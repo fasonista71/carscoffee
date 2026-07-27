@@ -38,6 +38,14 @@ export function createRenderer(canvas) {
   window.addEventListener('resize', resize);
   resize();
 
+  /* Maps a viewport CSS x coordinate to logical screen x. Values off
+     the canvas come back below 0 or above the logical width; callers
+     clamp as needed. Used by the app to resolve positional taps. */
+  function screenToLogicalX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    return ((clientX - rect.left) / rect.width) * W;
+  }
+
   function laneCenterX(laneFloat) {
     return TUNING.road.roadLeftPx + TUNING.road.laneWidthPx * (laneFloat + 0.5);
   }
@@ -105,5 +113,5 @@ export function createRenderer(canvas) {
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize };
+  return { drawFrame, resize, screenToLogicalX };
 }

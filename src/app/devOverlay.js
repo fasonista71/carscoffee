@@ -57,6 +57,30 @@ export function createDevOverlay(getWorld) {
     panel.appendChild(row);
   }
 
+  function addSelect(label, options, get, set) {
+    const row = document.createElement('label');
+    row.style.cssText = 'display: block; margin-bottom: 6px;';
+    const caption = document.createElement('div');
+    caption.textContent = label;
+    const sel = document.createElement('select');
+    sel.style.cssText = 'width: 100%; font: 12px monospace;';
+    for (const o of options) {
+      const opt = document.createElement('option');
+      opt.value = o;
+      opt.textContent = o;
+      sel.appendChild(opt);
+    }
+    sel.value = get();
+    sel.addEventListener('change', () => set(sel.value));
+    row.appendChild(caption);
+    row.appendChild(sel);
+    panel.appendChild(row);
+  }
+
+  addSelect('Tap mode', ['lane', 'thirds'],
+    () => TUNING.input.tapMode,
+    (v) => { TUNING.input.tapMode = v; });
+
   addSlider('Lane tween ms', 60, 300, 10,
     () => TUNING.movement.laneTweenMs,
     (v) => {

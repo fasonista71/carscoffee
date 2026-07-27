@@ -25,9 +25,11 @@
   - Finger travel past swipeThresholdPx classifies the touch as a
     swipe: dominant horizontal axis is a lane change in that direction,
     dominant vertical axis upward is boost, downward is unmapped.
-  - A release with no swipe within tapMaxMs is a tap, resolved by
-    screen third: left third lane left, right third lane right,
-    center third boost.
+  - A release with no swipe within tapMaxMs is a tap. The adapter does
+    not decide what a tap means; it emits the position and the app
+    resolves it per TUNING.input.tapMode, since resolution can depend
+    on canvas geometry and car position, which input has no business
+    knowing.
   - A three finger touch toggles the dev overlay.
 */
 
@@ -86,10 +88,7 @@ export function attachTouch(emit) {
       active.delete(t.identifier);
       if (rec.swiped) continue;
       if (e.timeStamp - rec.time > TUNING.input.tapMaxMs) continue;
-      const rel = t.clientX / window.innerWidth;
-      if (rel < 1 / 3) emit({ type: 'lane', dir: -1 });
-      else if (rel > 2 / 3) emit({ type: 'lane', dir: 1 });
-      else emit({ type: 'boost' });
+      emit({ type: 'tapAt', clientX: t.clientX });
     }
   }
 

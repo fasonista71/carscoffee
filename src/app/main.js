@@ -49,6 +49,25 @@ function pause() {
   if (mode === 'playing') mode = 'paused';
 }
 
+/*
+  Positional taps resolve here, where render geometry and tuning meet.
+  'lane' mode: the tap targets the lane under the finger, clamped, so
+  letterbox and offroad taps pull toward the nearest lane. 'thirds'
+  mode: the original brief spec, kept for A/B testing.
+*/
+function resolveTap(clientX) {
+  if (TUNING.input.tapMode === 'thirds') {
+    const rel = clientX / window.innerWidth;
+    if (rel < 1 / 3) return { type: 'lane', dir: -1 };
+    if (rel > 2 / 3) return { type: 'lane', dir: 1 };
+    return { type: 'boost' };
+  }
+  const lx = renderer.screenToLogicalX(clientX);
+  const raw = Math.floor((lx - TUNING.road.roadLeftPx) / TUNING.road.laneWidthPx);
+  const lane = Math.max(0, Math.min(TUNING.road.laneCount - 1, raw));
+  return { type: 'tapLane', lane };
+}
+
 function onIntent(intent) {
   if (intent.type === 'devtoggle') {
     overlay.toggle();
@@ -62,7 +81,7 @@ function onIntent(intent) {
     mode = 'playing';
     return;
   }
-  pending.push(intent);
+  pending.push(intent.type === 'tapAt' ? resolveTap(intent.clientX) : intent);
 }
 
 let fps = 0;

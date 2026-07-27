@@ -59,9 +59,17 @@ backtick on a keyboard.
 | Boost (no op until step 6) | Up arrow, W, or space | Swipe up, or tap center third |
 | Dev overlay | Backtick | Three finger tap |
 
-Touch is read across the whole screen, letterbox included, and tap
-zones are screen thirds. Each finger is tracked independently, so a
-tap that starts before the previous finger lifts still counts.
+Touch is read across the whole screen, letterbox included, and each
+finger is tracked independently, so a tap that starts before the
+previous finger lifts still counts.
+
+Swipe is the primary input. Taps are the secondary path and default
+to lane targeting: a tap means "go to the lane under my finger". The
+car moves one lane toward it, a tap on the car's own lane is boost,
+and taps in the letterbox or offroad pull toward the nearest lane.
+The original screen thirds scheme from the brief is still implemented
+and can be A/B tested live via the Tap mode select in the dev overlay
+(TUNING.input.tapMode).
 
 ## Tests
 
@@ -91,6 +99,7 @@ they do to feel:
 | movement.maxQueuedInputs | 1 | Brief requirement. Raising it would let inputs pile up and fire late. |
 | speed.basePxPerSec | 150 | World scroll speed. The single biggest feel dial right now. |
 | speed.pxPerMeter | 8 | Display conversion only, for the distance readout. |
+| input.tapMode | 'lane' | 'lane' targets the lane under the finger; 'thirds' is the original left/center/right scheme. Both live, switchable in the overlay. |
 | input.swipeThresholdPx | 24 | Finger travel before a touch commits to being a swipe. Lower fires sooner but misreads sloppy taps; higher feels laggy. |
 | input.tapMaxMs | 500 | Longest press that still counts as a tap on release. Generous on purpose: rejecting a real tap costs far more than accepting a slow one. |
 | render.playerYPx | 252 | Player position on screen. Higher on screen gives more reaction time visually. |

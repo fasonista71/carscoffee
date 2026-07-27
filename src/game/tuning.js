@@ -37,6 +37,14 @@ export const TUNING = {
   },
 
   input: {
+    /* How taps resolve.
+       'lane': a tap targets the lane under the finger. The car moves
+       one lane toward it; a tap on the car's own lane is boost. This
+       matches the spatial instinct found in device testing.
+       'thirds': the original brief spec. Left and right screen thirds
+       move by direction, center third is boost.
+       Both stay implemented so they can be A/B tested live. */
+    tapMode: 'lane',
     /* Finger travel in CSS px before a touch becomes a swipe. GUESS. */
     swipeThresholdPx: 24,
     /* A release with no swipe within this duration counts as a tap.

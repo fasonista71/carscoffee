@@ -34,8 +34,11 @@ export function distanceMeters(world) {
 }
 
 /*
-  intents: an array of { type: 'lane', dir: -1 | 1 } or { type: 'boost' }
-  drained by the caller since the previous logic frame, in arrival order.
+  intents drained by the caller since the previous logic frame, in
+  arrival order. Three kinds:
+    { type: 'lane', dir: -1 | 1 }   relative move (keys, swipes, thirds)
+    { type: 'tapLane', lane: n }    positional tap on a lane
+    { type: 'boost' }               no op until build step 6
 */
 export function step(world, intents) {
   world.frame += 1;
@@ -64,6 +67,22 @@ function applyIntent(world, intent) {
       /* Exactly one queued input during a tween. Later arrivals are
          discarded, per the brief. */
       p.queuedDir = intent.dir;
+    }
+  } else if (intent.type === 'tapLane') {
+    /* Positional tap, resolved against where the car is committed to
+       be: the tween target mid tween, the current lane otherwise.
+       One tap moves one lane toward the tapped lane, sharing the same
+       single slot queue as relative moves. A tap on the committed
+       lane itself means boost (a no op until build step 6). */
+    const committed = p.tween ? p.tween.to : p.lane;
+    const diff = intent.lane - committed;
+    if (diff !== 0) {
+      const dir = diff > 0 ? 1 : -1;
+      if (!p.tween) {
+        startTween(world, dir);
+      } else if (p.queuedDir === 0) {
+        p.queuedDir = dir;
+      }
     }
   } else if (intent.type === 'boost') {
     /* Boost is wired up in build step 6. Ignored for now so the input

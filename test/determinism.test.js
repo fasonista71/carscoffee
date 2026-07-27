@@ -35,6 +35,7 @@ function scriptedIntents(frame) {
   if (frame % 131 === 0) intents.push({ type: 'lane', dir: 1 });
   if (frame % 53 === 0) intents.push({ type: 'boost' });
   if (frame % 21 === 0) intents.push({ type: 'lane', dir: frame % 2 === 0 ? 1 : -1 });
+  if (frame % 61 === 0) intents.push({ type: 'tapLane', lane: Math.floor(frame / 61) % 3 });
   return intents;
 }
 
