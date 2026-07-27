@@ -12,6 +12,7 @@ import { TUNING, VEHICLES, ENVIRONMENTS } from '../game/tuning.js';
 import { createWorld, step, distanceMeters } from '../game/world.js';
 import { playerLaneFloat } from '../game/entities.js';
 import { createRenderer } from '../render/renderer.js';
+import { loadSprites } from '../render/sprites.js';
 import { attachKeyboard } from '../input/keyboard.js';
 import { attachTouch } from '../input/touch.js';
 import { createLoop } from './loop.js';
@@ -33,8 +34,11 @@ function snapshot() {
 }
 
 function startRun() {
+  /* Each run gets a fresh seed. The clock is fine here in app/; the
+     simulation itself stays deterministic for whatever seed it gets,
+     which is what the headless tests prove. */
   world = createWorld({
-    seed: 0xc0ffee,
+    seed: Date.now() >>> 0,
     vehicle: VEHICLES.sports,
     environment: ENVIRONMENTS.city
   });
@@ -81,6 +85,11 @@ function onIntent(intent) {
     mode = 'playing';
     return;
   }
+  if (mode === 'gameOver') {
+    /* Instant restart: game over to playing again in one input. */
+    startRun();
+    return;
+  }
   pending.push(intent.type === 'tapAt' ? resolveTap(intent.clientX) : intent);
 }
 
@@ -96,6 +105,7 @@ const loop = createLoop({
     pending = [];
     step(world, intents);
     currSnap = snapshot();
+    if (world.status === 'dead') mode = 'gameOver';
   },
   render(alpha) {
     let view;
@@ -108,6 +118,8 @@ const loop = createLoop({
     } else {
       view = { mode, distancePx: currSnap.distancePx, laneFloat: currSnap.laneFloat };
     }
+    view.obstacles = world ? world.obstacles : [];
+    view.meters = world ? Math.floor(distanceMeters(world)) : 0;
     renderer.drawFrame(view);
 
     fpsFrames += 1;
@@ -136,4 +148,10 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('blur', pause);
 
-loop.start();
+/* Sprites load once before the first frame; the game does not start
+   on a half loaded sheet. */
+loadSprites()
+  .then(() => loop.start())
+  .catch((err) => {
+    console.error(err);
+  });

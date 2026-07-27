@@ -53,6 +53,31 @@ export const TUNING = {
     tapMaxMs: 500
   },
 
+  obstacles: {
+    /* Clear road before the first obstacle appears. GUESS. */
+    firstSpawnDistPx: 600,
+    /* How far ahead of the car the generator stays. */
+    horizonPx: 480,
+    /* How far behind the car obstacles are removed. */
+    despawnBehindPx: 120,
+    /* Human time to notice a pattern before having to act. Feeds the
+       fairness gap between obstacle rows. GUESS. */
+    reactionBufferMs: 350,
+    /* Row gaps are the fair minimum times 1 to this. Lower means
+       denser, harder track. GUESS. */
+    gapJitterMax: 1.9,
+    /* Chance a row blocks two lanes instead of one. GUESS. */
+    doubleRowChance: 0.3,
+    /* Uniform collision box for stalled cars regardless of which art
+       variant is drawn. Slightly smaller than the art reads. */
+    stalledHitbox: { wPx: 24, hPx: 44 },
+    /* Total forgiveness subtracted from combined half extents, so
+       near misses feel like near misses. GUESS. */
+    hitboxShrinkPx: 4,
+    /* Must match the variant list in render sprites. */
+    stalledVariantCount: 8
+  },
+
   render: {
     logicalW: 180,
     logicalH: 320,
@@ -93,7 +118,7 @@ export const VEHICLES = {
   sports: {
     id: 'sports',
     name: 'Sports car',
-    hitbox: { wPx: 12, hPx: 20 },
+    hitbox: { wPx: 20, hPx: 36 },
     laneTweenMs: TUNING.movement.laneTweenMs,
     baseSpeedMultiplier: 1,
     fuelBurnMultiplier: 1,

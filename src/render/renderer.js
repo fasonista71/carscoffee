@@ -10,7 +10,8 @@
 */
 
 import { TUNING } from '../game/tuning.js';
-import { getSprite } from './sprites.js';
+import { laneCenterXPx } from '../game/entities.js';
+import { getSprite, getStalledSprite } from './sprites.js';
 import { drawText } from './font.js';
 
 export function createRenderer(canvas) {
@@ -46,10 +47,6 @@ export function createRenderer(canvas) {
     return ((clientX - rect.left) / rect.width) * W;
   }
 
-  function laneCenterX(laneFloat) {
-    return TUNING.road.roadLeftPx + TUNING.road.laneWidthPx * (laneFloat + 0.5);
-  }
-
   function drawRoad(distancePx, pal) {
     bctx.fillStyle = pal.offroad;
     bctx.fillRect(0, 0, W, H);
@@ -79,9 +76,25 @@ export function createRenderer(canvas) {
 
   function drawPlayer(laneFloat) {
     const spr = getSprite('player_car');
-    const x = Math.round(laneCenterX(laneFloat) - spr.width / 2);
+    const x = Math.round(laneCenterXPx(laneFloat) - spr.width / 2);
     const y = Math.round(TUNING.render.playerYPx - spr.height / 2);
     bctx.drawImage(spr, x, y);
+  }
+
+  /*
+    An obstacle's distPx equals the interpolated view distance exactly
+    when it draws level with the player, so screen y falls out of the
+    same numbers collision uses.
+  */
+  function drawObstacles(view) {
+    for (let i = 0; i < view.obstacles.length; i += 1) {
+      const ob = view.obstacles[i];
+      const spr = getStalledSprite(ob.variant);
+      const screenY = TUNING.render.playerYPx - (ob.distPx - view.distancePx);
+      if (screenY < -spr.height || screenY > H + spr.height) continue;
+      const x = Math.round(laneCenterXPx(ob.lane) - spr.width / 2);
+      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
+    }
   }
 
   function drawTitle(pal) {
@@ -90,6 +103,15 @@ export function createRenderer(canvas) {
     drawText(bctx, 'CARS & COFFEE', W / 2, 96, pal.edgeLine, { scale: 2, align: 'center' });
     drawText(bctx, 'Tap or press a key', W / 2, 170, pal.text, { scale: 1, align: 'center' });
     drawText(bctx, 'to start', W / 2, 180, pal.text, { scale: 1, align: 'center' });
+  }
+
+  function drawGameOver(pal, meters) {
+    bctx.fillStyle = pal.dim;
+    bctx.fillRect(0, 0, W, H);
+    drawText(bctx, 'Crashed', W / 2, 104, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, meters + ' m', W / 2, 136, pal.text, { scale: 2, align: 'center' });
+    drawText(bctx, 'Tap or press a key', W / 2, 176, pal.text, { scale: 1, align: 'center' });
+    drawText(bctx, 'to restart', W / 2, 186, pal.text, { scale: 1, align: 'center' });
   }
 
   function drawPaused(pal) {
@@ -107,9 +129,11 @@ export function createRenderer(canvas) {
   function drawFrame(view) {
     const pal = TUNING.palette.city;
     drawRoad(view.distancePx, pal);
+    drawObstacles(view);
     drawPlayer(view.laneFloat);
     if (view.mode === 'title') drawTitle(pal);
     if (view.mode === 'paused') drawPaused(pal);
+    if (view.mode === 'gameOver') drawGameOver(pal, view.meters);
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 

@@ -9,7 +9,8 @@
 
 import { TUNING } from './tuning.js';
 import { seedToState } from './rng.js';
-import { createPlayer } from './entities.js';
+import { createPlayer, laneCenterXPx, playerLaneFloat } from './entities.js';
+import { createGenState, generateAhead } from './generator.js';
 
 export function createWorld({ seed, vehicle, environment }) {
   return {
@@ -21,7 +22,11 @@ export function createWorld({ seed, vehicle, environment }) {
     vehicleId: vehicle.id,
     environmentId: environment.id,
     status: 'running',
-    player: createPlayer(vehicle)
+    player: createPlayer(vehicle),
+    obstacles: [],
+    /* Generation gets its own PRNG stream, decorrelated from the
+       reserved main stream by a fixed mix constant. */
+    gen: createGenState(seedToState((seed ^ 0x5bd1e995) >>> 0))
   };
 }
 
@@ -42,12 +47,71 @@ export function distanceMeters(world) {
 */
 export function step(world, intents) {
   world.frame += 1;
+  /* After death the world freezes; only the frame counter advances.
+     The app layer decides what to show and when to restart. */
+  if (world.status !== 'running') return world;
   for (let i = 0; i < intents.length; i += 1) {
     applyIntent(world, intents[i]);
   }
   advancePlayer(world);
   world.distancePx += currentSpeedPxPerSec(world) / TUNING.logic.hz;
+  spawnAhead(world);
+  pruneBehind(world);
+  checkCollision(world);
   return world;
+}
+
+function spawnAhead(world) {
+  const rows = generateAhead(world.gen, {
+    speedPxPerSec: currentSpeedPxPerSec(world),
+    laneTweenMs: world.laneTweenMs,
+    toDistPx: world.distancePx + TUNING.obstacles.horizonPx
+  });
+  for (let r = 0; r < rows.length; r += 1) {
+    const row = rows[r];
+    for (let lane = 0; lane < TUNING.road.laneCount; lane += 1) {
+      if (row.lanes[lane]) {
+        world.obstacles.push({
+          kind: 'stalled',
+          lane,
+          distPx: row.distPx,
+          variant: row.variants[lane]
+        });
+      }
+    }
+  }
+}
+
+function pruneBehind(world) {
+  const cutoff = world.distancePx - TUNING.obstacles.despawnBehindPx;
+  while (world.obstacles.length > 0 && world.obstacles[0].distPx < cutoff) {
+    world.obstacles.shift();
+  }
+}
+
+/*
+  Collision uses the interpolated lane position, so a car mid tween is
+  hit where it visually is, not where it logically departed from or is
+  headed to. Distances along the road are compared directly: an
+  obstacle's distPx equals world.distancePx exactly when it draws level
+  with the player.
+*/
+function checkCollision(world) {
+  const p = world.player;
+  const o = TUNING.obstacles;
+  const px = laneCenterXPx(playerLaneFloat(p));
+  const halfW = (p.hitbox.wPx + o.stalledHitbox.wPx) / 2 - o.hitboxShrinkPx;
+  const halfH = (p.hitbox.hPx + o.stalledHitbox.hPx) / 2 - o.hitboxShrinkPx;
+  for (let i = 0; i < world.obstacles.length; i += 1) {
+    const ob = world.obstacles[i];
+    const dy = ob.distPx - world.distancePx;
+    if (dy > halfH) break; /* obstacles are ordered by distPx */
+    if (dy < -halfH) continue;
+    if (Math.abs(px - laneCenterXPx(ob.lane)) < halfW) {
+      world.status = 'dead';
+      return;
+    }
+  }
 }
 
 function tweenTotalFrames(world) {

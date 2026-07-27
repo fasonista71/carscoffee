@@ -1,7 +1,16 @@
 /*
-  Entity factories and pure helpers. Obstacles and pickups are added in
-  build steps 4 and 6; only the player exists in this slice.
+  Entity factories and pure helpers. Pickups are added in build step 6.
 */
+
+import { TUNING } from './tuning.js';
+
+/*
+  Lane geometry, shared by simulation (collision) and rendering
+  (drawing), so the two can never disagree about where a lane is.
+*/
+export function laneCenterXPx(laneFloat) {
+  return TUNING.road.roadLeftPx + TUNING.road.laneWidthPx * (laneFloat + 0.5);
+}
 
 export function createPlayer(vehicle) {
   return {

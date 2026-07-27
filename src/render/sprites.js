@@ -1,82 +1,101 @@
 /*
-  Procedural placeholder sprites behind a registry keyed by name.
+  Sprite registry, now backed by a real spritesheet.
 
-  The swap seam: when real PNG spritesheets arrive, this file changes
-  to load and slice them under the same keys, and nothing outside
-  render/ changes. Game logic never sees a sprite, only sprite keys.
+  Car art: "Road To Rage" vehicle pack by TMD Studios,
+  tmdstudios.wordpress.com, used with attribution per the license note
+  shipped in assets/CARS_CREDITS.txt.
 
-  Placeholder art rules from the brief: chunky pixels, hard edges,
-  1 to 2 px dark outlines, readable by silhouette alone.
+  The atlas is a libGDX TexturePacker text atlas. Coordinates were
+  verified empirically against the sheet: xy is measured from the TOP
+  LEFT of the image, which matches drawImage source coordinates
+  directly. Each named frame is sliced once at load into its own
+  small backing surface, so drawing stays a single blit.
+
+  The swap seam holds: game logic knows sprite keys and art variant
+  indices, never files or pixels. Swapping art means editing the urls,
+  aliases, and variant list below. Nothing outside render/ changes.
 */
 
-import { TUNING } from '../game/tuning.js';
+const ATLAS_URL = 'assets/cars.atlas';
+const IMAGE_URL = 'assets/cars.png';
+
+/* Registry keys used by the game map to atlas frame names here. */
+const ALIASES = {
+  player_car: 'porsche'
+};
+
+/*
+  Art variants for stalled car obstacles. Order matters: the generator
+  picks an index, so this list must stay in sync with
+  TUNING.obstacles.stalledVariantCount.
+*/
+export const STALLED_VARIANT_NAMES = [
+  'taxi', 'van', 'pickup', 'suv', 'bmw', 'lancer', 'sunny', 'figo'
+];
 
 const registry = new Map();
 
-/*
-  Pixel maps. Each string is one row, one character per pixel.
-  '.' is transparent. Other characters index into the sprite's colors.
-*/
-function cityColors() {
-  const pal = TUNING.palette.city;
-  return {
-    O: pal.outline,
-    R: pal.carBody,
-    D: pal.carDark,
-    W: pal.carWindow,
-    T: pal.tire
-  };
-}
-
-const SPRITE_DEFS = {
-  player_car: () => ({
-    colors: cityColors(),
-    rows: [
-      '....OOOO....',
-      '...ORRRRO...',
-      '..ORRRRRRO..',
-      '.ORRRRRRRRO.',
-      'TTORRWWRROTT',
-      'TTORWWWWROTT',
-      '.ORWWWWWWRO.',
-      '.ORRWWWWRRO.',
-      '.ORRRRRRRRO.',
-      '.ORRRRRRRRO.',
-      '.ORDRRRRDRO.',
-      '.ORRRRRRRRO.',
-      '.ORRRRRRRRO.',
-      'TTORRRRRROTT',
-      'TTORRRRRROTT',
-      '.ORRRRRRRRO.',
-      '..ORRRRRRO..',
-      '..ORDDDDRO..',
-      '...OOOOOO...',
-      '............'
-    ]
-  })
-};
-
-export function getSprite(key) {
-  if (registry.has(key)) return registry.get(key);
-  const def = SPRITE_DEFS[key];
-  if (!def) throw new Error('Unknown sprite key: ' + key);
-  const { colors, rows } = def();
-  const h = rows.length;
-  const w = rows[0].length;
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext('2d');
-  for (let y = 0; y < h; y += 1) {
-    for (let x = 0; x < w; x += 1) {
-      const ch = rows[y][x];
-      if (ch === '.') continue;
-      const color = colors[ch];
-      if (!color) throw new Error('Sprite ' + key + ' uses unmapped char ' + ch);
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, 1, 1);
+function parseAtlas(text) {
+  const frames = {};
+  let current = null;
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.trim()) { current = null; continue; }
+    const indented = raw.startsWith(' ') || raw.startsWith('\t');
+    if (!indented && !raw.includes(':')) {
+      current = raw.trim();
+      frames[current] = {};
+      continue;
+    }
+    if (current && raw.includes(':')) {
+      const idx = raw.indexOf(':');
+      const key = raw.slice(0, idx).trim();
+      const val = raw.slice(idx + 1).trim();
+      if (key === 'xy' || key === 'size') {
+        const [a, b] = val.split(',').map((n) => parseInt(n.trim(), 10));
+        if (key === 'xy') { frames[current].x = a; frames[current].y = b; }
+        else { frames[current].w = a; frames[current].h = b; }
+      }
     }
   }
-  registry.set(key, c);
-  return c;
+  return frames;
+}
+
+export function loadSprites() {
+  const img = new Image();
+  const imageReady = new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error('Could not load ' + IMAGE_URL));
+    img.src = IMAGE_URL;
+  });
+  const atlasReady = fetch(ATLAS_URL).then((r) => {
+    if (!r.ok) throw new Error('Could not load ' + ATLAS_URL);
+    return r.text();
+  });
+  return Promise.all([atlasReady, imageReady]).then(([text]) => {
+    const frames = parseAtlas(text);
+    const needed = new Set([...Object.values(ALIASES), ...STALLED_VARIANT_NAMES]);
+    for (const name of needed) {
+      const f = frames[name];
+      if (!f || f.w == null || f.x == null) {
+        throw new Error('Atlas frame missing or incomplete: ' + name);
+      }
+      const c = document.createElement('canvas');
+      c.width = f.w;
+      c.height = f.h;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+      registry.set(name, c);
+    }
+  });
+}
+
+export function getSprite(key) {
+  const spr = registry.get(ALIASES[key] || key);
+  if (!spr) throw new Error('Sprite not loaded: ' + key);
+  return spr;
+}
+
+export function getStalledSprite(variant) {
+  return getSprite(STALLED_VARIANT_NAMES[variant % STALLED_VARIANT_NAMES.length]);
 }

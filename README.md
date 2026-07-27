@@ -3,11 +3,23 @@
 An 8 bit style top down endless driver. Browser prototype, built as a
 vertical slice: one vehicle, one environment, the complete core loop.
 
-## Current status: milestone 1 of the build order
+## Current status: milestone 2 of the build order
 
-This delivery is build order steps 1 and 2, plus two items pulled
-forward by agreement: a movement slice of the dev tuning overlay, and
-the headless determinism test. Included and working:
+Build order steps 1 through 5 are done, plus two items pulled forward
+by agreement: a movement slice of the dev tuning overlay, and the
+headless determinism test. Included and working:
+
+- Stalled car obstacles with real sprite art, one hit death, and a
+  game over screen with one tap instant restart
+- A track generator with the fairness invariant built in by
+  construction: no row ever blocks all lanes, and row spacing always
+  allows a worst case two lane crossing plus reaction time at the
+  current speed and tween duration
+- The generator solvability gate: a forward search over the lane grid
+  proves a survivable path for 100 seeds at six speeds, including the
+  speeds future difficulty tiers will reach
+
+From milestone 1:
 
 - Fixed 60Hz timestep with accumulator, clamp on resume, interpolated rendering
 - Scrolling three lane road on a 180x320 logical screen, integer pixel upscale
@@ -18,9 +30,9 @@ the headless determinism test. Included and working:
 - Dev overlay with live movement sliders
 - Headless determinism test and a game purity guard test
 
-Not built yet, by design: obstacles, fuel, coffee, boost effect,
-stumble, tiers, scoring, audio, parallax. Those wait on the movement
-feel checkpoint (build order step 3).
+Not built yet, by design: fuel, coffee, boost effect, oil slicks,
+rubble, stumble, tiers, scoring persistence, audio, parallax. Next up
+is build order step 6.
 
 ## How to run
 
@@ -80,11 +92,14 @@ Runs two suites in Node (18 or newer), no dependencies:
 - `test/determinism.test.js` imports only `src/game/`, runs 10000
   simulated frames from a fixed seed with a scripted input sequence,
   twice, and asserts identical FNV-1a hashes of the final world state.
+- `test/fairness.test.js` is the solvability gate from brief section
+  4: 100 seeds at six speeds, forward search over the lane grid,
+  asserting a survivable path always exists and no row blocks every
+  lane.
+- `test/tap.test.js` covers positional tap semantics.
 - `test/purity.test.js` scans every file in `src/game/` for forbidden
   identifiers (window, document, navigator, performance, Date,
   Math.random, requestAnimationFrame, localStorage, canvas, Audio).
-
-The generator solvability test arrives with the generator in step 5.
 
 ## Tuning guide
 
@@ -103,6 +118,11 @@ they do to feel:
 | input.swipeThresholdPx | 24 | Finger travel before a touch commits to being a swipe. Lower fires sooner but misreads sloppy taps; higher feels laggy. |
 | input.tapMaxMs | 500 | Longest press that still counts as a tap on release. Generous on purpose: rejecting a real tap costs far more than accepting a slow one. |
 | render.playerYPx | 252 | Player position on screen. Higher on screen gives more reaction time visually. |
+| obstacles.firstSpawnDistPx | 600 | Clear road before the first obstacle. |
+| obstacles.reactionBufferMs | 350 | Human reaction time baked into fair row spacing. Lower makes the track denser and meaner everywhere. |
+| obstacles.gapJitterMax | 1.9 | Row gaps run from the fair minimum to this multiple of it. Lower is relentless, higher is breathing room. |
+| obstacles.doubleRowChance | 0.3 | How often a row blocks two lanes, forcing a specific open lane. |
+| obstacles.stalledHitbox, hitboxShrinkPx | | Collision forgiveness. Raise shrink if deaths feel cheap. |
 | render.dash*, render.edgeLine* | | Road paint dimensions. Cosmetic. |
 
 The dev overlay exposes lane tween, scroll speed, swipe threshold, and
@@ -111,6 +131,7 @@ and put them in tuning.js.
 
 ## Project structure
 
+    assets/       car spritesheet, atlas, and license text
     src/game/     pure simulation, no browser globals, runs in Node
     src/render/   Canvas 2D drawing, reads state, never mutates
     src/input/    keyboard and touch adapters, normalized to intents
@@ -118,15 +139,22 @@ and put them in tuning.js.
     src/app/      bootstrap, loop, state machine, dev overlay
     test/         headless tests
 
-## Swapping in real art later
+## Art credits and the swap seam
 
-All placeholder sprites are procedural pixel maps in
-`src/render/sprites.js`, behind a registry keyed by name
-(`player_car` now; obstacle and pickup keys arrive with those
-features). The swap is: replace the map builders with PNG spritesheet
-loading and slicing under the same keys. Nothing outside `render/`
-changes. Text uses a 3x5 bitmap font in `src/render/font.js` for the
-same reason: no fillText antialiasing, and swappable in one place.
+Car sprites are from the "Road To Rage" vehicle pack by TMD Studios:
+https://tmdstudios.wordpress.com (license asks for this link; the
+original license text ships in assets/CARS_CREDITS.txt). The sheet
+plus its atlas live in assets/ and are sliced at load by
+`src/render/sprites.js`.
+
+The swap seam: game logic knows only sprite keys (`player_car`) and
+art variant indices, never files or pixels. To change art, edit the
+urls, aliases, and variant name list at the top of sprites.js.
+Nothing outside `render/` changes. The player car is currently the
+`porsche` frame; the stalled obstacle pool is 8 frames chosen for
+silhouette variety. Text uses a 3x5 bitmap font in
+`src/render/font.js`: no fillText antialiasing, swappable in one
+place.
 
 Audio follows the same pattern when it arrives in step 10: a manifest
 mapping event names to file paths, nothing more.
