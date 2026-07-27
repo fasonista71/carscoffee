@@ -73,7 +73,7 @@ export function createDevOverlay(getWorld) {
     () => TUNING.input.swipeThresholdPx,
     (v) => { TUNING.input.swipeThresholdPx = v; });
 
-  addSlider('Tap max ms', 100, 500, 10,
+  addSlider('Tap max ms', 100, 800, 10,
     () => TUNING.input.tapMaxMs,
     (v) => { TUNING.input.tapMaxMs = v; });
 

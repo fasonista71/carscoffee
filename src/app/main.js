@@ -103,7 +103,7 @@ const loop = createLoop({
 });
 
 attachKeyboard(onIntent);
-attachTouch(canvas, onIntent);
+attachTouch(onIntent);
 
 /* Desktop mouse: advance title and paused screens. Touch never reaches
    here because the touch adapter suppresses synthetic clicks. */

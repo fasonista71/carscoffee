@@ -59,6 +59,10 @@ backtick on a keyboard.
 | Boost (no op until step 6) | Up arrow, W, or space | Swipe up, or tap center third |
 | Dev overlay | Backtick | Three finger tap |
 
+Touch is read across the whole screen, letterbox included, and tap
+zones are screen thirds. Each finger is tracked independently, so a
+tap that starts before the previous finger lifts still counts.
+
 ## Tests
 
     npm test
@@ -88,7 +92,7 @@ they do to feel:
 | speed.basePxPerSec | 150 | World scroll speed. The single biggest feel dial right now. |
 | speed.pxPerMeter | 8 | Display conversion only, for the distance readout. |
 | input.swipeThresholdPx | 24 | Finger travel before a touch commits to being a swipe. Lower fires sooner but misreads sloppy taps; higher feels laggy. |
-| input.tapMaxMs | 250 | Longest press that still counts as a tap. Lower rejects hesitant taps; higher lets slow presses fire on release. |
+| input.tapMaxMs | 500 | Longest press that still counts as a tap on release. Generous on purpose: rejecting a real tap costs far more than accepting a slow one. |
 | render.playerYPx | 252 | Player position on screen. Higher on screen gives more reaction time visually. |
 | render.dash*, render.edgeLine* | | Road paint dimensions. Cosmetic. |
 

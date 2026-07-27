@@ -39,8 +39,10 @@ export const TUNING = {
   input: {
     /* Finger travel in CSS px before a touch becomes a swipe. GUESS. */
     swipeThresholdPx: 24,
-    /* A press and release under this duration counts as a tap. GUESS. */
-    tapMaxMs: 250
+    /* A release with no swipe within this duration counts as a tap.
+       Generous on purpose: the cost of rejecting a real tap is far
+       higher than the cost of accepting a slow one. GUESS. */
+    tapMaxMs: 500
   },
 
   render: {
