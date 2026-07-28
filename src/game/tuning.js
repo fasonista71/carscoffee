@@ -61,13 +61,15 @@ export const TUNING = {
     /* How far behind the car obstacles are removed. */
     despawnBehindPx: 120,
     /* Human time to notice a pattern before having to act. Feeds the
-       fairness gap between obstacle rows. GUESS. */
-    reactionBufferMs: 350,
+       fairness gap between obstacle rows. Tightened from 350 after
+       play testing read as too easy. GUESS. */
+    reactionBufferMs: 260,
     /* Row gaps are the fair minimum times 1 to this. Lower means
-       denser, harder track. GUESS. */
-    gapJitterMax: 1.9,
-    /* Chance a row blocks two lanes instead of one. GUESS. */
-    doubleRowChance: 0.3,
+       denser, harder track. Tightened from 1.9. GUESS. */
+    gapJitterMax: 1.35,
+    /* Chance a row blocks two lanes instead of one. Raised from 0.3
+       for difficulty. GUESS. */
+    doubleRowChance: 0.42,
     /* Total forgiveness subtracted from combined half extents, so
        near misses feel like near misses. GUESS. Collision boxes are
        per variant now; see TRAFFIC_VARIANTS below. */
@@ -76,17 +78,31 @@ export const TUNING = {
 
   traffic: {
     /* Chance a row of cars is stalled (speed zero) rather than
-       moving. GUESS. */
-    stalledChance: 0.4,
+       moving. Lowered from 0.4 so more traffic moves. GUESS. */
+    stalledChance: 0.3,
     /* Moving rows travel at this fraction of the player's base speed,
-       chosen per row. The band keeps closing speeds meaningful: slow
-       traffic rushes at you, fast traffic creeps back at you. GUESS. */
-    speedFracMin: 0.25,
-    speedFracMax: 0.5,
+       chosen per row. The band is wide on purpose: near stalled
+       traffic rushes at you, fast traffic creeps back and forces long
+       passes. Widened from 0.25 to 0.5 for difficulty. GUESS. */
+    speedFracMin: 0.12,
+    speedFracMax: 0.62,
     /* Rear traffic slows to match the row ahead this many px before
-       the fair minimum gap would be violated. Keeps moving rows from
-       ever bunching into an unfair wall. */
-    clampMarginPx: 12
+       that pair's minimum gap would be violated. Keeps moving rows
+       from ever bunching into an unfair wall. */
+    clampMarginPx: 12,
+    /* Clusters: rows may pack bumper to bumper when a guaranteed open
+       corridor runs through them (every corridor lane stays open), so
+       traffic reads crowded without ever demanding a lane change
+       there is no room to make. Chance a row joins the cluster when
+       it can, the longest cluster before a full gap is forced, and
+       the extra breathing room between packed bumpers. GUESSES. */
+    clusterChance: 0.8,
+    clusterMaxLen: 6,
+    /* When continuing a cluster, incompatible lane patterns are
+       rerolled up to this many extra times. Keeps clusters long and
+       the road crowded. */
+    clusterRerolls: 2,
+    tightExtraGapPx: 8
   },
 
   fuel: {
@@ -112,8 +128,9 @@ export const TUNING = {
   },
 
   coffee: {
-    /* Chance each spawned row brings a cup with it. GUESS. */
-    spawnChancePerRow: 0.35,
+    /* Chance each spawned row brings a cup with it. Lowered from
+       0.35 so fuel pressure bites harder. GUESS. */
+    spawnChancePerRow: 0.22,
     /* Share of cups placed in tension (beside or in the forced path
        of a hazard) versus free cups in gaps. Kept above the brief's
        70 percent floor. */
@@ -168,7 +185,8 @@ export const TUNING = {
   true size as its collision box, so a truck occupies its visual
   length and a bike is as small as it looks. Excluded on purpose:
   the taxi family (cut by request), the dumptruck (wider than a
-  lane), and the porsche (it is the player). Render maps sprite names
+  lane), the porsche (it is the player), the motorcycles and the junk
+  bed pickups (cut by request). Render maps sprite names
   to atlas frames; the generator picks by index with an anti repeat
   memory so neighbors rarely match.
 */
@@ -185,8 +203,6 @@ export const TRAFFIC_VARIANTS = [
   { sprite: 'raptor', wPx: 28, hPx: 55 },
   { sprite: 'raptor2', wPx: 28, hPx: 55 },
   { sprite: 'pickup', wPx: 28, hPx: 51 },
-  { sprite: 'pickup2', wPx: 28, hPx: 51 },
-  { sprite: 'pickup3', wPx: 28, hPx: 51 },
   { sprite: 'suv', wPx: 28, hPx: 50 },
   { sprite: 'suv2', wPx: 28, hPx: 50 },
   { sprite: 'van2', wPx: 27, hPx: 50 },
@@ -222,9 +238,7 @@ export const TRAFFIC_VARIANTS = [
   { sprite: 'mini', wPx: 24, hPx: 42 },
   { sprite: 'convertible', wPx: 24, hPx: 41 },
   { sprite: 'figo', wPx: 24, hPx: 41 },
-  { sprite: 'figo2', wPx: 24, hPx: 41 },
-  { sprite: 'bike', wPx: 16, hPx: 33 },
-  { sprite: 'bike2', wPx: 16, hPx: 35 }
+  { sprite: 'figo2', wPx: 24, hPx: 41 }
 ];
 
 export const VEHICLES = {

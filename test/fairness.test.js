@@ -21,7 +21,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, step, currentSpeedPxPerSec, fairMinGapForPairPx } from '../src/game/world.js';
+import { createWorld, step, currentSpeedPxPerSec } from '../src/game/world.js';
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
 
 TUNING.fuel.passiveDrainPerSec = 0;
@@ -43,6 +43,7 @@ function predictWindows(world, vP) {
   const pH = world.player.hitbox.hPx;
   const rows = world.rows.map((r) => ({
     dist: r.distPx, v: r.speedPxPerSec, lanes: r.lanes,
+    minGapPrevPx: r.minGapPrevPx,
     halfH: (pH + r.maxHPx) / 2 - o.hitboxShrinkPx
   }));
   const windows = rows.map(() => null);
@@ -51,8 +52,7 @@ function predictWindows(world, vP) {
     playerD += vP * PREDICT_DT;
     for (let i = 0; i < rows.length; i += 1) rows[i].dist += rows[i].v * PREDICT_DT;
     for (let i = rows.length - 2; i >= 0; i -= 1) {
-      const minGap = fairMinGapForPairPx(world, world.rows[i].maxHPx, world.rows[i + 1].maxHPx)
-        + TUNING.traffic.clampMarginPx;
+      const minGap = rows[i + 1].minGapPrevPx + TUNING.traffic.clampMarginPx;
       if (rows[i + 1].dist - rows[i].dist < minGap && rows[i].v > rows[i + 1].v) {
         rows[i].v = rows[i + 1].v;
       }

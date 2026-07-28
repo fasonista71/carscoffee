@@ -142,18 +142,20 @@ they do to feel:
 | input.tapMaxMs | 500 | Longest press that still counts as a tap on release. Generous on purpose: rejecting a real tap costs far more than accepting a slow one. |
 | render.playerYPx | 252 | Player position on screen. Higher on screen gives more reaction time visually. |
 | obstacles.firstSpawnDistPx | 600 | Clear road before the first obstacle. |
-| obstacles.reactionBufferMs | 350 | Human reaction time baked into fair row spacing. Lower makes the track denser and meaner everywhere. |
-| obstacles.gapJitterMax | 1.9 | Row gaps run from the fair minimum to this multiple of it. Lower is relentless, higher is breathing room. |
-| obstacles.doubleRowChance | 0.3 | How often a row blocks two lanes, forcing a specific open lane. |
+| obstacles.reactionBufferMs | 260 | Human reaction time baked into fair row spacing. Lower makes the track denser and meaner everywhere. |
+| obstacles.gapJitterMax | 1.35 | Row gaps run from the fair minimum to this multiple of it. Lower is relentless, higher is breathing room. |
+| obstacles.doubleRowChance | 0.42 | How often a row blocks two lanes, forcing a specific open lane. |
 | obstacles.stalledHitbox, hitboxShrinkPx | | Collision forgiveness. Raise shrink if deaths feel cheap. |
-| traffic.stalledChance | 0.4 | Share of rows that sit still versus move. |
-| traffic.speedFracMin/Max | 0.25/0.5 | Moving traffic speed band as a fraction of your base speed. Faster traffic creeps back at you and is passed slowly. |
+| traffic.stalledChance | 0.3 | Share of rows that sit still versus move. |
+| traffic.speedFracMin/Max | 0.12/0.62 | Moving traffic speed band as a fraction of your base speed. Near stalled traffic rushes at you; fast traffic creeps back and forces long passes. |
 | traffic.clampMarginPx | 12 | How early rear traffic slows behind the row ahead. |
+| traffic.clusterChance / clusterMaxLen / clusterRerolls | 0.8 / 6 / 2 | The crowding dials. Clusters pack rows bumper to bumper along a guaranteed open corridor; full crossing gaps only appear where the corridor shifts. |
+| traffic.tightExtraGapPx | 8 | Breathing room between packed bumpers inside a cluster. |
 | fuel.passiveDrainPerSec | 2.2 | The clock on every run. 100/this is your no coffee survival time in seconds. |
 | fuel.boostDrainPerSec | 12 | Extra burn while boosting. The price of score rate. |
 | fuel.coffeeRefill | 18 | How much a cup matters. |
 | boost.durationMs / speedMultiplier / minFuel | 1200 / 1.45 / 10 | The whole boost decision in three numbers. |
-| coffee.spawnChancePerRow | 0.35 | Cup frequency. |
+| coffee.spawnChancePerRow | 0.22 | Cup frequency. At this setting the fuel math is deliberately tight: collecting most cups roughly breaks even, missing many ends the run. |
 | coffee.tensionRatio | 0.75 | Share of cups placed against hazards rather than free. Keep at or above 0.7 per the brief. |
 | render.dash*, render.edgeLine* | | Road paint dimensions. Cosmetic. |
 
@@ -181,15 +183,23 @@ plus its atlas live in assets/ and are sliced at load by
 
 The swap seam: game logic knows only sprite keys (`player_car`,
 `pickup_coffee`) and art variant indices, never files or pixels. The
-traffic pool is the TRAFFIC_VARIANTS list in tuning.js: 52 frames,
+traffic pool is the TRAFFIC_VARIANTS list in tuning.js: 48 frames,
 nearly the whole sheet, each with its true size as its collision box,
-so trucks occupy their visual length and bikes are as small as they
-look. Excluded: the taxi family (cut by request), the dumptruck
-(wider than a lane), and the porsche (the player). The generator
+so trucks occupy their visual length. Excluded: the taxi family, the
+motorcycles, and the junk bed pickups (all cut by request), the
+dumptruck (wider than a lane), and the porsche (the player). The generator
 avoids repeating any of the last six picks, so neighbors rarely
 match. Because hitbox heights vary, fair gaps and the traffic clamp
 are computed per pair of rows: truck follows truck at a bigger
-distance than mini follows mini. The
+distance than mini follows mini.
+
+Crowding comes from clusters: a row may pack bumper to bumper behind
+the previous one only when every lane of the current guaranteed open
+corridor stays open through it, so a player driving the corridor
+never needs a lane change there is no room to make. Full crossing
+gaps appear exactly where the corridor shifts. The oracle test
+verifies survivability of the whole arrangement, dynamics included.
+The
 coffee cup is Jason's art, reduced to its native 16x20 pixels with a
 transparent background, stored as assets/coffee.png. Its shiver is
 render only and never affects collection. Text uses a 3x5 bitmap

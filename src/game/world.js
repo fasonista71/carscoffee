@@ -33,6 +33,11 @@ export function createWorld({ seed, vehicle, environment }) {
        sit still. */
     pickups: [],
     pendingSpec: null,
+    /* Lanes guaranteed open through the current cluster, as a bit
+       mask. Starts as all lanes; a full gap resets it to the open
+       lanes of the row after the gap. */
+    corridorMask: (1 << TUNING.road.laneCount) - 1,
+    clusterLen: 0,
     /* Generation gets its own PRNG stream, decorrelated from the
        reserved main stream by a fixed mix constant. */
     gen: createGenState(seedToState((seed ^ 0x5bd1e995) >>> 0))
@@ -198,8 +203,9 @@ function advanceTraffic(world, dt) {
      from ever assembling an unfair wall, and it also means rows never
      trade places, so the array stays ordered by distPx. */
   for (let i = rows.length - 2; i >= 0; i -= 1) {
-    const minGap = fairMinGapForPairPx(world, rows[i].maxHPx, rows[i + 1].maxHPx)
-      + TUNING.traffic.clampMarginPx;
+    /* Each pair's floor was fixed at spawn: a full fair gap between
+       clusters, a bumper gap inside them. */
+    const minGap = rows[i + 1].minGapPrevPx + TUNING.traffic.clampMarginPx;
     if (rows[i + 1].distPx - rows[i].distPx < minGap &&
         rows[i].speedPxPerSec > rows[i + 1].speedPxPerSec) {
       rows[i].speedPxPerSec = rows[i + 1].speedPxPerSec;
@@ -211,13 +217,54 @@ function advanceTraffic(world, dt) {
   }
 }
 
+function openMaskOf(lanes) {
+  let m = 0;
+  for (let i = 0; i < lanes.length; i += 1) {
+    if (!lanes[i]) m |= 1 << i;
+  }
+  return m;
+}
+
 function spawn(world) {
   if (!world.pendingSpec) world.pendingSpec = nextRowSpec(world.gen);
-  const spec = world.pendingSpec;
+  let spec = world.pendingSpec;
+  const t = TUNING.traffic;
   const last = world.rows.length > 0 ? world.rows[world.rows.length - 1] : null;
+
+  /* A row may pack tightly behind the previous one only if EVERY
+     current corridor lane stays open through it. Then a player
+     driving any corridor lane survives the whole cluster without
+     needing a lane change there is no room to make. Anything else
+     takes a full fair gap, which allows a worst case crossing.
+     When a cluster wants to continue but the rolled pattern is
+     incompatible, reroll a bounded number of times; this is what
+     keeps the road crowded. */
+  const wantTight = last !== null
+    && world.clusterLen < t.clusterMaxLen
+    && spec.clusterRoll < t.clusterChance;
+  if (wantTight) {
+    let rerolls = 0;
+    while (rerolls < t.clusterRerolls
+        && (openMaskOf(spec.lanes) & world.corridorMask) !== world.corridorMask) {
+      spec = nextRowSpec(world.gen);
+      rerolls += 1;
+    }
+  }
   const specMaxH = rowMaxHPx(spec.lanes, spec.variants);
-  const fairMin = fairMinGapForPairPx(world, last ? last.maxHPx : specMaxH, specMaxH);
-  const gapPx = fairMin * (1 + spec.gapJitter * (TUNING.obstacles.gapJitterMax - 1));
+  const openMask = openMaskOf(spec.lanes);
+  const keepsCorridor = (openMask & world.corridorMask) === world.corridorMask;
+  const tight = wantTight && keepsCorridor;
+
+  let minGapPrevPx;
+  let gapPx;
+  if (tight) {
+    minGapPrevPx = (last.maxHPx + specMaxH) / 2 + t.tightExtraGapPx;
+    gapPx = minGapPrevPx * (1 + spec.tightJitter * 0.35);
+  } else {
+    minGapPrevPx = fairMinGapForPairPx(world, last ? last.maxHPx : specMaxH, specMaxH);
+    gapPx = minGapPrevPx * (1 + spec.gapJitter * (TUNING.obstacles.gapJitterMax - 1));
+  }
+
   const at = last ? last.distPx + gapPx : Math.max(TUNING.obstacles.firstSpawnDistPx, world.distancePx + gapPx);
   if (world.distancePx + TUNING.obstacles.horizonPx < at) return;
   const row = {
@@ -225,10 +272,22 @@ function spawn(world) {
     speedPxPerSec: spec.speedFrac * baseSpeedPxPerSec(world),
     lanes: spec.lanes,
     variants: spec.variants,
-    maxHPx: specMaxH
+    maxHPx: specMaxH,
+    minGapPrevPx
   };
   world.rows.push(row);
-  if (spec.coffee) addCoffee(world, spec.coffee, row, gapPx);
+  if (tight) {
+    world.corridorMask &= openMask;
+    world.clusterLen += 1;
+  } else {
+    world.corridorMask = openMask;
+    world.clusterLen = 0;
+  }
+  /* Free cups need a real gap to sit in; inside a cluster only
+     tension cups (riding with their row) make sense. */
+  if (spec.coffee && !(tight && spec.coffee.kind === 'gap')) {
+    addCoffee(world, spec.coffee, row, gapPx);
+  }
   world.pendingSpec = null;
 }
 

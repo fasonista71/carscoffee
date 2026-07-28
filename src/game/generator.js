@@ -103,6 +103,10 @@ export function nextRowSpec(genState) {
 
   let gapJitter;
   [gapJitter, s] = nextFloat01(s);
+  let clusterRoll;
+  [clusterRoll, s] = nextFloat01(s);
+  let tightJitter;
+  [tightJitter, s] = nextFloat01(s);
 
   let coffee = null;
   [roll, s] = nextFloat01(s);
@@ -115,5 +119,5 @@ export function nextRowSpec(genState) {
   }
 
   genState.rngState = s;
-  return { lanes, variants, speedFrac, gapJitter, coffee };
+  return { lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter, coffee };
 }
