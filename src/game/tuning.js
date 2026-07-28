@@ -159,6 +159,26 @@ export const TUNING = {
     }
   },
 
+  overtakers: {
+    /* Sports cars that catch up from behind and speed past, once in a
+       while, past this tier index (tier 1 starts at 2000 meters). */
+    minTier: 1,
+    chancePerSec: 0.12,
+    speedMultMin: 1.9,
+    speedMultMax: 2.3,
+    spawnBehindPx: 400,
+    despawnAheadPx: 380,
+    /* Their lane must be clear of traffic this far in both directions
+       at spawn, so they never plow through rows on screen. */
+    clearLanePx: 400,
+    /* Never spawn when, within this many seconds around the pass,
+       any row's guaranteed corridor collapses to the overtaker's
+       lane. Clusters can pin the player to their corridor, so the
+       guard checks corridors, not just single rows. */
+    squeezeGuardSec: 1.2,
+    maxActive: 2
+  },
+
   stumble: {
     /* One free lethal contact per run: spin, speed drop, and this
        much blinking invulnerability. Brief says roughly 1.2s. */
@@ -211,13 +231,21 @@ export const TUNING = {
     dashGapPx: 12,
     dashWidthPx: 2,
     edgeLineWidthPx: 2,
-    /* The shaded HUD band across the top. */
-    hudBandHPx: 24,
-    /* Centered cartoon gauge: cup icon plus capsule bar. Narrow
-       enough to share the band with the score and best plates. */
-    fuelBar: { wPx: 58, hPx: 8, yPx: 8, cupGapPx: 3 },
-    /* Score and best plates, same cartoon capsule language. */
-    hudPlate: { wPx: 40, hPx: 14, yPx: 5, marginPx: 2 },
+    /* The shaded HUD band across the top: two rows. Row one holds the
+       distance and best plates with double size chunky digits, row
+       two holds the fuel gauge, stumble heart, and boost pill. */
+    hudBandHPx: 42,
+    fuelBar: { wPx: 58, hPx: 8, yPx: 28, cupGapPx: 3 },
+    hudPlate: { wPx: 58, hPx: 17, yPx: 3, marginPx: 2 },
+    boostPill: { wPx: 24, hPx: 8 },
+    /* Menu layout: one primary button plus option rows, hit tested in
+       logical coordinates. Restart taps are ignored for a beat after
+       a menu opens, so a frantic last tap cannot start a new run. */
+    menu: {
+      primary: { wPx: 104, hPx: 22 },
+      option: { wPx: 132, hPx: 16, gapPx: 6 },
+      cooldownMs: 350
+    },
     /* Cup shiver rate. Purely visual. */
     coffeeJiggleHz: 6
   },
@@ -325,6 +353,17 @@ export const VEHICLES = {
     fuelBurnMultiplier: 1,
     boostMultiplier: 1.6,
     spriteKey: 'player_car',
+    locked: false
+  },
+  lambo: {
+    id: 'lambo',
+    name: 'Lambo',
+    hitbox: { wPx: 22, hPx: 42 },
+    laneTweenMs: TUNING.movement.laneTweenMs,
+    baseSpeedMultiplier: 1.06,
+    fuelBurnMultiplier: 1.12,
+    boostMultiplier: 1.55,
+    spriteKey: 'player_lambo',
     locked: false
   },
   suv: { id: 'suv', name: '4x4 SUV', locked: true },

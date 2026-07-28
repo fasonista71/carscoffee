@@ -38,6 +38,9 @@ import { TUNING } from '../game/tuning.js';
 export function attachTouch(emit) {
   /* identifier -> { x, y, time, swiped } */
   const active = new Map();
+  /* Most fingers seen during the current gesture. Resolved when the
+     last finger lifts: two fingers pause, three toggle the overlay. */
+  let gestureMax = 0;
 
   function onOverlay(e) {
     return Boolean(e.target && e.target.closest && e.target.closest('#dev-overlay'));
@@ -46,8 +49,8 @@ export function attachTouch(emit) {
   function onTouchStart(e) {
     if (onOverlay(e)) return;
     e.preventDefault();
-    if (e.touches.length >= 3) {
-      emit({ type: 'devtoggle' });
+    gestureMax = Math.max(gestureMax, e.touches.length);
+    if (e.touches.length > 1) {
       active.clear();
       return;
     }
@@ -88,7 +91,12 @@ export function attachTouch(emit) {
       active.delete(t.identifier);
       if (rec.swiped) continue;
       if (e.timeStamp - rec.time > TUNING.input.tapMaxMs) continue;
-      emit({ type: 'tapAt', clientX: t.clientX });
+      emit({ type: 'tapAt', clientX: t.clientX, clientY: t.clientY });
+    }
+    if (e.touches.length === 0) {
+      if (gestureMax >= 3) emit({ type: 'devtoggle' });
+      else if (gestureMax === 2) emit({ type: 'pause' });
+      gestureMax = 0;
     }
   }
 

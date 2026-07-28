@@ -23,7 +23,8 @@ import { TUNING, TRAFFIC_VARIANTS } from '../game/tuning.js';
 
 /* Registry keys used by the game map to atlas frame names here. */
 const ALIASES = {
-  player_car: 'porsche'
+  player_car: 'porsche',
+  player_lambo: 'lambo'
 };
 
 const registry = new Map();
@@ -54,6 +55,7 @@ function parseAtlas(text) {
 }
 
 const COFFEE_URL = 'assets/coffee.png';
+const BADGE_URL = 'assets/badge.png';
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -79,11 +81,14 @@ export function loadSprites() {
   const coffeeReady = loadImage(COFFEE_URL).then((img) => {
     registry.set('pickup_coffee', toSurface(img));
   });
+  const badgeReady = loadImage(BADGE_URL).then((img) => {
+    registry.set('ui_badge', toSurface(img));
+  });
   const atlasReady = fetch(ATLAS_URL).then((r) => {
     if (!r.ok) throw new Error('Could not load ' + ATLAS_URL);
     return r.text();
   });
-  return Promise.all([atlasReady, imageReady, coffeeReady]).then(([text, img]) => {
+  return Promise.all([atlasReady, imageReady, coffeeReady, badgeReady]).then(([text, img]) => {
     const frames = parseAtlas(text);
     const needed = new Set([
       ...Object.values(ALIASES),

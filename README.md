@@ -3,9 +3,34 @@
 An 8 bit style top down endless driver. Browser prototype, built as a
 vertical slice: one vehicle, one environment, the complete core loop.
 
-## Current status: milestone 4 of the build order
+## Current status: milestone 5 of the build order
 
-Build order steps 1 through 9 are done. New in milestone 4:
+Build order steps 1 through 10 are done. New in milestone 5:
+
+- Starting or restarting a run is ONLY the primary menu button, with
+  a short cooldown after a menu opens, so a frantic last tap can
+  never launch a run by accident. Keys and swipes do nothing in
+  menus.
+- Menus on title, pause, and game over: car swap (Sports car and
+  Lambo unlocked, each with its own persisted high score), sound
+  on/off, rumble on/off. Pause via Escape, P, a two finger tap, or
+  backgrounding; three finger tap still opens the dev overlay.
+- Sound (build step 10): synthesized Web Audio placeholders for every
+  registry event, a quiet chip bass loop, a persisted mute, and the
+  iOS unlock riding the Start button gesture. Dropping in real sound
+  files is editing the MANIFEST map in src/audio/audio.js.
+- Haptics behind an interface: navigator.vibrate patterns for crash,
+  stumble, rubble, slick, boost, tier up, overtake. iPhones ignore
+  vibrate in Safari today; the seam is where native haptics land.
+- Overtakers: past 2000 meters, sports cars occasionally blast past
+  from behind, telegraphed by flashing chevrons at the bottom of
+  their lane. Spawn guards keep them fair: clear runway, never into
+  a lane the corridor pins you to, into your own lane only on open
+  road, and slicks refuse to slide you into their path.
+- The Cars & Coffee badge on the title screen, and a two row HUD
+  with double size digits and a boost pill.
+
+From milestone 4:
 
 - Six difficulty tiers at distance milestones (every 2000 meters). Each raises scroll speed, traffic density, cluster
   pressure, double row frequency, and the spread of traffic speeds,
@@ -77,9 +102,10 @@ From milestone 1:
 - Dev overlay with live movement sliders
 - Headless determinism test and a game purity guard test
 
-Not built yet, by design: audio (step 10), parallax and juice
-(step 11), the full dev overlay (step 12). The two select screens
-from brief section 9 are also still to come.
+Not built yet, by design: parallax and juice (step 11) and the full
+dev overlay (step 12). The car option in the menus covers vehicle
+selection; a fuller select screen can grow from it when more
+vehicles unlock.
 
 ## How to run
 
@@ -116,7 +142,9 @@ backtick on a keyboard.
 | Lane left | Left arrow or A | Swipe left, or tap left third |
 | Lane right | Right arrow or D | Swipe right, or tap right third |
 | Boost | Up arrow, W, or space | Swipe up, or tap your own lane |
+| Pause | Escape or P | Two finger tap |
 | Dev overlay | Backtick | Three finger tap |
+| Start / restart | Menu button only | Menu button only |
 
 Touch is read across the whole screen, letterbox included, and each
 finger is tracked independently, so a tap that starts before the

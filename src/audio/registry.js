@@ -18,6 +18,7 @@ export const AUDIO_EVENTS = [
   'slick_slide',
   'fuel_low',
   'tier_up',
+  'overtake',
   'game_over',
   'music_loop'
 ];

@@ -22,7 +22,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, step, currentSpeedPxPerSec } from '../src/game/world.js';
-import { TUNING, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
+import { TUNING, TRAFFIC_VARIANTS, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
 
 TUNING.fuel.passiveDrainPerSec = 0;
 TUNING.hazards.rubble.fuelCost = 0; /* the oracle tests dodging, not fuel */
@@ -69,7 +69,28 @@ function predictWindows(world, vP) {
       }
     }
   }
-  return windows.filter(Boolean).sort((a, b) => a.tStart - b.tStart);
+  const result = windows.filter(Boolean);
+  /* Overtakers approach from behind at constant speed; model their
+     pass over the player as an event in their lane. */
+  for (const ov of world.overtakers) {
+    const rel = ov.speedPxPerSec - vP;
+    if (rel <= 0) continue;
+    const vv = TRAFFIC_VARIANTS[ov.variant];
+    const halfH = (pH + vv.hPx) / 2 - o.hitboxShrinkPx;
+    const dy = ov.distPx - world.distancePx;
+    const tCenter = -dy / rel;
+    if (tCenter > LOOKAHEAD_SEC) continue;
+    /* skip overtakers that have effectively passed already */
+    if (tCenter + halfH / rel <= 0.05) continue;
+    const lanes = new Array(TUNING.road.laneCount).fill(false);
+    lanes[ov.lane] = true;
+    result.push({
+      tStart: Math.max(0, tCenter - halfH / rel),
+      tEnd: tCenter + halfH / rel,
+      lanes
+    });
+  }
+  return result.sort((a, b) => a.tStart - b.tStart);
 }
 
 /*
@@ -78,11 +99,14 @@ function predictWindows(world, vP) {
   cautious pass commits to moves early instead of procrastinating the
   fairness slack away; doom is only asserted on the exact budget.
 */
-function planFirstMove(world, marginSec) {
+function planFirstMove(world, marginSec, tweenScale = 1) {
   const p = world.player;
   const committed = p.tween ? p.tween.to : p.lane;
   const vP = currentSpeedPxPerSec(world);
-  const tweenSec = world.laneTweenMs / 1000;
+  /* tweenScale below 1 models that a lane change clears a collision
+     partway through the tween, not at its end. Used only by the
+     final doom check, never by the cautious pass. */
+  const tweenSec = (world.laneTweenMs / 1000) * tweenScale;
 
   const events = predictWindows(world, vP);
   let prevEnd = p.tween ? (p.tween.totalFrames - p.tween.frame) / TUNING.logic.hz : 0;
@@ -116,10 +140,11 @@ function planFirstMove(world, marginSec) {
   return fallback === null ? 0 : fallback;
 }
 
-/* Quick gate: skip the full predictive plan while the nearest row is
-   comfortably far. Anything beyond the gate is even farther. */
-function nearestRowSec(world, vP) {
+/* Quick gate: skip the full predictive plan while nothing is close,
+   rows ahead or overtakers behind. */
+function nearestThreatSec(world, vP) {
   const pH = world.player.hitbox.hPx;
+  let nearest = Infinity;
   for (let i = 0; i < world.rows.length; i += 1) {
     const row = world.rows[i];
     const closing = vP - row.speedPxPerSec;
@@ -127,9 +152,17 @@ function nearestRowSec(world, vP) {
     const halfH = (pH + row.maxHPx) / 2;
     const dy = row.distPx - world.distancePx;
     if (dy < -halfH) continue;
-    return Math.max(0, (dy - halfH) / closing);
+    nearest = Math.max(0, (dy - halfH) / closing);
+    break;
   }
-  return Infinity;
+  for (const ov of world.overtakers) {
+    const rel = ov.speedPxPerSec - vP;
+    if (rel <= 0) continue;
+    const dy = ov.distPx - world.distancePx;
+    const t = Math.max(0, (-dy - 60) / rel);
+    if (t < nearest) nearest = t;
+  }
+  return nearest;
 }
 
 test('an oracle player survives the real simulation through every tier for every seed', () => {
@@ -144,10 +177,10 @@ test('an oracle player survives the real simulation through every tier for every
       const intents = [];
       if (!world.player.tween) {
         const vP = currentSpeedPxPerSec(world);
-        if (nearestRowSec(world, vP) < 1.5) {
+        if (nearestThreatSec(world, vP) < 1.5) {
           const cautiousMargin = (TUNING.obstacles.reactionBufferMs / 1000) * 0.8;
           let move = planFirstMove(world, cautiousMargin);
-          if (move === 'doomed') move = planFirstMove(world, 0);
+          if (move === 'doomed') move = planFirstMove(world, 0, 0.75);
           assert.notEqual(move, 'doomed',
             `oracle doomed: seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
           if (move !== 0) intents.push({ type: 'lane', dir: move });

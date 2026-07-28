@@ -8,7 +8,7 @@
 */
 
 import { TUNING, TRAFFIC_VARIANTS } from './tuning.js';
-import { seedToState } from './rng.js';
+import { seedToState, nextFloat01 } from './rng.js';
 import { createPlayer, laneCenterXPx, playerLaneFloat } from './entities.js';
 import { createGenState, nextRowSpec } from './generator.js';
 
@@ -40,6 +40,11 @@ export function createWorld({ seed, vehicle, environment }) {
     speedTierMult: TUNING.tiers[0].speed,
     tierFlashFrames: 0,
     player: createPlayer(vehicle),
+    /* Event names emitted this frame, drained by the app layer for
+       sound and rumble. Plain strings; the simulation stays pure. */
+    events: [],
+    /* Fast sports cars passing from behind, past tier 1. */
+    overtakers: [],
     /* Traffic rows, ordered by distPx. A row is a lane pattern that
        moves as a unit at its own speed. */
     rows: [],
@@ -126,6 +131,7 @@ export function step(world, intents) {
   /* After death the world freezes; only the frame counter advances.
      The app layer decides what to show and when to restart. */
   if (world.status !== 'running') return world;
+  world.events.length = 0;
   const dt = 1 / TUNING.logic.hz;
 
   updateTier(world);
@@ -141,6 +147,8 @@ export function step(world, intents) {
   advanceTraffic(world, dt);
   cullOvertakenSlicks(world);
   spawn(world);
+  updateOvertakers(world, dt);
+  maybeSpawnOvertaker(world);
   prune(world);
   drainFuel(world, dt);
   if (world.status !== 'running') return world;
@@ -148,6 +156,8 @@ export function step(world, intents) {
   checkHazards(world);
   if (world.status !== 'running') return world;
   checkCollision(world);
+  if (world.status !== 'running') return world;
+  checkOvertakerCollision(world);
   return world;
 }
 
@@ -160,6 +170,7 @@ function updateTier(world) {
   if (idx !== world.tier) {
     world.tier = idx;
     world.tierFlashFrames = 90;
+    world.events.push('tier_up');
   }
   const target = TUNING.tiers[world.tier].speed;
   const rate = TUNING.tierRampPerFrame;
@@ -171,7 +182,10 @@ function updateTier(world) {
 }
 
 function tickTimers(world) {
-  if (world.boostFramesLeft > 0) world.boostFramesLeft -= 1;
+  if (world.boostFramesLeft > 0) {
+    world.boostFramesLeft -= 1;
+    if (world.boostFramesLeft === 0) world.events.push('boost_end');
+  }
   if (world.slideLockFrames > 0) world.slideLockFrames -= 1;
   if (world.slowFrames > 0) world.slowFrames -= 1;
   if (world.invulnFrames > 0) world.invulnFrames -= 1;
@@ -230,6 +244,7 @@ function tryBoost(world) {
   if (world.boostFramesLeft > 0) return;
   if (world.fuel < TUNING.boost.minFuel) return;
   world.boostFramesLeft = msToFrames(TUNING.boost.durationMs);
+  world.events.push('boost_start');
 }
 
 function startTween(world, dir) {
@@ -237,6 +252,7 @@ function startTween(world, dir) {
   const target = p.lane + dir;
   if (!laneInRange(target)) return;
   p.tween = { from: p.lane, to: target, frame: 0, totalFrames: tweenTotalFrames(world) };
+  world.events.push('lane_change');
 }
 
 function advancePlayer(world) {
@@ -352,6 +368,9 @@ function spawn(world) {
     world.corridorMask = openMask;
     world.clusterLen = 0;
   }
+  /* Each row remembers the guaranteed corridor as of its spawn; the
+     overtaker squeeze guard reads it. */
+  row.corridorMask = world.corridorMask;
   /* Hazards live in full gaps only; cluster interiors have no room
      for a slide or a recovery. */
   let hazardPlaced = false;
@@ -480,6 +499,7 @@ function prune(world) {
 
 function drainFuel(world, dt) {
   /* Passive drain scales with the tier's speed, per the brief. */
+  const before = world.fuel;
   const rate = TUNING.fuel.passiveDrainPerSec * world.speedTierMult
     + (isBoosting(world) ? TUNING.fuel.boostDrainPerSec : 0);
   world.fuel -= rate * dt;
@@ -487,6 +507,11 @@ function drainFuel(world, dt) {
     world.fuel = 0;
     world.status = 'dead';
     world.deathCause = 'fuel';
+    world.events.push('game_over');
+    return;
+  }
+  if (before > TUNING.fuel.lowThreshold && world.fuel <= TUNING.fuel.lowThreshold) {
+    world.events.push('fuel_low');
   }
 }
 
@@ -503,6 +528,7 @@ function collectCoffee(world) {
     if (Math.abs(px - laneCenterXPx(cup.lane)) < halfW) {
       world.pickups.splice(i, 1);
       world.fuel = Math.min(TUNING.fuel.max, world.fuel + TUNING.fuel.coffeeRefill);
+      world.events.push('coffee_pickup');
     }
   }
 }
@@ -545,6 +571,17 @@ function slideTargetBlocked(world, slick) {
     if (dy < -hz.cullOverlapPx) continue;
     if (world.rows[i].lanes[target]) return true;
   }
+  /* Never slide into a lane an overtaker will blast through before
+     the slide lock ends and the player has had time to escape. */
+  const ovWindowSec = (hz.slideLockMs + 2 * world.laneTweenMs + TUNING.obstacles.reactionBufferMs) / 1000 + 0.4;
+  for (let i = 0; i < world.overtakers.length; i += 1) {
+    const ov = world.overtakers[i];
+    if (ov.lane !== target) continue;
+    const rel = ov.speedPxPerSec - v;
+    if (rel <= 0) continue;
+    const tCenter = -(ov.distPx - world.distancePx) / rel;
+    if (tCenter > -0.3 && tCenter < ovWindowSec) return true;
+  }
   return false;
 }
 
@@ -555,6 +592,7 @@ function startSlide(world, slick) {
   p.lane = slick.lane;
   p.tween = { from: slick.lane, to: target, frame: 0, totalFrames: tweenTotalFrames(world) };
   world.slideLockFrames = msToFrames(TUNING.hazards.slick.slideLockMs);
+  world.events.push('slick_slide');
 }
 
 function checkHazards(world) {
@@ -582,10 +620,12 @@ function checkHazards(world) {
       world.fuel -= hz.rubble.fuelCost;
       world.slowFrames = Math.max(world.slowFrames, msToFrames(hz.rubble.slowMs));
       world.boostFramesLeft = 0;
+      world.events.push('rubble_hit');
       if (world.fuel <= 0) {
         world.fuel = 0;
         world.status = 'dead';
         world.deathCause = 'fuel';
+        world.events.push('game_over');
         return;
       }
     }
@@ -618,19 +658,133 @@ function checkCollision(world) {
       const halfW = (p.hitbox.wPx + v.wPx) / 2 - o.hitboxShrinkPx;
       const halfH = (p.hitbox.hPx + v.hPx) / 2 - o.hitboxShrinkPx;
       if (Math.abs(dy) < halfH && Math.abs(px - laneCenterXPx(lane)) < halfW) {
-        if (world.stumbleAvailable) {
-          world.stumbleAvailable = false;
-          world.invulnFrames = msToFrames(TUNING.stumble.invulnMs);
-          world.spinFrames = msToFrames(TUNING.stumble.spinMs);
-          world.slowFrames = Math.max(world.slowFrames, msToFrames(TUNING.stumble.slowMs));
-          world.boostFramesLeft = 0;
-          world.slideLockFrames = 0;
-        } else {
-          world.status = 'dead';
-          world.deathCause = 'crash';
-        }
+        lethalHit(world);
         return;
       }
+    }
+  }
+}
+
+function lethalHit(world) {
+  if (world.stumbleAvailable) {
+    world.stumbleAvailable = false;
+    world.invulnFrames = msToFrames(TUNING.stumble.invulnMs);
+    world.spinFrames = msToFrames(TUNING.stumble.spinMs);
+    world.slowFrames = Math.max(world.slowFrames, msToFrames(TUNING.stumble.slowMs));
+    world.boostFramesLeft = 0;
+    world.slideLockFrames = 0;
+    world.events.push('stumble');
+  } else {
+    world.status = 'dead';
+    world.deathCause = 'crash';
+    world.events.push('crash');
+    world.events.push('game_over');
+  }
+}
+
+/* Sports cars from behind: spectacle with teeth. Lethal on contact
+   like any traffic, telegraphed by the warning chevrons the renderer
+   draws while they approach. */
+const OVERTAKER_VARIANT_IDS = ['lambo', 'lambo2', 'camaro', 'camaro2',
+  'mustang2', 'mustang3', 'challenger2', 'challenger3']
+  .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
+  .filter((i) => i >= 0);
+
+function updateOvertakers(world, dt) {
+  const o = TUNING.overtakers;
+  for (let i = world.overtakers.length - 1; i >= 0; i -= 1) {
+    const ov = world.overtakers[i];
+    ov.distPx += ov.speedPxPerSec * dt;
+    if (ov.distPx - world.distancePx > o.despawnAheadPx) {
+      world.overtakers.splice(i, 1);
+    }
+  }
+}
+
+function overtakerLaneClear(world, lane, vO) {
+  const o = TUNING.overtakers;
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const dy = world.rows[i].distPx - world.distancePx;
+    if (dy < -o.clearLanePx) continue;
+    if (dy > o.clearLanePx) break;
+    if (world.rows[i].lanes[lane]) return false;
+  }
+  /* Squeeze guard: never pass while any row the player meets around
+     the same moment has a guaranteed corridor that collapses to the
+     overtaker's lane. Clusters pin the player to their corridor, so
+     this checks the stored corridor mask, not just single rows. */
+  const vPlayer = currentSpeedPxPerSec(world);
+  const tMeet = o.spawnBehindPx / Math.max(1, vO - vPlayer);
+  const laneBit = 1 << lane;
+  const fullMask = (1 << TUNING.road.laneCount) - 1;
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const row = world.rows[i];
+    const dy = row.distPx - world.distancePx;
+    if (dy <= 0) continue;
+    /* A row's arrival is an interval, not a point: it may clamp to
+       stalled traffic ahead and arrive at full closing speed. */
+    const tMin = dy / vPlayer;
+    const closing = vPlayer - row.speedPxPerSec;
+    const tMax = closing > 0 ? dy / closing : Infinity;
+    if (tMax < tMeet - o.squeezeGuardSec || tMin > tMeet + o.squeezeGuardSec) continue;
+    if ((row.corridorMask & fullMask & ~laneBit) === 0) return false;
+  }
+  /* Into the player's own lane only on open road: a corridor lane
+     existing is not enough when a cluster has the player pinned with
+     no room to reach it. If the first row ahead arrives before the
+     pass is over, pick another lane. */
+  const committed = world.player.tween ? world.player.tween.to : world.player.lane;
+  if (lane === committed) {
+    for (let i = 0; i < world.rows.length; i += 1) {
+      const dy = world.rows[i].distPx - world.distancePx;
+      if (dy < 0) continue;
+      if (dy / vPlayer < tMeet + o.squeezeGuardSec) return false;
+      break;
+    }
+  }
+  return true;
+}
+
+function maybeSpawnOvertaker(world) {
+  const o = TUNING.overtakers;
+  if (world.tier < o.minTier) return;
+  if (world.overtakers.length >= o.maxActive) return;
+  if (world.frame % TUNING.logic.hz !== 0) return;
+  let s = world.rngState;
+  let roll;
+  [roll, s] = nextFloat01(s);
+  if (roll < o.chancePerSec) {
+    let laneRoll;
+    let speedRoll;
+    let variantRoll;
+    [laneRoll, s] = nextFloat01(s);
+    [speedRoll, s] = nextFloat01(s);
+    [variantRoll, s] = nextFloat01(s);
+    const lane = Math.min(TUNING.road.laneCount - 1, Math.floor(laneRoll * TUNING.road.laneCount));
+    const vO = baseSpeedPxPerSec(world) * (o.speedMultMin + speedRoll * (o.speedMultMax - o.speedMultMin));
+    if (OVERTAKER_VARIANT_IDS.length > 0 && overtakerLaneClear(world, lane, vO)) {
+      const variant = OVERTAKER_VARIANT_IDS[Math.min(OVERTAKER_VARIANT_IDS.length - 1,
+        Math.floor(variantRoll * OVERTAKER_VARIANT_IDS.length))];
+      world.overtakers.push({ lane, distPx: world.distancePx - o.spawnBehindPx, speedPxPerSec: vO, variant });
+      world.events.push('overtake');
+    }
+  }
+  world.rngState = s;
+}
+
+function checkOvertakerCollision(world) {
+  if (world.invulnFrames > 0) return;
+  const p = world.player;
+  const px = laneCenterXPx(playerLaneFloat(p));
+  for (let i = 0; i < world.overtakers.length; i += 1) {
+    const ov = world.overtakers[i];
+    const v = TRAFFIC_VARIANTS[ov.variant];
+    const halfW = (p.hitbox.wPx + v.wPx) / 2 - TUNING.obstacles.hitboxShrinkPx;
+    const halfH = (p.hitbox.hPx + v.hPx) / 2 - TUNING.obstacles.hitboxShrinkPx;
+    const dy = ov.distPx - world.distancePx;
+    if (Math.abs(dy) < halfH && Math.abs(px - laneCenterXPx(ov.lane)) < halfW) {
+      lethalHit(world);
+      return;
     }
   }
 }

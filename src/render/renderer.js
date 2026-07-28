@@ -47,6 +47,15 @@ export function createRenderer(canvas) {
     return ((clientX - rect.left) / rect.width) * W;
   }
 
+  /* Full logical coordinates, for menu hit testing. */
+  function screenToLogical(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((clientX - rect.left) / rect.width) * W,
+      y: ((clientY - rect.top) / rect.height) * H
+    };
+  }
+
   function drawRoad(distancePx, pal) {
     bctx.fillStyle = pal.offroad;
     bctx.fillRect(0, 0, W, H);
@@ -81,7 +90,7 @@ export function createRenderer(canvas) {
   */
   function drawPlayer(view) {
     if (view.invulnFrames > 0 && Math.floor(view.invulnFrames / 4) % 2 === 1) return;
-    const spr = getSprite('player_car');
+    const spr = getSprite(view.playerSpriteKey || 'player_car');
     const cx = laneCenterXPx(view.laneFloat);
     const cy = TUNING.render.playerYPx;
     if (view.spinFrames > 0) {
@@ -94,6 +103,36 @@ export function createRenderer(canvas) {
       return;
     }
     bctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
+  }
+
+  /*
+    Overtakers, plus their telegraph: while one is still approaching
+    from behind, flashing chevrons at the bottom of its lane warn
+    which lane is about to be hot.
+  */
+  function drawOvertakers(view, pal) {
+    const t = performance.now() / 1000;
+    for (let i = 0; i < view.overtakers.length; i += 1) {
+      const ov = view.overtakers[i];
+      const dy = ov.distPx - view.distancePx;
+      const screenY = TUNING.render.playerYPx - dy;
+      if (screenY > H + 40 && Math.floor(t * 6) % 2 === 0) {
+        /* still below the screen: warning chevrons */
+        const cx = Math.round(laneCenterXPx(ov.lane));
+        bctx.fillStyle = pal.carBody;
+        for (let c = 0; c < 2; c += 1) {
+          const baseY = H - 8 - c * 7;
+          for (let k = -3; k <= 3; k += 1) {
+            bctx.fillRect(cx + k, baseY + Math.abs(k) - 3, 1, 3);
+          }
+        }
+        continue;
+      }
+      if (screenY < -70 || screenY > H + 70) continue;
+      const spr = getTrafficSprite(ov.variant);
+      const x = Math.round(laneCenterXPx(ov.lane) - spr.width / 2);
+      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
+    }
   }
 
   /* Road features draw under everything that drives over them. */
@@ -231,22 +270,37 @@ export function createRenderer(canvas) {
       bctx.fillRect(barX + fb.wPx + 2, barY - 1, 1, fb.hPx + 2);
     }
 
-    /* stumble heart at the bar's right end */
+    /* stumble heart, then the boost pill, on the same row */
     const heart = getSprite(view.stumbleAvailable ? 'ui_heart_full' : 'ui_heart_empty');
-    bctx.drawImage(heart, barX + fb.wPx + 5, Math.round(barY + fb.hPx / 2 - heart.height / 2));
+    const heartX = barX + fb.wPx + 5;
+    bctx.drawImage(heart, heartX, Math.round(barY + fb.hPx / 2 - heart.height / 2));
+    const bp = TUNING.render.boostPill;
+    const bpX = heartX + heart.width + 5;
+    const bpY = Math.round(barY + fb.hPx / 2 - bp.hPx / 2);
+    drawPlate(bpX, bpY, bp.wPx, bp.hPx, pal);
+    if (view.boosting) {
+      bctx.fillStyle = pal.dash;
+      bctx.fillRect(bpX + 1, bpY + 1, Math.round((bp.wPx - 2) * view.boostFrac), bp.hPx - 2);
+    } else if (view.boostReady) {
+      bctx.fillStyle = pal.edgeLine;
+      bctx.fillRect(bpX + 1, bpY + 1, bp.wPx - 2, bp.hPx - 2);
+      bctx.fillStyle = pal.carDark;
+      bctx.fillRect(bpX + 1, bpY + bp.hPx - 2, bp.wPx - 2, 1);
+    }
   }
 
   /* Brief HUD: score, high score, fuel meter, stumble indicator, all
-     in the same cartoon capsule style on the shaded band. */
+     in the same cartoon capsule style on the shaded band. Row one is
+     the double size digits. */
   function drawScore(view, pal) {
     const p = TUNING.render.hudPlate;
     drawPlate(p.marginPx, p.yPx, p.wPx, p.hPx, pal);
-    drawText(bctx, view.meters + 'M', p.marginPx + p.wPx / 2, p.yPx + 5, pal.text,
-      { scale: 1, align: 'center' });
+    drawText(bctx, view.meters + 'M', p.marginPx + p.wPx / 2, p.yPx + 4, pal.text,
+      { scale: 2, align: 'center' });
     const hiX = W - p.marginPx - p.wPx;
     drawPlate(hiX, p.yPx, p.wPx, p.hPx, pal);
-    drawText(bctx, 'HI ' + view.high, hiX + p.wPx / 2, p.yPx + 5, pal.edgeLine,
-      { scale: 1, align: 'center' });
+    drawText(bctx, String(view.high), hiX + p.wPx / 2, p.yPx + 4, pal.edgeLine,
+      { scale: 2, align: 'center' });
   }
 
   function drawTierBanner(view, pal) {
@@ -260,35 +314,100 @@ export function createRenderer(canvas) {
     drawText(bctx, 'Faster. Denser.', W / 2, 140, pal.text, { scale: 1, align: 'center' });
   }
 
-  function drawTitle(pal) {
+  /*
+    Menus. One primary button plus option rows, laid out from tuning
+    and hit tested in logical coordinates by the app. Starting a run
+    is ONLY ever the primary button; stray taps and keys do nothing.
+  */
+  function menuLayout(mode) {
+    const m = TUNING.render.menu;
+    const items = [];
+    let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 170);
+    const primaryLabel = mode === 'title' ? 'Start' : (mode === 'paused' ? 'Resume' : 'Go again');
+    items.push({ id: 'primary', label: primaryLabel, x: Math.round((W - m.primary.wPx) / 2), y, w: m.primary.wPx, h: m.primary.hPx });
+    y += m.primary.hPx + m.option.gapPx + 6;
+    for (const id of ['car', 'sound', 'haptics']) {
+      items.push({ id, x: Math.round((W - m.option.wPx) / 2), y, w: m.option.wPx, h: m.option.hPx });
+      y += m.option.hPx + m.option.gapPx;
+    }
+    if (mode === 'paused') {
+      items.push({ id: 'restart', label: 'Restart', x: Math.round((W - m.option.wPx) / 2), y: y + 6, w: m.option.wPx, h: m.option.hPx });
+    }
+    return items;
+  }
+
+  function hitTestMenu(mode, lx, ly) {
+    if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver') return null;
+    for (const item of menuLayout(mode)) {
+      if (lx >= item.x && lx <= item.x + item.w && ly >= item.y && ly <= item.y + item.h) {
+        return item.id;
+      }
+    }
+    return null;
+  }
+
+  function drawMenu(view, pal, mode) {
+    for (const item of menuLayout(mode)) {
+      if (item.id === 'primary') {
+        bctx.fillStyle = pal.outline;
+        bctx.fillRect(item.x + 1, item.y - 1, item.w - 2, item.h + 2);
+        bctx.fillRect(item.x - 1, item.y + 1, item.w + 2, item.h - 2);
+        bctx.fillRect(item.x, item.y, item.w, item.h);
+        bctx.fillStyle = pal.edgeLine;
+        bctx.fillRect(item.x + 1, item.y + 1, item.w - 2, item.h - 2);
+        bctx.fillStyle = pal.carDark;
+        bctx.fillRect(item.x + 1, item.y + item.h - 2, item.w - 2, 1);
+        drawText(bctx, item.label, item.x + item.w / 2, item.y + 5, pal.outline, { scale: 2, align: 'center' });
+      } else if (item.id === 'restart') {
+        drawPlate(item.x, item.y, item.w, item.h, pal);
+        drawText(bctx, item.label, item.x + item.w / 2, item.y + 5, pal.text, { scale: 1, align: 'center' });
+      } else {
+        drawPlate(item.x, item.y, item.w, item.h, pal);
+        let label;
+        let value;
+        if (item.id === 'car') {
+          label = 'Car';
+          value = (view.vehicleName || '').toUpperCase();
+        } else if (item.id === 'sound') {
+          label = 'Sound';
+          value = view.soundOn ? 'ON' : 'OFF';
+        } else {
+          label = 'Rumble';
+          value = view.hapticsSupported ? (view.hapticsOn ? 'ON' : 'OFF') : 'N/A';
+        }
+        drawText(bctx, label, item.x + 6, item.y + 5, pal.text, { scale: 1, align: 'left' });
+        drawText(bctx, value, item.x + item.w - 6, item.y + 5, pal.edgeLine, { scale: 1, align: 'right' });
+      }
+    }
+  }
+
+  function drawTitle(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
-    drawText(bctx, 'CARS & COFFEE', W / 2, 96, pal.edgeLine, { scale: 2, align: 'center' });
-    drawText(bctx, 'Tap or press a key', W / 2, 170, pal.text, { scale: 1, align: 'center' });
-    drawText(bctx, 'to start', W / 2, 180, pal.text, { scale: 1, align: 'center' });
+    const badge = getSprite('ui_badge');
+    bctx.drawImage(badge, Math.round((W - badge.width) / 2), 16);
+    drawMenu(view, pal, 'title');
   }
 
   function drawGameOver(pal, view) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
     const cause = view.deathCause === 'fuel' ? 'Out of fuel' : 'Crashed';
-    drawText(bctx, cause, W / 2, 100, pal.carBody, { scale: 2, align: 'center' });
-    drawText(bctx, view.meters + ' m', W / 2, 130, pal.text, { scale: 2, align: 'center' });
+    drawText(bctx, cause, W / 2, 88, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m', W / 2, 116, pal.text, { scale: 2, align: 'center' });
     if (view.newBest) {
-      drawText(bctx, 'New best!', W / 2, 152, pal.edgeLine, { scale: 1, align: 'center' });
+      drawText(bctx, 'New best!', W / 2, 140, pal.edgeLine, { scale: 1, align: 'center' });
     } else {
-      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 152, pal.text, { scale: 1, align: 'center' });
+      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 140, pal.text, { scale: 1, align: 'center' });
     }
-    drawText(bctx, 'Tap or press a key', W / 2, 180, pal.text, { scale: 1, align: 'center' });
-    drawText(bctx, 'to restart', W / 2, 190, pal.text, { scale: 1, align: 'center' });
+    drawMenu(view, pal, 'gameOver');
   }
 
-  function drawPaused(pal) {
+  function drawPaused(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
-    drawText(bctx, 'Paused', W / 2, 140, pal.text, { scale: 2, align: 'center' });
-    drawText(bctx, 'Tap or press a key', W / 2, 170, pal.text, { scale: 1, align: 'center' });
-    drawText(bctx, 'to resume', W / 2, 180, pal.text, { scale: 1, align: 'center' });
+    drawText(bctx, 'Paused', W / 2, 88, pal.text, { scale: 2, align: 'center' });
+    drawMenu(view, pal, 'paused');
   }
 
   /*
@@ -300,6 +419,7 @@ export function createRenderer(canvas) {
     drawRoad(view.distancePx, pal);
     drawHazards(view);
     drawPickups(view);
+    drawOvertakers(view, pal);
     drawTraffic(view);
     drawPlayer(view);
     if (view.mode === 'playing' || view.mode === 'paused' || view.mode === 'gameOver') {
@@ -308,11 +428,11 @@ export function createRenderer(canvas) {
       drawScore(view, pal);
       drawTierBanner(view, pal);
     }
-    if (view.mode === 'title') drawTitle(pal);
-    if (view.mode === 'paused') drawPaused(pal);
+    if (view.mode === 'title') drawTitle(view, pal);
+    if (view.mode === 'paused') drawPaused(view, pal);
     if (view.mode === 'gameOver') drawGameOver(pal, view);
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize, screenToLogicalX };
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu };
 }

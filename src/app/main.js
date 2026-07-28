@@ -1,11 +1,11 @@
 /*
   Bootstrap and state machine. Owns the world instance, drains input
   intents into the fixed timestep, snapshots state for interpolated
-  rendering, and handles pause on visibility loss.
+  rendering, handles pause on visibility loss, and runs the menus.
 
-  States in this slice: title, playing, paused. The select screens and
-  gameOver arrive in later build steps; the machine is a plain mode
-  string plus routing in onIntent, which is all the brief's flow needs.
+  Starting or restarting a run happens ONLY through the primary menu
+  button, and menu taps are ignored for a beat after a menu opens, so
+  a frantic last second tap can never launch a run by accident.
 */
 
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../game/tuning.js';
@@ -15,28 +15,62 @@ import { createRenderer } from '../render/renderer.js';
 import { loadSprites } from '../render/sprites.js';
 import { attachKeyboard } from '../input/keyboard.js';
 import { attachTouch } from '../input/touch.js';
+import { createAudio } from '../audio/audio.js';
 import { createLoop } from './loop.js';
 import { createDevOverlay } from './devOverlay.js';
+import { createHaptics } from './haptics.js';
 
 const canvas = document.getElementById('game');
 const renderer = createRenderer(canvas);
+const audio = createAudio();
+const haptics = createHaptics();
 
 let mode = 'title';
 let world = null;
 let pending = [];
 let prevSnap = { distancePx: 0, laneFloat: 1 };
 let currSnap = prevSnap;
-
-/* Persisted high score, per vehicle and environment so future
-   combos never collide. */
-const HIGH_KEY = 'cc.high.sports.city.v1';
-let high = 0;
-try {
-  high = Number(localStorage.getItem(HIGH_KEY)) || 0;
-} catch (e) {
-  high = 0;
-}
+let menuEnteredAt = 0;
 let newBest = false;
+
+/* Persisted settings and per vehicle high scores. */
+const UNLOCKED = Object.values(VEHICLES).filter((v) => !v.locked).map((v) => v.id);
+
+function loadSetting(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function saveSetting(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    /* private mode etc.; the game still works without persistence */
+  }
+}
+
+let vehicleId = loadSetting('cc.vehicle.v1', UNLOCKED[0]);
+if (!UNLOCKED.includes(vehicleId)) vehicleId = UNLOCKED[0];
+let soundOn = loadSetting('cc.sound.v1', '1') === '1';
+let hapticsOn = loadSetting('cc.haptics.v1', '1') === '1';
+audio.setMuted(!soundOn);
+haptics.setEnabled(hapticsOn);
+
+const highs = {};
+function getHigh(id) {
+  if (!(id in highs)) {
+    highs[id] = Number(loadSetting('cc.high.' + id + '.city.v1', '0')) || 0;
+  }
+  return highs[id];
+}
+function setHigh(id, meters) {
+  highs[id] = meters;
+  saveSetting('cc.high.' + id + '.city.v1', String(meters));
+}
 
 const overlay = createDevOverlay(() => world);
 
@@ -50,19 +84,57 @@ function startRun() {
      which is what the headless tests prove. */
   world = createWorld({
     seed: Date.now() >>> 0,
-    vehicle: VEHICLES.sports,
+    vehicle: VEHICLES[vehicleId],
     environment: ENVIRONMENTS.city
   });
-  /* Pick up any live overlay tuning done on the title screen. */
   world.laneTweenMs = TUNING.movement.laneTweenMs;
   pending = [];
   newBest = false;
   prevSnap = currSnap = snapshot();
   mode = 'playing';
+  audio.startMusic();
 }
 
-function pause() {
-  if (mode === 'playing') mode = 'paused';
+function pauseRun() {
+  if (mode !== 'playing') return;
+  mode = 'paused';
+  menuEnteredAt = performance.now();
+  audio.stopMusic();
+}
+
+function resumeRun() {
+  mode = 'playing';
+  audio.startMusic();
+}
+
+function cycleVehicle() {
+  const idx = (UNLOCKED.indexOf(vehicleId) + 1) % UNLOCKED.length;
+  vehicleId = UNLOCKED[idx];
+  saveSetting('cc.vehicle.v1', vehicleId);
+}
+
+function handleMenuTap(clientX, clientY) {
+  if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+  const p = renderer.screenToLogical(clientX, clientY);
+  const id = renderer.hitTestMenu(mode, p.x, p.y);
+  if (!id) return;
+  if (id === 'primary') {
+    if (mode === 'paused') resumeRun();
+    else startRun();
+  } else if (id === 'restart') {
+    startRun();
+  } else if (id === 'car') {
+    cycleVehicle();
+  } else if (id === 'sound') {
+    soundOn = !soundOn;
+    audio.setMuted(!soundOn);
+    if (!soundOn) audio.stopMusic();
+    saveSetting('cc.sound.v1', soundOn ? '1' : '0');
+  } else if (id === 'haptics') {
+    hapticsOn = !hapticsOn;
+    haptics.setEnabled(hapticsOn);
+    saveSetting('cc.haptics.v1', hapticsOn ? '1' : '0');
+  }
 }
 
 /*
@@ -85,21 +157,21 @@ function resolveTap(clientX) {
 }
 
 function onIntent(intent) {
+  /* Any gesture is a legal moment to unlock the sound engine. */
+  audio.unlock();
   if (intent.type === 'devtoggle') {
     overlay.toggle();
     return;
   }
-  if (mode === 'title') {
-    startRun();
+  if (intent.type === 'pause') {
+    if (mode === 'playing') pauseRun();
+    else if (mode === 'paused') resumeRun();
     return;
   }
-  if (mode === 'paused') {
-    mode = 'playing';
-    return;
-  }
-  if (mode === 'gameOver') {
-    /* Instant restart: game over to playing again in one input. */
-    startRun();
+  if (mode !== 'playing') {
+    /* Menus respond only to taps on their buttons. Nothing here can
+       start a run by swipe, key, or stray tap. */
+    if (intent.type === 'tapAt') handleMenuTap(intent.clientX, intent.clientY);
     return;
   }
   pending.push(intent.type === 'tapAt' ? resolveTap(intent.clientX) : intent);
@@ -109,6 +181,8 @@ let fps = 0;
 let fpsFrames = 0;
 let fpsWindowStart = performance.now();
 
+const BOOST_TOTAL_FRAMES = Math.max(1, Math.round((TUNING.boost.durationMs / 1000) * TUNING.logic.hz));
+
 const loop = createLoop({
   update() {
     if (mode !== 'playing' || !world) return;
@@ -117,17 +191,18 @@ const loop = createLoop({
     pending = [];
     step(world, intents);
     currSnap = snapshot();
+    for (let i = 0; i < world.events.length; i += 1) {
+      audio.play(world.events[i]);
+      haptics.trigger(world.events[i]);
+    }
     if (world.status === 'dead') {
       mode = 'gameOver';
+      menuEnteredAt = performance.now();
+      audio.stopMusic();
       const meters = Math.floor(distanceMeters(world));
-      if (meters > high) {
-        high = meters;
+      if (meters > getHigh(world.vehicleId)) {
+        setHigh(world.vehicleId, meters);
         newBest = true;
-        try {
-          localStorage.setItem(HIGH_KEY, String(high));
-        } catch (e) {
-          /* private mode etc.; the run still works without persistence */
-        }
       }
     }
   },
@@ -145,8 +220,11 @@ const loop = createLoop({
     view.rows = world ? world.rows : [];
     view.pickups = world ? world.pickups : [];
     view.hazards = world ? world.hazards : [];
+    view.overtakers = world ? world.overtakers : [];
     view.fuel = world ? world.fuel : TUNING.fuel.max;
     view.boosting = world ? isBoosting(world) : false;
+    view.boostFrac = world ? world.boostFramesLeft / BOOST_TOTAL_FRAMES : 0;
+    view.boostReady = world ? world.fuel >= TUNING.boost.minFuel : true;
     view.deathCause = world ? world.deathCause : null;
     view.meters = world ? Math.floor(distanceMeters(world)) : 0;
     view.spinFrames = world ? world.spinFrames : 0;
@@ -154,8 +232,13 @@ const loop = createLoop({
     view.tier = world ? world.tier : 0;
     view.tierFlashFrames = world ? world.tierFlashFrames : 0;
     view.stumbleAvailable = world ? world.stumbleAvailable : true;
-    view.high = high;
+    view.playerSpriteKey = world ? world.player.spriteKey : VEHICLES[vehicleId].spriteKey;
+    view.high = world ? getHigh(world.vehicleId) : getHigh(vehicleId);
     view.newBest = newBest;
+    view.vehicleName = VEHICLES[vehicleId].name;
+    view.soundOn = soundOn;
+    view.hapticsOn = hapticsOn;
+    view.hapticsSupported = haptics.supported;
     renderer.drawFrame(view);
 
     fpsFrames += 1;
@@ -172,17 +255,17 @@ const loop = createLoop({
 attachKeyboard(onIntent);
 attachTouch(onIntent);
 
-/* Desktop mouse: advance title and paused screens. Touch never reaches
-   here because the touch adapter suppresses synthetic clicks. */
-canvas.addEventListener('click', () => {
-  if (mode === 'title') startRun();
-  else if (mode === 'paused') mode = 'playing';
+/* Desktop mouse: menu button clicks. Touch never reaches here because
+   the touch adapter suppresses synthetic clicks. */
+canvas.addEventListener('click', (e) => {
+  audio.unlock();
+  if (mode !== 'playing') handleMenuTap(e.clientX, e.clientY);
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) pause();
+  if (document.hidden) pauseRun();
 });
-window.addEventListener('blur', pause);
+window.addEventListener('blur', pauseRun);
 
 /* Sprites load once before the first frame; the game does not start
    on a half loaded sheet. */

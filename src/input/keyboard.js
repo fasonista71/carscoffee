@@ -23,6 +23,11 @@ export function attachKeyboard(emit) {
         e.preventDefault();
         emit({ type: 'boost' });
         break;
+      case 'Escape':
+      case 'KeyP':
+        e.preventDefault();
+        emit({ type: 'pause' });
+        break;
       default:
         break;
     }
