@@ -10,6 +10,17 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 All twelve build order steps are done. Latest additions:
 
+- Organic packs: each car slides up to staggerMaxPx forward or back
+  of its row line, and bumper gaps inside clusters vary over a wider
+  span (tightGapJitterSpan), so traffic staggers like the real thing
+  instead of marching in ranks. Fairness holds because every row's
+  stored extent is inflated by the full stagger span while collisions
+  use the exact per car positions.
+- Stopped cars run hazard flashers: blinking amber corner lights on
+  every stalled row, phase shifted so the road never blinks in
+  unison.
+- Overtakers arrive about half again as often per tier
+  (overtakerChance now 0.33 to 0.6 past 2000 meters).
 - Aggro traffic: a rising share of full gap rows per tier (22 to 62
   percent, TUNING.tiers[].aggro) target the player directly. A single
   block lands on your committed lane; a forced double row opens the

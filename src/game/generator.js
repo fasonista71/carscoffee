@@ -157,9 +157,19 @@ export function nextRowSpec(genState, tierCfg) {
   [aggroRoll, s] = nextFloat01(s);
   [aggroLaneRoll, s] = nextFloat01(s);
 
+  /* One stagger roll per lane, rolled unconditionally so the rng
+     stream never depends on which lanes ended up occupied (aggro may
+     move cars between lanes after this). The world turns these into
+     per car nose forward or hang back offsets. */
+  const staggerRolls = new Array(laneCount);
+  for (let i = 0; i < laneCount; i += 1) {
+    [staggerRolls[i], s] = nextFloat01(s);
+  }
+
   genState.rngState = s;
   return {
     lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter,
-    coffee, hazard, heartRoll, heartLaneRoll, aggroRoll, aggroLaneRoll
+    coffee, hazard, heartRoll, heartLaneRoll, aggroRoll, aggroLaneRoll,
+    staggerRolls
   };
 }

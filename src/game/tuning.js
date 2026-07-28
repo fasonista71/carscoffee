@@ -101,7 +101,17 @@ export const TUNING = {
        rerolled up to this many extra times. Keeps clusters long and
        the road crowded. */
     clusterRerolls: 2,
-    tightExtraGapPx: 8
+    tightExtraGapPx: 8,
+    /* Organic packs: each car in a row slides up to this far forward
+       or back of the row line, so clusters stagger like real traffic
+       instead of marching in ranks. Fairness stays intact because
+       every row's stored extent is inflated by the full stagger span;
+       collisions use the exact per car positions. */
+    staggerMaxPx: 10,
+    /* Bumper gap variance inside a cluster, as a fraction above the
+       tight minimum. Wider than the old 0.35 so pack spacing reads
+       ragged and natural. */
+    tightGapJitterSpan: 0.6
   },
 
   /*
@@ -123,11 +133,11 @@ export const TUNING = {
   */
   tiers: [
     { atMeters: 0,     theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62, aggro: 0.22, overtakerChance: 0 },
-    { atMeters: 2000,  theme: 'desert',   speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66, aggro: 0.32, overtakerChance: 0.22 },
-    { atMeters: 4000,  theme: 'snow',     speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7,  aggro: 0.4,  overtakerChance: 0.27 },
-    { atMeters: 6000,  theme: 'beach',    speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72, aggro: 0.48, overtakerChance: 0.32 },
-    { atMeters: 8000,  theme: 'city',     speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74, aggro: 0.55, overtakerChance: 0.36 },
-    { atMeters: 10000, theme: 'city',     speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75, aggro: 0.62, overtakerChance: 0.4 }
+    { atMeters: 2000,  theme: 'desert',   speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66, aggro: 0.32, overtakerChance: 0.33 },
+    { atMeters: 4000,  theme: 'snow',     speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7,  aggro: 0.4,  overtakerChance: 0.4 },
+    { atMeters: 6000,  theme: 'beach',    speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72, aggro: 0.48, overtakerChance: 0.48 },
+    { atMeters: 8000,  theme: 'city',     speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74, aggro: 0.55, overtakerChance: 0.54 },
+    { atMeters: 10000, theme: 'city',     speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75, aggro: 0.62, overtakerChance: 0.6 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -283,6 +293,9 @@ export const TUNING = {
     /* Blink period for the boost prompt (label, pill ring, and the
        BOOST! callout over the car). Purely visual. */
     boostHintBlinkMs: 130,
+    /* Stopped cars run their hazard flashers at this period, each row
+       phase shifted so the road never blinks in unison. Visual. */
+    hazardBlinkMs: 460,
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
@@ -323,6 +336,7 @@ export const TUNING = {
       slick: '#241839',
       slickSheen: '#43306b',
       slickArrow: '#c2b1ff',
+      hazardLight: '#ffb937',
       rubbleLight: '#b3a58c',
       rubbleMid: '#8a7a66',
       rubbleDark: '#5c5044',

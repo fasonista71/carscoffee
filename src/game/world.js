@@ -442,7 +442,10 @@ function spawn(world) {
     applyAggro(world, spec, cfg);
     steerOpenLaneOffOvertakers(world, spec);
   }
-  const specMaxH = rowMaxHPx(spec.lanes, spec.variants);
+  /* The stored extent covers the full stagger span, so every gap
+     floor, the traffic clamp, and the oracle's windows stay
+     conservative no matter how the cars lean inside the row. */
+  const specMaxH = rowMaxHPx(spec.lanes, spec.variants) + 2 * t.staggerMaxPx;
   const openMask = openMaskOf(spec.lanes);
   keepsCorridor = (openMask & world.corridorMask) === world.corridorMask;
 
@@ -450,7 +453,7 @@ function spawn(world) {
   let gapPx;
   if (tight) {
     minGapPrevPx = (last.maxHPx + specMaxH) / 2 + t.tightExtraGapPx;
-    gapPx = minGapPrevPx * (1 + spec.tightJitter * 0.35);
+    gapPx = minGapPrevPx * (1 + spec.tightJitter * t.tightGapJitterSpan);
   } else {
     minGapPrevPx = fairMinGapForPairPx(world, last ? last.maxHPx : specMaxH, specMaxH);
     gapPx = minGapPrevPx * (1 + spec.gapJitter * (cfg.gapJitterMax - 1));
@@ -466,11 +469,19 @@ function spawn(world) {
   const horizon = Math.max(TUNING.obstacles.horizonPx,
     currentSpeedPxPerSec(world) * TUNING.obstacles.horizonSecs);
   if (world.distancePx + horizon < at) return;
+  /* Per car stagger: nose forward or hang back of the row line. */
+  const offsets = new Array(TUNING.road.laneCount).fill(0);
+  for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+    if (spec.lanes[l]) {
+      offsets[l] = Math.round((spec.staggerRolls[l] - 0.5) * 2 * t.staggerMaxPx);
+    }
+  }
   const row = {
     distPx: at,
     speedPxPerSec: spec.speedFrac * baseSpeedPxPerSec(world),
     lanes: spec.lanes,
     variants: spec.variants,
+    offsets,
     maxHPx: specMaxH,
     minGapPrevPx
   };
@@ -782,7 +793,7 @@ function checkCollision(world) {
   const p = world.player;
   const o = TUNING.obstacles;
   const px = laneCenterXPx(playerLaneFloat(p));
-  const maxHalfH = (p.hitbox.hPx + TRAFFIC_MAX_H_PX) / 2;
+  const maxHalfH = (p.hitbox.hPx + TRAFFIC_MAX_H_PX) / 2 + TUNING.traffic.staggerMaxPx;
   for (let i = 0; i < world.rows.length; i += 1) {
     const row = world.rows[i];
     const dy = row.distPx - world.distancePx;
@@ -793,7 +804,8 @@ function checkCollision(world) {
       const v = TRAFFIC_VARIANTS[row.variants[lane]];
       const halfW = (p.hitbox.wPx + v.wPx) / 2 - o.hitboxShrinkPx;
       const halfH = (p.hitbox.hPx + v.hPx) / 2 - o.hitboxShrinkPx;
-      if (Math.abs(dy) < halfH && Math.abs(px - laneCenterXPx(lane)) < halfW) {
+      const dyCar = dy + (row.offsets ? row.offsets[lane] : 0);
+      if (Math.abs(dyCar) < halfH && Math.abs(px - laneCenterXPx(lane)) < halfW) {
         lethalHit(world);
         return;
       }
