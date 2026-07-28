@@ -3,6 +3,9 @@
 An 8 bit style top down endless driver. Browser prototype, built as a
 vertical slice: one vehicle, one environment, the complete core loop.
 
+The plan of record, including the reconciled external architecture
+review and the native iOS port path, lives in ROADMAP.md.
+
 ## Current status: milestone 5 of the build order
 
 Build order steps 1 through 10 are done. New in milestone 5:
