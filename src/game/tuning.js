@@ -23,8 +23,11 @@ export const TUNING = {
   },
 
   movement: {
-    /* Lane change duration. The brief says start near 120. GUESS. */
-    laneTweenMs: 120,
+    /* Lane change duration. Started at the brief's 120; raised after
+       device testing read the change as an abrupt snap. Combined with
+       the smoothstep easing in entities.js this is what makes the
+       shift feel organic. GUESS. */
+    laneTweenMs: 170,
     /* Exactly one input may queue during a tween. Brief requirement. */
     maxQueuedInputs: 1
   },
@@ -108,12 +111,12 @@ export const TUNING = {
     All values are GUESSES to be tuned by feel.
   */
   tiers: [
-    { atMeters: 0,    speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62 },
-    { atMeters: 300,  speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66 },
-    { atMeters: 700,  speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7 },
-    { atMeters: 1200, speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72 },
-    { atMeters: 1800, speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74 },
-    { atMeters: 2600, speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75 }
+    { atMeters: 0,     speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62 },
+    { atMeters: 2000,  speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66 },
+    { atMeters: 4000,  speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7 },
+    { atMeters: 6000,  speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72 },
+    { atMeters: 8000,  speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74 },
+    { atMeters: 10000, speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -208,8 +211,13 @@ export const TUNING = {
     dashGapPx: 12,
     dashWidthPx: 2,
     edgeLineWidthPx: 2,
-    /* Centered cartoon gauge: cup icon plus capsule bar. */
-    fuelBar: { wPx: 96, hPx: 8, yPx: 8, cupGapPx: 3 },
+    /* The shaded HUD band across the top. */
+    hudBandHPx: 24,
+    /* Centered cartoon gauge: cup icon plus capsule bar. Narrow
+       enough to share the band with the score and best plates. */
+    fuelBar: { wPx: 58, hPx: 8, yPx: 8, cupGapPx: 3 },
+    /* Score and best plates, same cartoon capsule language. */
+    hudPlate: { wPx: 40, hPx: 14, yPx: 5, marginPx: 2 },
     /* Cup shiver rate. Purely visual. */
     coffeeJiggleHz: 6
   },
@@ -228,6 +236,7 @@ export const TUNING = {
       tire: '#1a1c2c',
       text: '#f4f4f4',
       dim: 'rgba(26, 28, 44, 0.6)',
+      hudBand: 'rgba(26, 28, 44, 0.55)',
       slick: '#241839',
       slickArrow: '#8d7ae0',
       rubbleLight: '#b3a58c',

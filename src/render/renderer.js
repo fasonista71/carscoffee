@@ -156,10 +156,29 @@ export function createRenderer(canvas) {
     Low fuel turns the fill red and the cup shivers. Boost wraps the
     capsule in a bright ring.
   */
+  /* The chunky capsule language every HUD element shares. */
+  function drawPlate(x, y, w, h, pal) {
+    bctx.fillStyle = pal.outline;
+    bctx.fillRect(x + 1, y - 1, w - 2, h + 2);
+    bctx.fillRect(x - 1, y + 1, w + 2, h - 2);
+    bctx.fillRect(x, y, w, h);
+    bctx.fillStyle = pal.road;
+    bctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  }
+
+  function drawHudBand(pal) {
+    const bandH = TUNING.render.hudBandHPx;
+    bctx.fillStyle = pal.hudBand;
+    bctx.fillRect(0, 0, W, bandH);
+    bctx.fillStyle = pal.outline;
+    bctx.fillRect(0, bandH, W, 1);
+  }
+
   function drawFuelBar(view, pal) {
     const fb = TUNING.render.fuelBar;
     const cup = getSprite('pickup_coffee');
-    const totalW = cup.width + fb.cupGapPx + fb.wPx;
+    const heartW = getSprite('ui_heart_full').width;
+    const totalW = cup.width + fb.cupGapPx + fb.wPx + 5 + heartW;
     const x0 = Math.round((W - totalW) / 2);
     const barX = x0 + cup.width + fb.cupGapPx;
     const barY = fb.yPx;
@@ -217,10 +236,17 @@ export function createRenderer(canvas) {
     bctx.drawImage(heart, barX + fb.wPx + 5, Math.round(barY + fb.hPx / 2 - heart.height / 2));
   }
 
-  /* Brief HUD: score, high score, fuel meter, stumble indicator. */
+  /* Brief HUD: score, high score, fuel meter, stumble indicator, all
+     in the same cartoon capsule style on the shaded band. */
   function drawScore(view, pal) {
-    drawText(bctx, view.meters + ' m', 3, 3, pal.text, { scale: 1, align: 'left' });
-    drawText(bctx, 'hi ' + view.high, W - 3, 3, pal.text, { scale: 1, align: 'right' });
+    const p = TUNING.render.hudPlate;
+    drawPlate(p.marginPx, p.yPx, p.wPx, p.hPx, pal);
+    drawText(bctx, view.meters + 'M', p.marginPx + p.wPx / 2, p.yPx + 5, pal.text,
+      { scale: 1, align: 'center' });
+    const hiX = W - p.marginPx - p.wPx;
+    drawPlate(hiX, p.yPx, p.wPx, p.hPx, pal);
+    drawText(bctx, 'HI ' + view.high, hiX + p.wPx / 2, p.yPx + 5, pal.edgeLine,
+      { scale: 1, align: 'center' });
   }
 
   function drawTierBanner(view, pal) {
@@ -277,6 +303,7 @@ export function createRenderer(canvas) {
     drawTraffic(view);
     drawPlayer(view);
     if (view.mode === 'playing' || view.mode === 'paused' || view.mode === 'gameOver') {
+      drawHudBand(pal);
       drawFuelBar(view, pal);
       drawScore(view, pal);
       drawTierBanner(view, pal);

@@ -7,8 +7,7 @@ vertical slice: one vehicle, one environment, the complete core loop.
 
 Build order steps 1 through 9 are done. New in milestone 4:
 
-- Six difficulty tiers at distance milestones (300, 700, 1200, 1800,
-  2600 meters). Each raises scroll speed, traffic density, cluster
+- Six difficulty tiers at distance milestones (every 2000 meters). Each raises scroll speed, traffic density, cluster
   pressure, double row frequency, and the spread of traffic speeds,
   and scales passive fuel drain. Transitions ramp over about two
   seconds and announce themselves with a flash and a Tier banner.
@@ -27,9 +26,11 @@ Build order steps 1 through 9 are done. New in milestone 4:
 - Stumble: the first lethal contact spins the car, drops speed, and
   grants 1.2 seconds of blinking invulnerability instead of ending
   the run. The heart by the fuel gauge shows whether it is spent.
-- Score and HUD per the brief: distance top left, high score top
-  right (persisted), fuel gauge, stumble heart. Game over shows the
-  result, your best, and celebrates a new one.
+- Score and HUD per the brief: a shaded band across the top holding
+  the distance plate, the fuel gauge with cup icon and stumble heart,
+  and the best plate, all in one cartoon capsule style. High score
+  persists. Game over shows the result, your best, and celebrates a
+  new one.
 
 From milestone 3:
 
@@ -167,7 +168,7 @@ they do to feel:
 | --- | --- | --- |
 | logic.hz | 60 | Simulation rate. Leave alone; everything is derived from it. |
 | logic.maxFrameDeltaMs | 100 | Largest frame gap the loop will simulate. Bigger means more catch up after a stall, smaller means time visibly slows instead. |
-| movement.laneTweenMs | 120 | Lane change duration. Lower is snappier but harsher; higher is smoother but mushier and lengthens the window where a queued input waits. |
+| movement.laneTweenMs | 170 | Lane change duration, paired with smoothstep easing for an organic shift. Lower is snappier but harsher; higher is smoother but mushier and lengthens the window where a queued input waits. |
 | movement.maxQueuedInputs | 1 | Brief requirement. Raising it would let inputs pile up and fire late. |
 | speed.basePxPerSec | 150 | World scroll speed. The single biggest feel dial right now. |
 | speed.pxPerMeter | 8 | Display conversion only, for the distance readout. |

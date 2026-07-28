@@ -28,10 +28,11 @@ TUNING.fuel.passiveDrainPerSec = 0;
 TUNING.hazards.rubble.fuelCost = 0; /* the oracle tests dodging, not fuel */
 
 const SEED_COUNT = 100;
-/* 200 seconds of escalating driving per run: every run climbs
-   through all six tiers, so each tier's regime is covered by all 100
-   seeds, including the transitions between them. */
-const FRAMES = 12000;
+/* Tiers arrive every 2000 meters now, so proving every tier means a
+   long haul: about 500 seconds of escalating driving per run. Every
+   run climbs through all six tiers, so each tier's regime is covered
+   by all 100 seeds, including the transitions between them. */
+const FRAMES = 30000;
 const LOOKAHEAD_SEC = 3.5;
 const PREDICT_DT = 1 / 30;
 
