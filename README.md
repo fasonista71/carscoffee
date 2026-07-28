@@ -6,9 +6,35 @@ vertical slice: one vehicle, one environment, the complete core loop.
 The plan of record, including the reconciled external architecture
 review and the native iOS port path, lives in ROADMAP.md.
 
-## Current status: milestone 5 of the build order
+## Current status: milestone 6. The build order is complete.
 
-Build order steps 1 through 10 are done. New in milestone 5:
+All twelve build order steps are done. New in milestone 6:
+
+- Phone menu taps fixed three ways: buttons meet the 44 point touch
+  minimum with padded hit areas, a slightly sloppy press now presses
+  buttons instead of being discarded as a failed swipe, and serve.py
+  serves with caching disabled so a phone can never mix old and new
+  modules. The build tag (bottom right of the title) makes staleness
+  visible at a glance.
+- Three hearts instead of one stumble: each lethal contact spends a
+  heart with the spin and invulnerability treatment, the last heart
+  ends the run, and hearts appear on the road as rare pickups.
+- HUD row two, flush left: coffee gauge, boost pill, then the three
+  hearts.
+- Parallax roadside (step 11): far buildings drift slower than the
+  near trees. Screen shake on crash, stumble, and rubble; a particle
+  puff on pickups; speed lines while boosting.
+- The full dev tuning overlay (step 12): boost duration and gating,
+  both fuel drains, refill, rubble cost, cup rate, tension ratio,
+  hazard rate, and per tier thresholds, speeds, and gap spans, all
+  live, scrollable panel.
+- The fairness oracle upgraded to time stepped lane reachability, and
+  overtaker spawn guards hardened again: edge lanes only (crossing
+  corridors always transits the middle lane), and all timing reasons
+  over the player's possible speed range rather than a transient
+  slowed instant.
+
+From milestone 5:
 
 - Starting or restarting a run is ONLY the primary menu button, with
   a short cooldown after a menu opens, so a frantic last tap can
@@ -112,13 +138,16 @@ vehicles unlock.
 
 ## How to run
 
-Any static file server works. From the project folder:
+From the project folder:
 
-    python3 -m http.server 8080
+    python3 serve.py
 
-or
-
-    npx serve
+This serves on port 8080 with caching disabled, which matters on
+phones: a cached module from an older build can silently mix with new
+ones. Any static server works in a pinch (python3 -m http.server
+8080, npx serve), but serve.py is the recommended one. The title
+screen shows the build tag bottom right; if it does not match the
+README's milestone, the phone is looking at a stale cache.
 
 Then open http://localhost:8080 in a browser. A plain double click on
 index.html will not work in Chrome: module scripts are blocked on the

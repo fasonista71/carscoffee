@@ -148,6 +148,11 @@ export function nextRowSpec(genState, tierCfg) {
     hazard = { typeRoll, laneRoll, cupRoll };
   }
 
+  let heartRoll;
+  let heartLaneRoll;
+  [heartRoll, s] = nextFloat01(s);
+  [heartLaneRoll, s] = nextFloat01(s);
+
   genState.rngState = s;
-  return { lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter, coffee, hazard };
+  return { lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter, coffee, hazard, heartRoll, heartLaneRoll };
 }

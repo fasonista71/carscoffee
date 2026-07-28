@@ -95,45 +95,67 @@ function predictWindows(world, vP) {
 
 /*
   Returns -1, 0, or 1 (an immediate lane move), or 'doomed' when no
-  surviving path exists. marginSec shrinks per event budgets so the
-  cautious pass commits to moves early instead of procrastinating the
-  fairness slack away; doom is only asserted on the exact budget.
+  surviving path exists.
+
+  Time stepped reachability: time is quantized into tween length
+  slots, each slot knows which lanes are blocked (from the predicted
+  windows, inflated by marginSec on the cautious pass), and the DP
+  walks lane transitions slot by slot. Unlike an event sequential
+  search, this correctly allows changing lanes WHILE a long window is
+  active in some other lane, which is exactly how you sidestep an
+  overtaker. tweenScale below 1 models that a lane change clears a
+  collision partway through the tween; used only by the final doom
+  check, never by the cautious pass.
 */
 function planFirstMove(world, marginSec, tweenScale = 1) {
   const p = world.player;
+  const laneCount = TUNING.road.laneCount;
   const committed = p.tween ? p.tween.to : p.lane;
   const vP = currentSpeedPxPerSec(world);
-  /* tweenScale below 1 models that a lane change clears a collision
-     partway through the tween, not at its end. Used only by the
-     final doom check, never by the cautious pass. */
-  const tweenSec = (world.laneTweenMs / 1000) * tweenScale;
+  const slotSec = (world.laneTweenMs / 1000) * tweenScale;
+  const slots = Math.max(2, Math.ceil(LOOKAHEAD_SEC / slotSec));
 
   const events = predictWindows(world, vP);
-  let prevEnd = p.tween ? (p.tween.totalFrames - p.tween.frame) / TUNING.logic.hz : 0;
-  let states = new Map([[committed, 0]]);
-  for (let e = 0; e < events.length; e += 1) {
-    const ev = events[e];
-    const moves = Math.max(0, Math.floor((ev.tStart - prevEnd - marginSec) / tweenSec));
+  const blocked = [];
+  for (let s = 0; s < slots; s += 1) blocked.push(new Array(laneCount).fill(false));
+  for (const ev of events) {
+    const s0 = Math.max(0, Math.floor((ev.tStart - marginSec) / slotSec));
+    const s1 = Math.min(slots - 1, Math.floor((ev.tEnd + marginSec) / slotSec));
+    for (let s = s0; s <= s1; s += 1) {
+      for (let l = 0; l < laneCount; l += 1) {
+        if (ev.lanes[l]) blocked[s][l] = true;
+      }
+    }
+  }
+
+  /* Slots still consumed by the current tween: no new move may start. */
+  const busySlots = p.tween
+    ? Math.ceil(((p.tween.totalFrames - p.tween.frame) / TUNING.logic.hz) / slotSec)
+    : 0;
+
+  let cur = new Map([[committed, 0]]);
+  for (let s = 1; s < slots; s += 1) {
     const next = new Map();
-    for (const [lane, first] of states) {
-      for (let to = 0; to < TUNING.road.laneCount; to += 1) {
-        if (ev.lanes[to]) continue;
-        if (Math.abs(to - lane) > moves) continue;
-        /* Only a move needed before the FIRST upcoming window is
-           immediate; later moves are issued by replanning when their
-           time comes. Executing them early drives into the near row. */
-        const firstMove = first !== 0 ? first : (e === 0 ? Math.sign(to - lane) : 0);
+    for (const [lane, first] of cur) {
+      for (let d = -1; d <= 1; d += 1) {
+        const to = lane + d;
+        if (to < 0 || to >= laneCount) continue;
+        if (d !== 0 && s <= busySlots) continue;
+        if (blocked[s][to]) continue;
+        /* entering a new lane straddles it across the boundary, so it
+           must also be safe in the slot the move starts in */
+        if (d !== 0 && blocked[s - 1][to]) continue;
+        const firstMove = first !== 0 ? first : (d !== 0 && s === busySlots + 1 ? d : 0);
         if (!next.has(to) || (next.get(to) !== 0 && firstMove === 0)) {
           next.set(to, firstMove);
         }
       }
     }
     if (next.size === 0) return 'doomed';
-    states = next;
-    prevEnd = Math.max(prevEnd, ev.tEnd);
+    cur = next;
   }
   let fallback = null;
-  for (const firstMove of states.values()) {
+  for (const firstMove of cur.values()) {
     if (firstMove === 0) return 0;
     if (fallback === null) fallback = firstMove;
   }

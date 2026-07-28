@@ -9,6 +9,7 @@
 
 export const AUDIO_EVENTS = [
   'coffee_pickup',
+  'heart_pickup',
   'boost_start',
   'boost_end',
   'crash',

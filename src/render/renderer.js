@@ -9,7 +9,7 @@
   canvas upscaling has gaps. The CSS property stays on as a backstop.
 */
 
-import { TUNING } from '../game/tuning.js';
+import { TUNING, BUILD_TAG } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
 import { getSprite, getTrafficSprite } from './sprites.js';
 import { drawText } from './font.js';
@@ -56,9 +56,108 @@ export function createRenderer(canvas) {
     };
   }
 
+  /* Deterministic small hash for scenery variation. */
+  function hash32(n) {
+    let h = (n | 0) + 0x9e3779b9;
+    h = Math.imul(h ^ (h >>> 16), 0x21f0aaad);
+    h = Math.imul(h ^ (h >>> 15), 0x735a2d97);
+    return (h ^ (h >>> 15)) >>> 0;
+  }
+
+  /*
+    Brief section 6: parallax layers. In a top down view that means
+    roadside bands scrolling at different rates: far buildings drift
+    slower than the road, near trees ride with it.
+  */
+  function drawScenery(distancePx, pal) {
+    const sc = TUNING.render.scenery;
+    const period = sc.periodPx;
+
+    function band(x0, bandW, factor, kind, salt) {
+      const scroll = distancePx * factor;
+      const offset = scroll % period;
+      const base = Math.floor(scroll / period);
+      for (let k = -1; k <= Math.ceil(H / period) + 1; k += 1) {
+        const y = Math.round(k * period + (period - offset));
+        const idx = base + k + salt * 7919;
+        const h = hash32(idx);
+        if (kind === 'blocks') {
+          const bh = 26 + (h % 22);
+          const bw = bandW - 3;
+          bctx.fillStyle = pal.outline;
+          bctx.fillRect(x0, y, bw + 1, bh + 1);
+          bctx.fillStyle = (h & 4) ? pal.building : pal.buildingDark;
+          bctx.fillRect(x0 + 1, y + 1, bw - 1, bh - 1);
+          bctx.fillStyle = pal.dash;
+          bctx.fillRect(x0 + 3 + (h % 4), y + 5, 2, 2);
+          bctx.fillRect(x0 + 3 + ((h >> 3) % 4), y + 13, 2, 2);
+        } else {
+          const r = 4 + (h % 3);
+          const cx = x0 + 3 + ((h >> 5) % Math.max(1, bandW - 2 * r - 4)) + r;
+          const cy = y + r;
+          bctx.fillStyle = pal.treeDark;
+          bctx.fillRect(cx - r, cy - r + 1, 2 * r, 2 * r - 2);
+          bctx.fillRect(cx - r + 1, cy - r, 2 * r - 2, 2 * r);
+          bctx.fillStyle = pal.tree;
+          bctx.fillRect(cx - r + 1, cy - r + 2, 2 * r - 2, 2 * r - 4);
+          bctx.fillRect(cx - r + 2, cy - r + 1, 2 * r - 4, 2 * r - 2);
+        }
+      }
+    }
+
+    band(0, 15, sc.farFactor, 'blocks', 1);
+    band(W - 15, 15, sc.farFactor, 'blocks', 2);
+    band(16, 13, 1, 'trees', 3);
+    band(W - 29, 13, 1, 'trees', 4);
+  }
+
+  /* Pickup puffs and similar one shot particles. Render only. */
+  let particles = [];
+
+  function addPuff(x, y, color) {
+    for (let i = 0; i < 8; i += 1) {
+      particles.push({
+        x, y, color,
+        vx: (Math.random() * 2 - 1) * 1.3,
+        vy: (Math.random() * 2 - 1) * 1.3 - 0.4,
+        life: 14 + Math.floor(Math.random() * 8)
+      });
+    }
+  }
+
+  function drawParticles() {
+    for (let i = particles.length - 1; i >= 0; i -= 1) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 1;
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+      bctx.globalAlpha = Math.min(1, p.life / 12);
+      bctx.fillStyle = p.color;
+      bctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    }
+    bctx.globalAlpha = 1;
+  }
+
+  function drawSpeedLines(view, pal) {
+    if (!view.boosting) return;
+    bctx.globalAlpha = 0.4;
+    bctx.fillStyle = pal.dash;
+    const xs = [44, 76, 104, 136];
+    for (let i = 0; i < xs.length; i += 1) {
+      const y = ((view.distancePx * 1.6 + i * 83) % (H + 40)) - 20;
+      bctx.fillRect(xs[i], Math.round(y), 1, 22);
+    }
+    bctx.globalAlpha = 1;
+  }
+
   function drawRoad(distancePx, pal) {
     bctx.fillStyle = pal.offroad;
     bctx.fillRect(0, 0, W, H);
+    drawScenery(distancePx, pal);
 
     const roadW = TUNING.road.laneWidthPx * TUNING.road.laneCount;
     const left = TUNING.road.roadLeftPx;
@@ -173,18 +272,27 @@ export function createRenderer(canvas) {
     Purely visual: collection uses the unjiggled position.
   */
   function drawPickups(view) {
-    const spr = getSprite('pickup_coffee');
+    const cupSpr = getSprite('pickup_coffee');
+    const heartSpr = getSprite('ui_heart_full');
     const t = performance.now() / 1000;
     const hz = TUNING.render.coffeeJiggleHz;
     for (let i = 0; i < view.pickups.length; i += 1) {
-      const cup = view.pickups[i];
-      const screenY = TUNING.render.playerYPx - (cup.distPx - view.distancePx);
+      const item = view.pickups[i];
+      const screenY = TUNING.render.playerYPx - (item.distPx - view.distancePx);
       if (screenY < -32 || screenY > H + 32) continue;
-      const phase = t * hz * Math.PI * 2 + cup.lane * 1.7 + cup.distPx * 0.01;
+      if (item.kind === 'heart') {
+        /* drawn at 2x so a life reads bigger than a coffee */
+        const w = heartSpr.width * 2;
+        const h = heartSpr.height * 2;
+        const x = Math.round(laneCenterXPx(item.lane) - w / 2);
+        bctx.drawImage(heartSpr, x, Math.round(screenY - h / 2), w, h);
+        continue;
+      }
+      const phase = t * hz * Math.PI * 2 + item.lane * 1.7 + item.distPx * 0.01;
       const jx = Math.round(Math.sin(phase));
       const jy = Math.round(Math.sin(phase * 0.63 + 1.3) * 0.6);
-      const x = Math.round(laneCenterXPx(cup.lane) - spr.width / 2) + jx;
-      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2) + jy);
+      const x = Math.round(laneCenterXPx(item.lane) - cupSpr.width / 2) + jx;
+      bctx.drawImage(cupSpr, x, Math.round(screenY - cupSpr.height / 2) + jy);
     }
   }
 
@@ -213,12 +321,11 @@ export function createRenderer(canvas) {
     bctx.fillRect(0, bandH, W, 1);
   }
 
+  /* Row two, flush left: coffee gauge, then boost pill, then hearts. */
   function drawFuelBar(view, pal) {
     const fb = TUNING.render.fuelBar;
     const cup = getSprite('pickup_coffee');
-    const heartW = getSprite('ui_heart_full').width;
-    const totalW = cup.width + fb.cupGapPx + fb.wPx + 5 + heartW;
-    const x0 = Math.round((W - totalW) / 2);
+    const x0 = 2;
     const barX = x0 + cup.width + fb.cupGapPx;
     const barY = fb.yPx;
     const low = view.fuel <= TUNING.fuel.lowThreshold;
@@ -270,12 +377,9 @@ export function createRenderer(canvas) {
       bctx.fillRect(barX + fb.wPx + 2, barY - 1, 1, fb.hPx + 2);
     }
 
-    /* stumble heart, then the boost pill, on the same row */
-    const heart = getSprite(view.stumbleAvailable ? 'ui_heart_full' : 'ui_heart_empty');
-    const heartX = barX + fb.wPx + 5;
-    bctx.drawImage(heart, heartX, Math.round(barY + fb.hPx / 2 - heart.height / 2));
+    /* boost pill, then the three hearts */
     const bp = TUNING.render.boostPill;
-    const bpX = heartX + heart.width + 5;
+    const bpX = barX + fb.wPx + 6;
     const bpY = Math.round(barY + fb.hPx / 2 - bp.hPx / 2);
     drawPlate(bpX, bpY, bp.wPx, bp.hPx, pal);
     if (view.boosting) {
@@ -286,6 +390,12 @@ export function createRenderer(canvas) {
       bctx.fillRect(bpX + 1, bpY + 1, bp.wPx - 2, bp.hPx - 2);
       bctx.fillStyle = pal.carDark;
       bctx.fillRect(bpX + 1, bpY + bp.hPx - 2, bp.wPx - 2, 1);
+    }
+    let hx = bpX + bp.wPx + 6;
+    for (let i = 0; i < TUNING.lives.max; i += 1) {
+      const spr = getSprite(i < view.hearts ? 'ui_heart_full' : 'ui_heart_empty');
+      bctx.drawImage(spr, hx, Math.round(barY + fb.hPx / 2 - spr.height / 2));
+      hx += spr.width + 2;
     }
   }
 
@@ -338,8 +448,11 @@ export function createRenderer(canvas) {
 
   function hitTestMenu(mode, lx, ly) {
     if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver') return null;
+    if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
+    const pad = TUNING.render.menu.hitPadPx;
     for (const item of menuLayout(mode)) {
-      if (lx >= item.x && lx <= item.x + item.w && ly >= item.y && ly <= item.y + item.h) {
+      if (lx >= item.x - pad && lx <= item.x + item.w + pad
+          && ly >= item.y - pad && ly <= item.y + item.h + pad) {
         return item.id;
       }
     }
@@ -357,10 +470,10 @@ export function createRenderer(canvas) {
         bctx.fillRect(item.x + 1, item.y + 1, item.w - 2, item.h - 2);
         bctx.fillStyle = pal.carDark;
         bctx.fillRect(item.x + 1, item.y + item.h - 2, item.w - 2, 1);
-        drawText(bctx, item.label, item.x + item.w / 2, item.y + 5, pal.outline, { scale: 2, align: 'center' });
+        drawText(bctx, item.label, item.x + item.w / 2, item.y + Math.round(item.h / 2) - 5, pal.outline, { scale: 2, align: 'center' });
       } else if (item.id === 'restart') {
         drawPlate(item.x, item.y, item.w, item.h, pal);
-        drawText(bctx, item.label, item.x + item.w / 2, item.y + 5, pal.text, { scale: 1, align: 'center' });
+        drawText(bctx, item.label, item.x + item.w / 2, item.y + Math.round(item.h / 2) - 2, pal.text, { scale: 1, align: 'center' });
       } else {
         drawPlate(item.x, item.y, item.w, item.h, pal);
         let label;
@@ -375,8 +488,9 @@ export function createRenderer(canvas) {
           label = 'Rumble';
           value = view.hapticsSupported ? (view.hapticsOn ? 'ON' : 'OFF') : 'N/A';
         }
-        drawText(bctx, label, item.x + 6, item.y + 5, pal.text, { scale: 1, align: 'left' });
-        drawText(bctx, value, item.x + item.w - 6, item.y + 5, pal.edgeLine, { scale: 1, align: 'right' });
+        const ty = item.y + Math.round(item.h / 2) - 2;
+        drawText(bctx, label, item.x + 7, ty, pal.text, { scale: 1, align: 'left' });
+        drawText(bctx, value, item.x + item.w - 7, ty, pal.edgeLine, { scale: 1, align: 'right' });
       }
     }
   }
@@ -387,6 +501,7 @@ export function createRenderer(canvas) {
     const badge = getSprite('ui_badge');
     bctx.drawImage(badge, Math.round((W - badge.width) / 2), 16);
     drawMenu(view, pal, 'title');
+    drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.road, { scale: 1, align: 'right' });
   }
 
   function drawGameOver(pal, view) {
@@ -416,12 +531,19 @@ export function createRenderer(canvas) {
   */
   function drawFrame(view) {
     const pal = TUNING.palette.city;
+    const sx = view.shakeX | 0;
+    const sy = view.shakeY | 0;
+    bctx.save();
+    bctx.translate(sx, sy);
     drawRoad(view.distancePx, pal);
+    drawSpeedLines(view, pal);
     drawHazards(view);
     drawPickups(view);
     drawOvertakers(view, pal);
     drawTraffic(view);
     drawPlayer(view);
+    drawParticles();
+    bctx.restore();
     if (view.mode === 'playing' || view.mode === 'paused' || view.mode === 'gameOver') {
       drawHudBand(pal);
       drawFuelBar(view, pal);
@@ -434,5 +556,5 @@ export function createRenderer(canvas) {
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu };
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, addPuff };
 }

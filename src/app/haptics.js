@@ -6,6 +6,7 @@
 */
 
 const PATTERNS = {
+  heart_pickup: [15, 20, 15],
   crash: [70, 50, 90],
   stumble: [40, 30, 40],
   rubble_hit: [25],

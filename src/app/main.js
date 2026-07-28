@@ -10,7 +10,7 @@
 
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../game/tuning.js';
 import { createWorld, step, distanceMeters, isBoosting } from '../game/world.js';
-import { playerLaneFloat } from '../game/entities.js';
+import { playerLaneFloat, laneCenterXPx } from '../game/entities.js';
 import { createRenderer } from '../render/renderer.js';
 import { loadSprites } from '../render/sprites.js';
 import { attachKeyboard } from '../input/keyboard.js';
@@ -169,17 +169,29 @@ function onIntent(intent) {
     return;
   }
   if (mode !== 'playing') {
-    /* Menus respond only to taps on their buttons. Nothing here can
-       start a run by swipe, key, or stray tap. */
-    if (intent.type === 'tapAt') handleMenuTap(intent.clientX, intent.clientY);
+    /* Menus respond only to presses on their buttons, but accept a
+       sloppy press (releaseAt) as readily as a clean tap. Nothing
+       here can start a run by swipe, key, or stray tap. */
+    if (intent.type === 'tapAt' || intent.type === 'releaseAt') {
+      handleMenuTap(intent.clientX, intent.clientY);
+    }
     return;
   }
+  if (intent.type === 'releaseAt') return;
   pending.push(intent.type === 'tapAt' ? resolveTap(intent.clientX) : intent);
 }
 
 let fps = 0;
 let fpsFrames = 0;
 let fpsWindowStart = performance.now();
+
+/* Screen shake, render only. */
+let shakeFrames = 0;
+let shakeMag = 0;
+function startShake(frames, mag) {
+  shakeFrames = Math.max(shakeFrames, frames);
+  shakeMag = Math.max(shakeMag, mag);
+}
 
 const BOOST_TOTAL_FRAMES = Math.max(1, Math.round((TUNING.boost.durationMs / 1000) * TUNING.logic.hz));
 
@@ -192,8 +204,19 @@ const loop = createLoop({
     step(world, intents);
     currSnap = snapshot();
     for (let i = 0; i < world.events.length; i += 1) {
-      audio.play(world.events[i]);
-      haptics.trigger(world.events[i]);
+      const ev = world.events[i];
+      audio.play(ev);
+      haptics.trigger(ev);
+      if (ev === 'coffee_pickup' || ev === 'heart_pickup') {
+        renderer.addPuff(
+          laneCenterXPx(currSnap.laneFloat),
+          TUNING.render.playerYPx - 16,
+          ev === 'heart_pickup' ? '#e43b44' : '#b78152'
+        );
+      }
+      if (ev === 'stumble') startShake(10, 3);
+      else if (ev === 'rubble_hit') startShake(6, 2);
+      else if (ev === 'crash') startShake(14, 4);
     }
     if (world.status === 'dead') {
       mode = 'gameOver';
@@ -231,7 +254,16 @@ const loop = createLoop({
     view.invulnFrames = world ? world.invulnFrames : 0;
     view.tier = world ? world.tier : 0;
     view.tierFlashFrames = world ? world.tierFlashFrames : 0;
-    view.stumbleAvailable = world ? world.stumbleAvailable : true;
+    view.hearts = world ? world.hearts : TUNING.lives.start;
+    if (shakeFrames > 0) {
+      shakeFrames -= 1;
+      view.shakeX = Math.round((Math.random() * 2 - 1) * shakeMag);
+      view.shakeY = Math.round((Math.random() * 2 - 1) * shakeMag);
+      if (shakeFrames === 0) shakeMag = 0;
+    } else {
+      view.shakeX = 0;
+      view.shakeY = 0;
+    }
     view.playerSpriteKey = world ? world.player.spriteKey : VEHICLES[vehicleId].spriteKey;
     view.high = world ? getHigh(world.vehicleId) : getHigh(vehicleId);
     view.newBest = newBest;

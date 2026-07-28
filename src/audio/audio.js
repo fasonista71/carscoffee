@@ -85,6 +85,7 @@ export function createAudio() {
 
   const SYNTH = {
     coffee_pickup() { blip(660, 0.06, 'square', 0.18); blip(990, 0.09, 'square', 0.18, 0.05); },
+    heart_pickup() { blip(523, 0.07, 'square', 0.16); blip(659, 0.07, 'square', 0.16, 0.06); blip(1047, 0.12, 'square', 0.16, 0.12); },
     boost_start() { blip(220, 0.25, 'square', 0.16, 0, 880); },
     boost_end() { blip(660, 0.18, 'square', 0.1, 0, 220); },
     crash() { noiseBurst(0.35, 0.35); blip(110, 0.3, 'square', 0.2, 0, 40); },

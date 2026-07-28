@@ -31,7 +31,7 @@ export function createWorld({ seed, vehicle, environment }) {
     /* Hazard and forgiveness state. */
     slideLockFrames: 0,
     slowFrames: 0,
-    stumbleAvailable: true,
+    hearts: TUNING.lives.start,
     invulnFrames: 0,
     spinFrames: 0,
     /* Difficulty tier state. speedTierMult ramps toward the current
@@ -382,6 +382,20 @@ function spawn(world) {
   if (spec.coffee && !((tight || hazardPlaced) && spec.coffee.kind === 'gap')) {
     addCoffee(world, spec.coffee, row, gapPx);
   }
+  /* Rare heart pickups, gap only, always in a lane open in the row
+     they precede, offset from where cups and rubble sit. */
+  if (!tight && last !== null && !hazardPlaced
+      && spec.heartRoll < TUNING.lives.pickupChancePerGap) {
+    const open = [];
+    for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+      if (!row.lanes[l]) open.push(l);
+    }
+    const lane = open[Math.min(open.length - 1, Math.floor(spec.heartLaneRoll * open.length))];
+    const at = row.distPx - gapPx * 0.35;
+    if (at > last.distPx + 50) {
+      world.pickups.push({ kind: 'heart', lane, distPx: at, speedPxPerSec: 0 });
+    }
+  }
   world.pendingSpec = null;
 }
 
@@ -444,7 +458,7 @@ function addHazard(world, spec, row, gapPx, last) {
      slick's own lane. Grabbing it means threading into that lane
      after the puddle; the safe line and the fueled line differ. */
   if (spec.hazard.cupRoll < hz.slick.cupChance) {
-    world.pickups.push({ lane: pick.lane, distPx: at + hz.slick.cupAheadPx, speedPxPerSec: 0 });
+    world.pickups.push({ kind: 'coffee', lane: pick.lane, distPx: at + hz.slick.cupAheadPx, speedPxPerSec: 0 });
   }
   return true;
 }
@@ -470,7 +484,7 @@ function addCoffee(world, coffee, row, gapPx) {
       if (blocked + 1 < laneCount && !row.lanes[blocked + 1]) options.push(blocked + 1);
       lane = options[Math.min(options.length - 1, Math.floor(coffee.laneRoll * options.length))];
     }
-    world.pickups.push({ lane, distPx: row.distPx, speedPxPerSec: 0 });
+    world.pickups.push({ kind: 'coffee', lane, distPx: row.distPx, speedPxPerSec: 0 });
   } else {
     /* Free cup, mid gap, and only in a lane that is open in the row
        it precedes, so a cup never lures the player into a blocked
@@ -480,7 +494,7 @@ function addCoffee(world, coffee, row, gapPx) {
       if (!row.lanes[l]) open.push(l);
     }
     const lane = open[Math.min(open.length - 1, Math.floor(coffee.laneRoll * open.length))];
-    world.pickups.push({ lane, distPx: row.distPx - gapPx * 0.5, speedPxPerSec: 0 });
+    world.pickups.push({ kind: 'coffee', lane, distPx: row.distPx - gapPx * 0.5, speedPxPerSec: 0 });
   }
 }
 
@@ -519,16 +533,22 @@ function collectCoffee(world) {
   const p = world.player;
   const c = TUNING.coffee;
   const px = laneCenterXPx(playerLaneFloat(p));
-  const halfW = (p.hitbox.wPx + c.hitbox.wPx) / 2 + c.pickupSlopPx;
-  const halfH = (p.hitbox.hPx + c.hitbox.hPx) / 2 + c.pickupSlopPx;
   for (let i = world.pickups.length - 1; i >= 0; i -= 1) {
-    const cup = world.pickups[i];
-    const dy = cup.distPx - world.distancePx;
+    const item = world.pickups[i];
+    const box = item.kind === 'heart' ? TUNING.lives.hitbox : c.hitbox;
+    const halfW = (p.hitbox.wPx + box.wPx) / 2 + c.pickupSlopPx;
+    const halfH = (p.hitbox.hPx + box.hPx) / 2 + c.pickupSlopPx;
+    const dy = item.distPx - world.distancePx;
     if (dy < -halfH || dy > halfH) continue;
-    if (Math.abs(px - laneCenterXPx(cup.lane)) < halfW) {
+    if (Math.abs(px - laneCenterXPx(item.lane)) < halfW) {
       world.pickups.splice(i, 1);
-      world.fuel = Math.min(TUNING.fuel.max, world.fuel + TUNING.fuel.coffeeRefill);
-      world.events.push('coffee_pickup');
+      if (item.kind === 'heart') {
+        world.hearts = Math.min(TUNING.lives.max, world.hearts + 1);
+        world.events.push('heart_pickup');
+      } else {
+        world.fuel = Math.min(TUNING.fuel.max, world.fuel + TUNING.fuel.coffeeRefill);
+        world.events.push('coffee_pickup');
+      }
     }
   }
 }
@@ -666,8 +686,8 @@ function checkCollision(world) {
 }
 
 function lethalHit(world) {
-  if (world.stumbleAvailable) {
-    world.stumbleAvailable = false;
+  world.hearts -= 1;
+  if (world.hearts > 0) {
     world.invulnFrames = msToFrames(TUNING.stumble.invulnMs);
     world.spinFrames = msToFrames(TUNING.stumble.spinMs);
     world.slowFrames = Math.max(world.slowFrames, msToFrames(TUNING.stumble.slowMs));
@@ -712,33 +732,43 @@ function overtakerLaneClear(world, lane, vO) {
   /* Squeeze guard: never pass while any row the player meets around
      the same moment has a guaranteed corridor that collapses to the
      overtaker's lane. Clusters pin the player to their corridor, so
-     this checks the stored corridor mask, not just single rows. */
-  const vPlayer = currentSpeedPxPerSec(world);
-  const tMeet = o.spawnBehindPx / Math.max(1, vO - vPlayer);
+     this checks the stored corridor mask, not just single rows.
+
+     All timing reasons over the player's possible speed RANGE, from
+     rubble slowed through boosted, never the transient instant. A
+     momentary slowdown once made a fatal cluster look comfortably far
+     away; the slow expired and the timeline compressed onto the
+     player. */
+  const vBase = baseSpeedPxPerSec(world);
+  const vFast = vBase * TUNING.boost.speedMultiplier;
+  const vSlow = vBase * TUNING.hazards.rubble.slowFactor;
+  const g = o.squeezeGuardSec;
+  const tMeetMin = o.spawnBehindPx / Math.max(1, vO - vSlow);
+  const tMeetMax = o.spawnBehindPx / Math.max(1, vO - vFast);
   const laneBit = 1 << lane;
   const fullMask = (1 << TUNING.road.laneCount) - 1;
   for (let i = 0; i < world.rows.length; i += 1) {
     const row = world.rows[i];
     const dy = row.distPx - world.distancePx;
     if (dy <= 0) continue;
-    /* A row's arrival is an interval, not a point: it may clamp to
-       stalled traffic ahead and arrive at full closing speed. */
-    const tMin = dy / vPlayer;
-    const closing = vPlayer - row.speedPxPerSec;
-    const tMax = closing > 0 ? dy / closing : Infinity;
-    if (tMax < tMeet - o.squeezeGuardSec || tMin > tMeet + o.squeezeGuardSec) continue;
+    /* A row's arrival is an interval too: it may clamp to stalled
+       traffic ahead, and the player's own speed varies. */
+    const tRowMin = dy / vFast;
+    const slowClosing = vSlow - row.speedPxPerSec;
+    const tRowMax = slowClosing > 0 ? dy / slowClosing : Infinity;
+    if (tRowMax < tMeetMin - g || tRowMin > tMeetMax + g) continue;
     if ((row.corridorMask & fullMask & ~laneBit) === 0) return false;
   }
   /* Into the player's own lane only on open road: a corridor lane
      existing is not enough when a cluster has the player pinned with
-     no room to reach it. If the first row ahead arrives before the
+     no room to reach it. If the first row ahead can arrive before the
      pass is over, pick another lane. */
   const committed = world.player.tween ? world.player.tween.to : world.player.lane;
   if (lane === committed) {
     for (let i = 0; i < world.rows.length; i += 1) {
       const dy = world.rows[i].distPx - world.distancePx;
       if (dy < 0) continue;
-      if (dy / vPlayer < tMeet + o.squeezeGuardSec) return false;
+      if (dy / vFast < tMeetMax + g) return false;
       break;
     }
   }
@@ -760,7 +790,11 @@ function maybeSpawnOvertaker(world) {
     [laneRoll, s] = nextFloat01(s);
     [speedRoll, s] = nextFloat01(s);
     [variantRoll, s] = nextFloat01(s);
-    const lane = Math.min(TUNING.road.laneCount - 1, Math.floor(laneRoll * TUNING.road.laneCount));
+    /* Edge lanes only. Crossing between corridors always transits the
+       middle lane, so a middle lane overtaker can wall off the only
+       path exactly when a corridor shift demands it. Edges never
+       carry transit. */
+    const lane = laneRoll < 0.5 ? 0 : TUNING.road.laneCount - 1;
     const vO = baseSpeedPxPerSec(world) * (o.speedMultMin + speedRoll * (o.speedMultMax - o.speedMultMin));
     if (OVERTAKER_VARIANT_IDS.length > 0 && overtakerLaneClear(world, lane, vO)) {
       const variant = OVERTAKER_VARIANT_IDS[Math.min(OVERTAKER_VARIANT_IDS.length - 1,

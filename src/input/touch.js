@@ -89,8 +89,13 @@ export function attachTouch(emit) {
       const rec = active.get(t.identifier);
       if (!rec) continue;
       active.delete(t.identifier);
-      if (rec.swiped) continue;
-      if (e.timeStamp - rec.time > TUNING.input.tapMaxMs) continue;
+      if (rec.swiped || e.timeStamp - rec.time > TUNING.input.tapMaxMs) {
+        /* Not a clean tap, but menus still want to know where the
+           finger lifted: a slightly sloppy press must press buttons.
+           Gameplay ignores this intent entirely. */
+        emit({ type: 'releaseAt', clientX: t.clientX, clientY: t.clientY });
+        continue;
+      }
       emit({ type: 'tapAt', clientX: t.clientX, clientY: t.clientY });
     }
     if (e.touches.length === 0) {

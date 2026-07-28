@@ -64,22 +64,37 @@ test('rubble costs fuel, slows the car, ends boost, and is consumed', () => {
   assert.equal(currentSpeedPxPerSec(w), TUNING.speed.basePxPerSec, 'speed recovers');
 });
 
-test('the first lethal contact is a stumble, the second ends the run', () => {
+test('lethal contacts spend hearts with the stumble treatment; the last heart ends the run', () => {
   const w = mkWorld();
+  assert.equal(w.hearts, TUNING.lives.start);
   w.rows.push(mkRow(w, 40, [false, true, false]));
   for (let f = 0; f < 20; f += 1) step(w, []);
   assert.equal(w.status, 'running', 'first contact is forgiven');
-  assert.equal(w.stumbleAvailable, false, 'stumble is spent');
+  assert.equal(w.hearts, TUNING.lives.start - 1, 'one heart spent');
   assert.ok(w.invulnFrames > 0, 'invulnerability granted');
-  /* ride out invulnerability, then hit again. Clear the road first:
-     rows must stay ordered by distPx, and natural traffic has spawned
-     ahead of where this row is injected. */
+  /* ride out invulnerability, then take the final hit on the last
+     heart. Clear the road first: rows must stay ordered by distPx,
+     and natural traffic has spawned ahead of the injection point. */
   while (w.invulnFrames > 0) step(w, []);
+  w.hearts = 1;
   w.rows.length = 0;
   w.rows.push(mkRow(w, 40, [false, true, false]));
   for (let f = 0; f < 40 && w.status === 'running'; f += 1) step(w, []);
   assert.equal(w.status, 'dead');
   assert.equal(w.deathCause, 'crash');
+});
+
+test('a heart pickup restores a heart, capped at the maximum', () => {
+  const w = mkWorld();
+  w.hearts = 1;
+  w.pickups.push({ kind: 'heart', lane: 1, distPx: w.distancePx + 10, speedPxPerSec: 0 });
+  step(w, []);
+  assert.equal(w.pickups.length, 0, 'heart collected');
+  assert.equal(w.hearts, 2);
+  w.hearts = TUNING.lives.max;
+  w.pickups.push({ kind: 'heart', lane: 1, distPx: w.distancePx + 10, speedPxPerSec: 0 });
+  step(w, []);
+  assert.equal(w.hearts, TUNING.lives.max, 'capped at max');
 });
 
 test('hazards do nothing during stumble invulnerability', () => {

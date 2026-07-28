@@ -1,3 +1,7 @@
+/* Shown small on the title screen so a stale phone cache is visible
+   at a glance. Bump when shipping. */
+export const BUILD_TAG = 'M6';
+
 /*
   Every gameplay number lives here. Nothing elsewhere in the codebase is
   allowed to carry a magic number. The dev overlay mutates this object
@@ -180,11 +184,21 @@ export const TUNING = {
   },
 
   stumble: {
-    /* One free lethal contact per run: spin, speed drop, and this
-       much blinking invulnerability. Brief says roughly 1.2s. */
+    /* The forgiveness treatment a spent heart buys: spin, speed
+       drop, and this much blinking invulnerability. */
     invulnMs: 1200,
     spinMs: 750,
     slowMs: 1000
+  },
+
+  lives: {
+    /* Three hearts per run. A lethal contact spends one with the
+       stumble treatment; the last heart ends the run. Hearts also
+       appear on the road as rare pickups, like coffee. */
+    start: 3,
+    max: 3,
+    pickupChancePerGap: 0.07,
+    hitbox: { wPx: 14, hPx: 12 }
   },
 
   fuel: {
@@ -242,12 +256,18 @@ export const TUNING = {
        logical coordinates. Restart taps are ignored for a beat after
        a menu opens, so a frantic last tap cannot start a new run. */
     menu: {
-      primary: { wPx: 104, hPx: 22 },
-      option: { wPx: 132, hPx: 16, gapPx: 6 },
+      /* Sized so buttons meet the 44 point minimum touch target on a
+         phone at 2x logical scale, plus padded hit testing. */
+      primary: { wPx: 108, hPx: 26 },
+      option: { wPx: 140, hPx: 22, gapPx: 7 },
+      hitPadPx: 6,
       cooldownMs: 350
     },
     /* Cup shiver rate. Purely visual. */
-    coffeeJiggleHz: 6
+    coffeeJiggleHz: 6,
+    /* Roadside parallax: the far band of buildings scrolls slower
+       than the road, the near band of trees rides with it. */
+    scenery: { farFactor: 0.55, periodPx: 56 }
   },
 
   /* City palette, roughly 11 colors. Cheerful, high contrast. */
@@ -265,6 +285,10 @@ export const TUNING = {
       text: '#f4f4f4',
       dim: 'rgba(26, 28, 44, 0.6)',
       hudBand: 'rgba(26, 28, 44, 0.55)',
+      building: '#9aa7c4',
+      buildingDark: '#7c88a6',
+      tree: '#4e9e3f',
+      treeDark: '#3c7a31',
       slick: '#241839',
       slickArrow: '#8d7ae0',
       rubbleLight: '#b3a58c',

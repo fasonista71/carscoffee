@@ -18,7 +18,9 @@ export function createDevOverlay(getWorld) {
     'left: 8px',
     'z-index: 10',
     'display: none',
-    'width: 230px',
+    'width: 240px',
+    'max-height: 86vh',
+    'overflow-y: auto',
     'padding: 10px',
     'background: rgba(20, 22, 38, 0.92)',
     'color: #f4f4f4',
@@ -101,17 +103,74 @@ export function createDevOverlay(getWorld) {
     () => TUNING.input.tapMaxMs,
     (v) => { TUNING.input.tapMaxMs = v; });
 
+  function addSection(title) {
+    const el = document.createElement('div');
+    el.textContent = title;
+    el.style.cssText = 'margin: 10px 0 4px; color: #ffd93d; font-weight: bold;';
+    panel.appendChild(el);
+  }
+
+  addSection('Boost');
+
+  addSlider('Boost duration ms', 400, 2500, 50,
+    () => TUNING.boost.durationMs,
+    (v) => { TUNING.boost.durationMs = v; });
+
+  addSlider('Boost multiplier', 1.1, 2, 0.05,
+    () => TUNING.boost.speedMultiplier,
+    (v) => { TUNING.boost.speedMultiplier = v; });
+
+  addSlider('Boost min fuel', 0, 30, 1,
+    () => TUNING.boost.minFuel,
+    (v) => { TUNING.boost.minFuel = v; });
+
+  addSection('Fuel');
+
   addSlider('Fuel drain per sec', 0.5, 6, 0.1,
     () => TUNING.fuel.passiveDrainPerSec,
     (v) => { TUNING.fuel.passiveDrainPerSec = v; });
+
+  addSlider('Boost drain per sec', 2, 30, 1,
+    () => TUNING.fuel.boostDrainPerSec,
+    (v) => { TUNING.fuel.boostDrainPerSec = v; });
 
   addSlider('Coffee refill', 5, 50, 1,
     () => TUNING.fuel.coffeeRefill,
     (v) => { TUNING.fuel.coffeeRefill = v; });
 
-  addSlider('Boost multiplier', 1.1, 2, 0.05,
-    () => TUNING.boost.speedMultiplier,
-    (v) => { TUNING.boost.speedMultiplier = v; });
+  addSlider('Rubble fuel cost', 0, 30, 1,
+    () => TUNING.hazards.rubble.fuelCost,
+    (v) => { TUNING.hazards.rubble.fuelCost = v; });
+
+  addSection('Coffee and hazards');
+
+  addSlider('Cup chance per row', 0, 0.6, 0.02,
+    () => TUNING.coffee.spawnChancePerRow,
+    (v) => { TUNING.coffee.spawnChancePerRow = v; });
+
+  addSlider('In tension ratio', 0.5, 1, 0.05,
+    () => TUNING.coffee.tensionRatio,
+    (v) => { TUNING.coffee.tensionRatio = v; });
+
+  addSlider('Hazard chance per gap', 0, 0.8, 0.05,
+    () => TUNING.hazards.spawnChancePerGap,
+    (v) => { TUNING.hazards.spawnChancePerGap = v; });
+
+  addSection('Tiers');
+
+  for (let i = 0; i < TUNING.tiers.length; i += 1) {
+    if (i > 0) {
+      addSlider('T' + (i + 1) + ' at meters', 500, 14000, 250,
+        () => TUNING.tiers[i].atMeters,
+        (v) => { TUNING.tiers[i].atMeters = v; });
+    }
+    addSlider('T' + (i + 1) + ' speed', 1, 2.2, 0.02,
+      () => TUNING.tiers[i].speed,
+      (v) => { TUNING.tiers[i].speed = v; });
+    addSlider('T' + (i + 1) + ' gap span', 1.05, 1.9, 0.05,
+      () => TUNING.tiers[i].gapJitterMax,
+      (v) => { TUNING.tiers[i].gapJitterMax = v; });
+  }
 
   document.body.appendChild(panel);
 
