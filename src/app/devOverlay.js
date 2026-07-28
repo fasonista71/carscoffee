@@ -101,6 +101,18 @@ export function createDevOverlay(getWorld) {
     () => TUNING.input.tapMaxMs,
     (v) => { TUNING.input.tapMaxMs = v; });
 
+  addSlider('Fuel drain per sec', 0.5, 6, 0.1,
+    () => TUNING.fuel.passiveDrainPerSec,
+    (v) => { TUNING.fuel.passiveDrainPerSec = v; });
+
+  addSlider('Coffee refill', 5, 50, 1,
+    () => TUNING.fuel.coffeeRefill,
+    (v) => { TUNING.fuel.coffeeRefill = v; });
+
+  addSlider('Boost multiplier', 1.1, 2, 0.05,
+    () => TUNING.boost.speedMultiplier,
+    (v) => { TUNING.boost.speedMultiplier = v; });
+
   document.body.appendChild(panel);
 
   window.addEventListener('keydown', (e) => {

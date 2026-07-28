@@ -9,7 +9,7 @@
 */
 
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../game/tuning.js';
-import { createWorld, step, distanceMeters } from '../game/world.js';
+import { createWorld, step, distanceMeters, isBoosting } from '../game/world.js';
 import { playerLaneFloat } from '../game/entities.js';
 import { createRenderer } from '../render/renderer.js';
 import { loadSprites } from '../render/sprites.js';
@@ -118,7 +118,11 @@ const loop = createLoop({
     } else {
       view = { mode, distancePx: currSnap.distancePx, laneFloat: currSnap.laneFloat };
     }
-    view.obstacles = world ? world.obstacles : [];
+    view.rows = world ? world.rows : [];
+    view.pickups = world ? world.pickups : [];
+    view.fuel = world ? world.fuel : TUNING.fuel.max;
+    view.boosting = world ? isBoosting(world) : false;
+    view.deathCause = world ? world.deathCause : null;
     view.meters = world ? Math.floor(distanceMeters(world)) : 0;
     renderer.drawFrame(view);
 

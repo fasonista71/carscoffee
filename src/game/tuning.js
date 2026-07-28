@@ -75,7 +75,56 @@ export const TUNING = {
        near misses feel like near misses. GUESS. */
     hitboxShrinkPx: 4,
     /* Must match the variant list in render sprites. */
-    stalledVariantCount: 8
+    stalledVariantCount: 7
+  },
+
+  traffic: {
+    /* Chance a row of cars is stalled (speed zero) rather than
+       moving. GUESS. */
+    stalledChance: 0.4,
+    /* Moving rows travel at this fraction of the player's base speed,
+       chosen per row. The band keeps closing speeds meaningful: slow
+       traffic rushes at you, fast traffic creeps back at you. GUESS. */
+    speedFracMin: 0.25,
+    speedFracMax: 0.5,
+    /* Rear traffic slows to match the row ahead this many px before
+       the fair minimum gap would be violated. Keeps moving rows from
+       ever bunching into an unfair wall. */
+    clampMarginPx: 12
+  },
+
+  fuel: {
+    max: 100,
+    /* Sized so ignoring coffee entirely ends a run in roughly 45
+       seconds, per the brief. Scales with speed tiers in step 9.
+       GUESS. */
+    passiveDrainPerSec: 2.2,
+    /* Extra drain while boosting, on top of passive. GUESS. */
+    boostDrainPerSec: 12,
+    coffeeRefill: 18,
+    /* Below this the meter turns red; feeds the fuel_low sound in
+       step 10. GUESS. */
+    lowThreshold: 25
+  },
+
+  boost: {
+    /* Fixed duration burst, not a hold. Gated only by minFuel; no
+       separate cooldown, no extension while active. */
+    durationMs: 1200,
+    speedMultiplier: 1.45,
+    minFuel: 10
+  },
+
+  coffee: {
+    /* Chance each spawned row brings a cup with it. GUESS. */
+    spawnChancePerRow: 0.35,
+    /* Share of cups placed in tension (beside or in the forced path
+       of a hazard) versus free cups in gaps. Kept above the brief's
+       70 percent floor. */
+    tensionRatio: 0.75,
+    hitbox: { wPx: 12, hPx: 14 },
+    /* Collection is forgiving by this much on each axis. */
+    pickupSlopPx: 2
   },
 
   render: {
@@ -86,7 +135,10 @@ export const TUNING = {
     dashLengthPx: 12,
     dashGapPx: 12,
     dashWidthPx: 2,
-    edgeLineWidthPx: 2
+    edgeLineWidthPx: 2,
+    fuelBar: { x: 4, y: 4, w: 80, h: 5 },
+    /* Cup shiver rate. Purely visual. */
+    coffeeJiggleHz: 6
   },
 
   /* City palette, roughly 11 colors. Cheerful, high contrast. */

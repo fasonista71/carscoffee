@@ -3,11 +3,27 @@
 An 8 bit style top down endless driver. Browser prototype, built as a
 vertical slice: one vehicle, one environment, the complete core loop.
 
-## Current status: milestone 2 of the build order
+## Current status: milestone 3 of the build order
 
-Build order steps 1 through 5 are done, plus two items pulled forward
-by agreement: a movement slice of the dev tuning overlay, and the
-headless determinism test. Included and working:
+Build order steps 1 through 6 are done, plus items pulled forward by
+agreement: the dev tuning overlay (movement and fuel slices) and the
+headless determinism test. New in milestone 3:
+
+- The fuel spine: a 0 to 100 meter, passive drain, coffee as the only
+  refill, boost as a fixed 1.2 second burst gated by minimum fuel,
+  and a distinct out of fuel death
+- Coffee cups with real art (16x20, transparent, gentle shiver),
+  placed per brief section 5: at least 70 percent in tension beside
+  or in the forced path of traffic, free cups only ever in a lane
+  that is open in the row they precede
+- Variable traffic speeds: rows are stalled or move at a fraction of
+  the player's speed, and a traffic clamp slows rear rows before they
+  could bunch into an unfair wall
+- HUD fuel bar (yellow, red when low, boost rails while boosting)
+- The fairness gate upgraded to an oracle that drives the real
+  simulation with clamp aware prediction, 100 seeds at six speeds
+
+From milestone 2:
 
 - Stalled car obstacles with real sprite art, one hit death, and a
   game over screen with one tap instant restart
@@ -30,9 +46,9 @@ From milestone 1:
 - Dev overlay with live movement sliders
 - Headless determinism test and a game purity guard test
 
-Not built yet, by design: fuel, coffee, boost effect, oil slicks,
-rubble, stumble, tiers, scoring persistence, audio, parallax. Next up
-is build order step 6.
+Not built yet, by design: oil slicks, rubble, stumble, speed tiers,
+persisted high score, audio, parallax and juice. Next up is build
+order step 7.
 
 ## How to run
 
@@ -68,7 +84,7 @@ backtick on a keyboard.
 | --- | --- | --- |
 | Lane left | Left arrow or A | Swipe left, or tap left third |
 | Lane right | Right arrow or D | Swipe right, or tap right third |
-| Boost (no op until step 6) | Up arrow, W, or space | Swipe up, or tap center third |
+| Boost | Up arrow, W, or space | Swipe up, or tap your own lane |
 | Dev overlay | Backtick | Three finger tap |
 
 Touch is read across the whole screen, letterbox included, and each
@@ -93,9 +109,14 @@ Runs two suites in Node (18 or newer), no dependencies:
   simulated frames from a fixed seed with a scripted input sequence,
   twice, and asserts identical FNV-1a hashes of the final world state.
 - `test/fairness.test.js` is the solvability gate from brief section
-  4: 100 seeds at six speeds, forward search over the lane grid,
-  asserting a survivable path always exists and no row blocks every
-  lane.
+  4, upgraded for moving traffic: an oracle player drives the real
+  simulation for 100 seconds per run, predicting meet windows with
+  the same traffic clamp rule the world uses and lane searching for a
+  surviving path. 100 seeds at six speeds, including the speeds
+  future tiers will reach. Any unfair situation fails the test with
+  its seed, speed, and road position.
+- `test/fuel.test.js` covers the fuel spine: drain timing, boost
+  duration, gating and no restacking, and coffee refills.
 - `test/tap.test.js` covers positional tap semantics.
 - `test/purity.test.js` scans every file in `src/game/` for forbidden
   identifiers (window, document, navigator, performance, Date,
@@ -123,6 +144,15 @@ they do to feel:
 | obstacles.gapJitterMax | 1.9 | Row gaps run from the fair minimum to this multiple of it. Lower is relentless, higher is breathing room. |
 | obstacles.doubleRowChance | 0.3 | How often a row blocks two lanes, forcing a specific open lane. |
 | obstacles.stalledHitbox, hitboxShrinkPx | | Collision forgiveness. Raise shrink if deaths feel cheap. |
+| traffic.stalledChance | 0.4 | Share of rows that sit still versus move. |
+| traffic.speedFracMin/Max | 0.25/0.5 | Moving traffic speed band as a fraction of your base speed. Faster traffic creeps back at you and is passed slowly. |
+| traffic.clampMarginPx | 12 | How early rear traffic slows behind the row ahead. |
+| fuel.passiveDrainPerSec | 2.2 | The clock on every run. 100/this is your no coffee survival time in seconds. |
+| fuel.boostDrainPerSec | 12 | Extra burn while boosting. The price of score rate. |
+| fuel.coffeeRefill | 18 | How much a cup matters. |
+| boost.durationMs / speedMultiplier / minFuel | 1200 / 1.45 / 10 | The whole boost decision in three numbers. |
+| coffee.spawnChancePerRow | 0.35 | Cup frequency. |
+| coffee.tensionRatio | 0.75 | Share of cups placed against hazards rather than free. Keep at or above 0.7 per the brief. |
 | render.dash*, render.edgeLine* | | Road paint dimensions. Cosmetic. |
 
 The dev overlay exposes lane tween, scroll speed, swipe threshold, and
@@ -147,14 +177,17 @@ original license text ships in assets/CARS_CREDITS.txt). The sheet
 plus its atlas live in assets/ and are sliced at load by
 `src/render/sprites.js`.
 
-The swap seam: game logic knows only sprite keys (`player_car`) and
-art variant indices, never files or pixels. To change art, edit the
-urls, aliases, and variant name list at the top of sprites.js.
-Nothing outside `render/` changes. The player car is currently the
-`porsche` frame; the stalled obstacle pool is 8 frames chosen for
-silhouette variety. Text uses a 3x5 bitmap font in
-`src/render/font.js`: no fillText antialiasing, swappable in one
-place.
+The swap seam: game logic knows only sprite keys (`player_car`,
+`pickup_coffee`) and art variant indices, never files or pixels. To
+change art, edit the urls, aliases, and variant name list at the top
+of sprites.js. Nothing outside `render/` changes. The player car is
+currently the `porsche` frame; the traffic pool is 7 frames chosen
+for silhouette variety (the taxi frame was cut by request). The
+coffee cup is Jason's art, reduced to its native 16x20 pixels with a
+transparent background, stored as assets/coffee.png. Its shiver is
+render only and never affects collection. Text uses a 3x5 bitmap
+font in `src/render/font.js`: no fillText antialiasing, swappable in
+one place.
 
 Audio follows the same pattern when it arrives in step 10: a manifest
 mapping event names to file paths, nothing more.
@@ -177,6 +210,21 @@ Verified against current sources during this build:
   (https://github.com/Fyrd/caniuse/issues/5973). Not certain the
   quirks are still current; the checkpoint on a real device is the
   real test.
+
+Design choices worth revisiting by feel:
+
+- Tension cups ride along with moving traffic so they stay beside
+  their hazard. It reads as slightly cartoonish (a cup gliding down
+  the road with the pack). If it bothers you in play, the alternative
+  is placing tension cups only against stalled rows.
+- The fair row gap includes a body extent term (player length plus
+  obstacle length), because gaps are measured center to center but
+  maneuvering happens in what is left over. This is why traffic
+  density reads as it does; tighten reactionBufferMs before touching
+  the extent term.
+- A tap on your own lane is the boost gesture in lane tap mode. It
+  replaces the brief's center third boost tap; judge it now that
+  boost is real.
 
 Guesses, clearly labeled, awaiting the feel checkpoint:
 

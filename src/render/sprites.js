@@ -30,7 +30,7 @@ const ALIASES = {
   TUNING.obstacles.stalledVariantCount.
 */
 export const STALLED_VARIANT_NAMES = [
-  'taxi', 'van', 'pickup', 'suv', 'bmw', 'lancer', 'sunny', 'figo'
+  'van', 'pickup', 'suv', 'bmw', 'lancer', 'sunny', 'figo'
 ];
 
 const registry = new Map();
@@ -60,18 +60,37 @@ function parseAtlas(text) {
   return frames;
 }
 
+const COFFEE_URL = 'assets/coffee.png';
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not load ' + url));
+    img.src = url;
+  });
+}
+
+function toSurface(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0);
+  return c;
+}
+
 export function loadSprites() {
-  const img = new Image();
-  const imageReady = new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('Could not load ' + IMAGE_URL));
-    img.src = IMAGE_URL;
+  const imageReady = loadImage(IMAGE_URL);
+  const coffeeReady = loadImage(COFFEE_URL).then((img) => {
+    registry.set('pickup_coffee', toSurface(img));
   });
   const atlasReady = fetch(ATLAS_URL).then((r) => {
     if (!r.ok) throw new Error('Could not load ' + ATLAS_URL);
     return r.text();
   });
-  return Promise.all([atlasReady, imageReady]).then(([text]) => {
+  return Promise.all([atlasReady, imageReady, coffeeReady]).then(([text, img]) => {
     const frames = parseAtlas(text);
     const needed = new Set([...Object.values(ALIASES), ...STALLED_VARIANT_NAMES]);
     for (const name of needed) {

@@ -82,18 +82,55 @@ export function createRenderer(canvas) {
   }
 
   /*
-    An obstacle's distPx equals the interpolated view distance exactly
-    when it draws level with the player, so screen y falls out of the
-    same numbers collision uses.
+    A row's distPx equals the interpolated view distance exactly when
+    it draws level with the player, so screen y falls out of the same
+    numbers collision uses.
   */
-  function drawObstacles(view) {
-    for (let i = 0; i < view.obstacles.length; i += 1) {
-      const ob = view.obstacles[i];
-      const spr = getStalledSprite(ob.variant);
-      const screenY = TUNING.render.playerYPx - (ob.distPx - view.distancePx);
-      if (screenY < -spr.height || screenY > H + spr.height) continue;
-      const x = Math.round(laneCenterXPx(ob.lane) - spr.width / 2);
-      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
+  function drawTraffic(view) {
+    for (let i = 0; i < view.rows.length; i += 1) {
+      const row = view.rows[i];
+      const screenY = TUNING.render.playerYPx - (row.distPx - view.distancePx);
+      if (screenY < -64 || screenY > H + 64) continue;
+      for (let lane = 0; lane < row.lanes.length; lane += 1) {
+        if (!row.lanes[lane]) continue;
+        const spr = getStalledSprite(row.variants[lane]);
+        const x = Math.round(laneCenterXPx(lane) - spr.width / 2);
+        bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
+      }
+    }
+  }
+
+  /*
+    Cups shiver by a pixel, phase offset per cup so they never sync.
+    Purely visual: collection uses the unjiggled position.
+  */
+  function drawPickups(view) {
+    const spr = getSprite('pickup_coffee');
+    const t = performance.now() / 1000;
+    const hz = TUNING.render.coffeeJiggleHz;
+    for (let i = 0; i < view.pickups.length; i += 1) {
+      const cup = view.pickups[i];
+      const screenY = TUNING.render.playerYPx - (cup.distPx - view.distancePx);
+      if (screenY < -32 || screenY > H + 32) continue;
+      const phase = t * hz * Math.PI * 2 + cup.lane * 1.7 + cup.distPx * 0.01;
+      const jx = Math.round(Math.sin(phase));
+      const jy = Math.round(Math.sin(phase * 0.63 + 1.3) * 0.6);
+      const x = Math.round(laneCenterXPx(cup.lane) - spr.width / 2) + jx;
+      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2) + jy);
+    }
+  }
+
+  function drawFuelBar(view, pal) {
+    const fb = TUNING.render.fuelBar;
+    bctx.fillStyle = pal.outline;
+    bctx.fillRect(fb.x - 1, fb.y - 1, fb.w + 2, fb.h + 2);
+    const frac = Math.max(0, Math.min(1, view.fuel / TUNING.fuel.max));
+    bctx.fillStyle = view.fuel <= TUNING.fuel.lowThreshold ? pal.carBody : pal.edgeLine;
+    bctx.fillRect(fb.x, fb.y, Math.round(fb.w * frac), fb.h);
+    if (view.boosting) {
+      bctx.fillStyle = pal.dash;
+      bctx.fillRect(fb.x - 1, fb.y - 3, fb.w + 2, 1);
+      bctx.fillRect(fb.x - 1, fb.y + fb.h + 2, fb.w + 2, 1);
     }
   }
 
@@ -105,11 +142,12 @@ export function createRenderer(canvas) {
     drawText(bctx, 'to start', W / 2, 180, pal.text, { scale: 1, align: 'center' });
   }
 
-  function drawGameOver(pal, meters) {
+  function drawGameOver(pal, view) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
-    drawText(bctx, 'Crashed', W / 2, 104, pal.carBody, { scale: 2, align: 'center' });
-    drawText(bctx, meters + ' m', W / 2, 136, pal.text, { scale: 2, align: 'center' });
+    const cause = view.deathCause === 'fuel' ? 'Out of fuel' : 'Crashed';
+    drawText(bctx, cause, W / 2, 104, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m', W / 2, 136, pal.text, { scale: 2, align: 'center' });
     drawText(bctx, 'Tap or press a key', W / 2, 176, pal.text, { scale: 1, align: 'center' });
     drawText(bctx, 'to restart', W / 2, 186, pal.text, { scale: 1, align: 'center' });
   }
@@ -129,11 +167,15 @@ export function createRenderer(canvas) {
   function drawFrame(view) {
     const pal = TUNING.palette.city;
     drawRoad(view.distancePx, pal);
-    drawObstacles(view);
+    drawPickups(view);
+    drawTraffic(view);
     drawPlayer(view.laneFloat);
+    if (view.mode === 'playing' || view.mode === 'paused' || view.mode === 'gameOver') {
+      drawFuelBar(view, pal);
+    }
     if (view.mode === 'title') drawTitle(pal);
     if (view.mode === 'paused') drawPaused(pal);
-    if (view.mode === 'gameOver') drawGameOver(pal, view.meters);
+    if (view.mode === 'gameOver') drawGameOver(pal, view);
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
