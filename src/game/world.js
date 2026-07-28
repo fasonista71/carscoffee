@@ -1004,7 +1004,13 @@ function overtakerLaneClear(world, lane, vO, behindPx, behindFarPx = behindPx) {
   const vSlow = vBase * TUNING.hazards.rubble.slowFactor;
   const g = o.squeezeGuardSec;
   const tMeetMin = behindPx / Math.max(1, vO - vSlow);
-  const tMeetMax = behindFarPx / Math.max(1, vO - vFast);
+  /* Latest possible meet: boost is a bounded burst, not a sustained
+     speed, so the honest bound is base speed plus the extra road two
+     full boosts can buy (fuel allows back to back bursts). Dividing
+     by (vO - vFast) instead would explode toward infinity as the
+     boost multiplier nears the slowest overtaker's. */
+  const boostExtraPx = (vFast - vBase) * (TUNING.boost.durationMs / 1000) * 2;
+  const tMeetMax = (behindFarPx + boostExtraPx) / Math.max(1, vO - vBase);
   const laneBit = 1 << lane;
   const fullMask = (1 << TUNING.road.laneCount) - 1;
   for (let i = 0; i < world.rows.length; i += 1) {

@@ -208,10 +208,10 @@ const loop = createLoop({
       audio.play(ev);
       haptics.trigger(ev);
       if (ev === 'coffee_pickup' || ev === 'heart_pickup') {
-        renderer.addPuff(
+        renderer.addPickupPop(
           laneCenterXPx(currSnap.laneFloat),
           TUNING.render.playerYPx - 16,
-          ev === 'heart_pickup' ? '#e43b44' : '#b78152'
+          ev === 'heart_pickup' ? 'heart' : 'coffee'
         );
       }
       if (ev === 'stumble') startShake(10, 3);

@@ -75,14 +75,19 @@ export function createRenderer(canvas) {
     return { key: t.theme, c: TUNING.sceneryThemes[t.theme] };
   }
 
+  /* Scenery scrolls toward the bottom of the screen exactly like the
+     road dashes (same sign as drawRoad's offset). It once ran the
+     other way, which read as the world driving against you. Item
+     identity is keyed to world position (base - k), so each tree or
+     peak keeps its shape while it rides down the screen. */
   function bandItems(x0, bandW, factor, salt, distancePx, itemFn) {
     const period = TUNING.render.scenery.periodPx;
     const scroll = distancePx * factor;
     const offset = scroll % period;
     const base = Math.floor(scroll / period);
     for (let k = -1; k <= Math.ceil(H / period) + 1; k += 1) {
-      const y = Math.round(k * period + (period - offset));
-      itemFn(x0, bandW, y, hash32(base + k + salt * 7919));
+      const y = Math.round(k * period + offset - period);
+      itemFn(x0, bandW, y, hash32(base - k + salt * 7919));
     }
   }
 
@@ -222,6 +227,7 @@ export function createRenderer(canvas) {
 
   /* Pickup puffs and similar one shot particles. Render only. */
   let particles = [];
+  let gaugeFlashFrames = 0;
 
   function addPuff(x, y, color) {
     for (let i = 0; i < 8; i += 1) {
@@ -232,6 +238,33 @@ export function createRenderer(canvas) {
         life: 14 + Math.floor(Math.random() * 8)
       });
     }
+  }
+
+  /* The loud version for pickups: a wide two color burst, a rising
+     callout, and (for coffee) a flash on the fuel gauge so the
+     reward reads even at speed. */
+  function addPickupPop(x, y, kind) {
+    const cCoffee = ['#b78152', '#e8d5b0'];
+    const cHeart = ['#e43b44', '#ffffff'];
+    const colors = kind === 'heart' ? cHeart : cCoffee;
+    for (let i = 0; i < 16; i += 1) {
+      particles.push({
+        x, y,
+        color: colors[i % 2],
+        vx: (Math.random() * 2 - 1) * 2.2,
+        vy: (Math.random() * 2 - 1) * 2.2 - 0.8,
+        size: i % 3 === 0 ? 3 : 2,
+        life: 18 + Math.floor(Math.random() * 10)
+      });
+    }
+    particles.push({
+      x, y: y - 6,
+      text: kind === 'heart' ? '+LIFE' : '+COFFEE',
+      color: colors[1],
+      vx: 0, vy: -0.55,
+      life: 46
+    });
+    if (kind !== 'heart') gaugeFlashFrames = 22;
   }
 
   function drawParticles() {
@@ -245,20 +278,30 @@ export function createRenderer(canvas) {
         continue;
       }
       bctx.globalAlpha = Math.min(1, p.life / 12);
-      bctx.fillStyle = p.color;
-      bctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+      if (p.text) {
+        drawText(bctx, p.text, Math.round(p.x) + 1, Math.round(p.y) + 1,
+          '#1a1a24', { scale: 1, align: 'center' });
+        drawText(bctx, p.text, Math.round(p.x), Math.round(p.y),
+          p.color, { scale: 1, align: 'center' });
+      } else {
+        bctx.fillStyle = p.color;
+        const s = p.size || 2;
+        bctx.fillRect(Math.round(p.x), Math.round(p.y), s, s);
+      }
     }
     bctx.globalAlpha = 1;
   }
 
+  /* Boost has to feel like boost: dense streaks down the whole road
+     plus flames off the back of the car (drawn in drawPlayer). */
   function drawSpeedLines(view, pal) {
     if (!view.boosting) return;
-    bctx.globalAlpha = 0.4;
     bctx.fillStyle = pal.dash;
-    const xs = [44, 76, 104, 136];
+    const xs = [36, 52, 68, 84, 100, 116, 132, 148];
     for (let i = 0; i < xs.length; i += 1) {
-      const y = ((view.distancePx * 1.6 + i * 83) % (H + 40)) - 20;
-      bctx.fillRect(xs[i], Math.round(y), 1, 22);
+      bctx.globalAlpha = i % 2 === 0 ? 0.5 : 0.3;
+      const y = ((view.distancePx * 1.9 + i * 67) % (H + 60)) - 30;
+      bctx.fillRect(xs[i], Math.round(y), 1, 34);
     }
     bctx.globalAlpha = 1;
   }
@@ -311,6 +354,22 @@ export function createRenderer(canvas) {
       return;
     }
     bctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
+    /* exhaust flames while boosting, flickering every few frames */
+    if (view.boosting) {
+      const pal = TUNING.palette.city;
+      const fl = Math.floor(performance.now() / 60) % 2;
+      const bx = Math.round(cx);
+      const by = Math.round(cy + spr.height / 2);
+      bctx.fillStyle = fl ? pal.flameInner : pal.flameOuter;
+      bctx.fillRect(bx - 4, by, 3, 5 + fl);
+      bctx.fillRect(bx + 1, by, 3, 6 - fl);
+      bctx.fillStyle = fl ? pal.flameOuter : pal.flameInner;
+      bctx.fillRect(bx - 3, by + 4, 1, 3);
+      bctx.fillRect(bx + 2, by + 4, 1, 3);
+      bctx.fillStyle = pal.flameCore;
+      bctx.fillRect(bx - 3, by, 1, 2);
+      bctx.fillRect(bx + 2, by, 1, 2);
+    }
     /* blinking BOOST! callout when an overtaker is bearing down on
        this lane and a boost is banked, so the escape move is obvious */
     if (view.boostHint && !view.boosting
@@ -506,13 +565,16 @@ export function createRenderer(canvas) {
     bctx.fillStyle = pal.road;
     bctx.fillRect(barX + 1, barY, fb.wPx - 2, fb.hPx);
 
-    /* fill with highlight and shadow bands */
+    /* fill with highlight and shadow bands; a fresh cup makes the
+       whole gauge flash bright for a beat */
+    const flashOn = gaugeFlashFrames > 0 && Math.floor(gaugeFlashFrames / 4) % 2 === 0;
+    if (gaugeFlashFrames > 0) gaugeFlashFrames -= 1;
     const frac = Math.max(0, Math.min(1, view.fuel / TUNING.fuel.max));
     const fillW = Math.round((fb.wPx - 2) * frac);
     if (fillW > 0) {
-      bctx.fillStyle = low ? pal.carBody : pal.edgeLine;
+      bctx.fillStyle = flashOn ? pal.dash : (low ? pal.carBody : pal.edgeLine);
       bctx.fillRect(barX + 1, barY, fillW, fb.hPx);
-      bctx.fillStyle = pal.dash;
+      bctx.fillStyle = flashOn ? '#ffffff' : pal.dash;
       bctx.fillRect(barX + 1, barY, fillW, 1);
       bctx.fillStyle = low ? pal.carDark : pal.outline;
       bctx.fillRect(barX + 1, barY + fb.hPx - 1, fillW, 1);
@@ -730,5 +792,5 @@ export function createRenderer(canvas) {
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, addPuff };
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, addPuff, addPickupPop };
 }

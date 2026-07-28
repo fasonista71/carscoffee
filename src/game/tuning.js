@@ -268,9 +268,13 @@ export const TUNING = {
 
   boost: {
     /* Fixed duration burst, not a hold. Gated only by minFuel; no
-       separate cooldown, no extension while active. */
-    durationMs: 1200,
-    speedMultiplier: 1.45,
+       separate cooldown, no extension while active. Grown from
+       1200ms at 1.45x: the boost is the escape move when a speeder
+       owns your lane, so it has to cover real road. The multiplier
+       stays under the slowest overtaker (1.7) so the pass guard's
+       closing speed math never degenerates. */
+    durationMs: 2000,
+    speedMultiplier: 1.65,
     minFuel: 10
   },
 
@@ -368,6 +372,9 @@ export const TUNING = {
       slickSheen: '#43306b',
       slickArrow: '#c2b1ff',
       hazardLight: '#ffb937',
+      flameOuter: '#ff6b35',
+      flameInner: '#ffb937',
+      flameCore: '#fff3c4',
       wigWagRed: '#ff2a2a',
       wigWagRedDim: '#701414',
       wigWagBlue: '#2a6aff',

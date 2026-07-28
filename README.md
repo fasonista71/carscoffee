@@ -10,6 +10,19 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 All twelve build order steps are done. Latest additions:
 
+- Pickup feedback got loud: collecting a cup fires a wide two color
+  burst, a rising +COFFEE callout, and a bright flash across the
+  fuel gauge (+LIFE for hearts). The old small puff is gone.
+- Boost covers real road now: 2000ms at 1.65x (was 1200ms at
+  1.45x), with exhaust flames off the car and dense streaks down
+  the whole road. The multiplier deliberately stays under the
+  slowest overtaker so the pass guard's closing math never
+  degenerates; the guard bounds the boost by distance (two full
+  bursts) rather than treating it as a sustained speed.
+- Parallax direction fixed: scenery scrolled UP the screen against
+  the road (a sign slip in the band scroller). Both bands now ride
+  down with the road dashes, the far band slower, and each item
+  keeps its identity by world position.
 - Traffic yields to a pass, lane to lane only (there is no usable
   shoulder): exactly one pass event runs at a time (a lone speeder
   or one pursuit pair), and a lone car in the speeder's lane merges
