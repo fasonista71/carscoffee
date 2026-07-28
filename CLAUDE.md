@@ -149,7 +149,14 @@ missing; add the rule; rerun everything.
 
 ## iOS port phase (when it starts)
 
-Follow ROADMAP.md. Port order: engineering hardening first (config
+The authoritative brief for the port is
+`Cars_and_Coffee_Claude_Code_iOS_Prompt.md` in this repo, written by
+Jason: SwiftUI shell, SpriteKit through SpriteView, a pure GameCore
+Swift package, Swift Testing, service protocols, phased migration
+with tests green at every phase, neutral vehicle identifiers with no
+manufacturer trademarks, and parity documented rather than claimed.
+Follow it. ROADMAP.md holds the wider plan: engineering hardening
+first (config
 snapshot per run, explicit state machine, frame stamped inputs,
 RenderSnapshot, golden tests, replays), then GameCore in Swift with
 the same tests, then SpriteKit rendering. The backlog includes smart
