@@ -29,6 +29,8 @@ export function createWorld({ seed, vehicle, environment }) {
     fuel: TUNING.fuel.max,
     boostFramesLeft: 0,
     boostHint: false,
+    /* Distance at which the next breakdown car may appear. */
+    nextBreakdownAtPx: TUNING.traffic.breakdownEveryMeters * TUNING.speed.pxPerMeter,
     /* Hazard and forgiveness state. */
     slideLockFrames: 0,
     slowFrames: 0,
@@ -469,6 +471,41 @@ function spawn(world) {
   const horizon = Math.max(TUNING.obstacles.horizonPx,
     currentSpeedPxPerSec(world) * TUNING.obstacles.horizonSecs);
   if (world.distancePx + horizon < at) return;
+  /* Stopped dead is reserved for breakdowns, on the jittered distance
+     cadence: the first full gap row past the mark becomes one stopped
+     car with its flashers on. A double row that draws the breakdown
+     sheds down to a single car first, so two flashing cars never sit
+     side by side. Everything else that rolled stalled crawls at the
+     tier's slowest fraction, so packs still jam up between marks. */
+  let blockedCount = 0;
+  for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+    if (spec.lanes[l]) blockedCount += 1;
+  }
+  let breakdown = false;
+  let speedFrac = spec.speedFrac;
+  if (!tight && blockedCount >= 1 && at >= world.nextBreakdownAtPx) {
+    if (blockedCount > 1) {
+      const blockedLanes = [];
+      for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+        if (spec.lanes[l]) blockedLanes.push(l);
+      }
+      const keep = blockedLanes[Math.min(blockedLanes.length - 1,
+        Math.floor(spec.aggroLaneRoll * blockedLanes.length))];
+      const lanes = new Array(TUNING.road.laneCount).fill(false);
+      lanes[keep] = true;
+      const variants = new Array(TUNING.road.laneCount).fill(-1);
+      variants[keep] = spec.variants[keep];
+      spec.lanes = lanes;
+      spec.variants = variants;
+    }
+    breakdown = true;
+    speedFrac = 0;
+    const j = t.breakdownJitterFrac;
+    const intervalPx = t.breakdownEveryMeters * TUNING.speed.pxPerMeter;
+    world.nextBreakdownAtPx = at + intervalPx * (1 - j / 2 + spec.breakdownRoll * j);
+  } else if (speedFrac === 0) {
+    speedFrac = cfg.speedFracMin;
+  }
   /* Per car stagger: nose forward or hang back of the row line. */
   const offsets = new Array(TUNING.road.laneCount).fill(0);
   for (let l = 0; l < TUNING.road.laneCount; l += 1) {
@@ -478,10 +515,11 @@ function spawn(world) {
   }
   const row = {
     distPx: at,
-    speedPxPerSec: spec.speedFrac * baseSpeedPxPerSec(world),
+    speedPxPerSec: speedFrac * baseSpeedPxPerSec(world),
     lanes: spec.lanes,
     variants: spec.variants,
     offsets,
+    breakdown,
     maxHPx: specMaxH,
     minGapPrevPx
   };

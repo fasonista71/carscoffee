@@ -111,7 +111,15 @@ export const TUNING = {
     /* Bumper gap variance inside a cluster, as a fraction above the
        tight minimum. Wider than the old 0.35 so pack spacing reads
        ragged and natural. */
-    tightGapJitterSpan: 0.6
+    tightGapJitterSpan: 0.6,
+    /* Breakdowns. Stopped dead is no longer routine: rows that roll
+       stalled crawl at the tier's slowest fraction instead. Roughly
+       every breakdownEveryMeters (jittered so it stays a surprise,
+       like the overtakers), the next full gap single car row stops
+       dead with its hazard flashers on. Single car only, never
+       inside a pack, so two flashing cars never sit together. */
+    breakdownEveryMeters: 500,
+    breakdownJitterFrac: 0.5
   },
 
   /*

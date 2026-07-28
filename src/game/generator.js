@@ -156,6 +156,8 @@ export function nextRowSpec(genState, tierCfg) {
   [heartLaneRoll, s] = nextFloat01(s);
   [aggroRoll, s] = nextFloat01(s);
   [aggroLaneRoll, s] = nextFloat01(s);
+  let breakdownRoll;
+  [breakdownRoll, s] = nextFloat01(s);
 
   /* One stagger roll per lane, rolled unconditionally so the rng
      stream never depends on which lanes ended up occupied (aggro may
@@ -170,6 +172,6 @@ export function nextRowSpec(genState, tierCfg) {
   return {
     lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter,
     coffee, hazard, heartRoll, heartLaneRoll, aggroRoll, aggroLaneRoll,
-    staggerRolls
+    breakdownRoll, staggerRolls
   };
 }

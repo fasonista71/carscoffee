@@ -380,11 +380,9 @@ export function createRenderer(canvas) {
       const row = view.rows[i];
       const screenY = TUNING.render.playerYPx - (row.distPx - view.distancePx);
       if (screenY < -64 || screenY > H + 64) continue;
-      /* Stopped cars run their hazard flashers, phase shifted per row
-         (keyed to the row's spawn position so it is stable) so the
-         road never blinks in unison. */
-      const stalled = row.speedPxPerSec === 0;
-      const flash = stalled
+      /* Breakdown cars run their hazard flashers, phase shifted per
+         row (keyed to the row's spawn position so it is stable). */
+      const flash = row.breakdown
         && Math.floor(now / blinkMs + (row.distPx % 7) * 0.29) % 2 === 0;
       for (let lane = 0; lane < row.lanes.length; lane += 1) {
         if (!row.lanes[lane]) continue;
