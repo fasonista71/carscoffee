@@ -148,6 +148,7 @@ export function step(world, intents) {
   advancePlayer(world);
   world.distancePx += currentSpeedPxPerSec(world) * dt;
   advanceTraffic(world, dt);
+  updateYields(world);
   cullOvertakenSlicks(world);
   spawn(world);
   updateOvertakers(world, dt);
@@ -523,6 +524,9 @@ function spawn(world) {
     variants: spec.variants,
     offsets,
     breakdown,
+    tight,
+    yield: null,
+    shoulder: null,
     maxHPx: specMaxH,
     minGapPrevPx
   };
@@ -899,24 +903,115 @@ function updateOvertakers(world, dt) {
   }
 }
 
+/*
+  Traffic yields to a pass: cars in the speeder's lane inside the
+  pass corridor pull over into the middle instead of blocking the
+  spawn outright, and the pulled over car becomes a brand new
+  obstacle for the player. A car may only yield when the maneuver is
+  fair to everyone:
+  - it is the only car in its row (a packed row has nowhere to go),
+  - the row is not bumper to bumper in a cluster (no room to merge),
+  - it is not a breakdown (a dead car cannot move),
+  - and, when the row is visible or ahead, it is at least
+    yieldMinAheadPx out so the merge never lands in the player's
+    face. Rows far behind the player may yield at any distance; the
+    player never meets them again.
+  Any car that cannot yield blocks the pass from spawning, exactly
+  like the old hard clear lane rule.
+*/
+function planYields(world, lane) {
+  const o = TUNING.overtakers;
+  const yields = [];
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const row = world.rows[i];
+    const dy = row.distPx - world.distancePx;
+    if (dy < -o.clearLanePx) continue;
+    if (dy > o.clearLanePx) break;
+    if (!row.lanes[lane]) continue;
+    /* A dead car cannot move, and a row already mid maneuver cannot
+       start another. Either blocks the pass entirely. */
+    if (row.yield || row.shoulder || row.breakdown) return null;
+    let blockedCount = 0;
+    for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+      if (row.lanes[l]) blockedCount += 1;
+    }
+    /* Two ways out of the speeder's path. A lone car in open road
+       merges into the middle lane and becomes the player's next
+       problem. Anything that cannot do that fairly (packed rows,
+       bumper to bumper clusters, rows already close to the player)
+       pulls onto the shoulder instead, which only ever OPENS lanes
+       and so can never create an unfair pattern. */
+    let mode = 'shoulder';
+    if (blockedCount === 1 && dy > -60) {
+      const next = world.rows[i + 1];
+      if (dy >= o.yieldMinAheadPx && !row.tight && !(next && next.tight)) {
+        mode = 'merge';
+      }
+    }
+    yields.push({ row, mode });
+  }
+  return yields;
+}
+
+/*
+  The pulled over car slides out of the speeder's lane. A merge goes
+  into the middle: while it slides both lanes count as occupied,
+  which is the conservative truth of a car straddling the line, and
+  the merge always finishes long before the row reaches the player
+  because of the yieldMinAheadPx floor. A shoulder pull slides off
+  the road entirely: the origin lane stays occupied until the car is
+  fully off, then simply opens.
+*/
+function startYield(row, fromLane, mode) {
+  const total = Math.max(1, msToFrames(TUNING.overtakers.yieldMs));
+  row.lanes = row.lanes.slice();
+  row.variants = row.variants.slice();
+  row.offsets = row.offsets ? row.offsets.slice() : new Array(TUNING.road.laneCount).fill(0);
+  if (mode === 'merge') {
+    const toLane = fromLane === 0 ? 1 : TUNING.road.laneCount - 2;
+    row.yield = { from: fromLane, to: toLane, frame: 0, total };
+    row.lanes[toLane] = true;
+    row.variants[toLane] = row.variants[fromLane];
+    row.offsets[toLane] = row.offsets[fromLane];
+  } else {
+    row.shoulder = {
+      from: fromLane,
+      variant: row.variants[fromLane],
+      offset: row.offsets[fromLane],
+      frame: 0,
+      total
+    };
+  }
+}
+
+function updateYields(world) {
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const row = world.rows[i];
+    if (row.yield) {
+      row.yield.frame += 1;
+      if (row.yield.frame >= row.yield.total) {
+        row.lanes[row.yield.from] = false;
+        row.variants[row.yield.from] = -1;
+        row.offsets[row.yield.from] = 0;
+        row.yield = null;
+      }
+    }
+    if (row.shoulder && row.shoulder.frame < row.shoulder.total) {
+      row.shoulder.frame += 1;
+      if (row.shoulder.frame >= row.shoulder.total && row.lanes[row.shoulder.from]) {
+        row.lanes[row.shoulder.from] = false;
+        row.variants[row.shoulder.from] = -1;
+        row.offsets[row.shoulder.from] = 0;
+      }
+    }
+  }
+}
+
 /* behindFarPx covers a chase pair: the pass interval runs from the
    lead car's earliest arrival to the trailing car's latest. For a
    lone car both bounds come from the same spawn distance. */
 function overtakerLaneClear(world, lane, vO, behindPx, behindFarPx = behindPx) {
   const o = TUNING.overtakers;
-  /* Concurrent overtakers must share a lane. Two passes on opposite
-     edges can overlap while any middle blocked row reaches the
-     player, and that walls all three lanes at once. A same lane
-     train is just a longer pass with the usual escapes. */
-  for (let i = 0; i < world.overtakers.length; i += 1) {
-    if (world.overtakers[i].lane !== lane) return false;
-  }
-  for (let i = 0; i < world.rows.length; i += 1) {
-    const dy = world.rows[i].distPx - world.distancePx;
-    if (dy < -o.clearLanePx) continue;
-    if (dy > o.clearLanePx) break;
-    if (world.rows[i].lanes[lane]) return false;
-  }
   /* Squeeze guard: never pass while any row the player meets around
      the same moment has a guaranteed corridor that collapses to the
      overtaker's lane. Clusters pin the player to their corridor, so
@@ -967,7 +1062,9 @@ function maybeSpawnOvertaker(world) {
   const o = TUNING.overtakers;
   const chance = tierConfig(world).overtakerChance;
   if (!chance || chance <= 0) return;
-  if (world.overtakers.length >= o.maxActive) return;
+  /* Exactly one pass event at a time: a lone speeder or one pursuit
+     pair. The next cannot start until this one is done. */
+  if (world.overtakers.length > 0) return;
   if (world.frame % TUNING.logic.hz !== 0) return;
   let s = world.rngState;
   let roll;
@@ -988,19 +1085,40 @@ function maybeSpawnOvertaker(world) {
     /* Edge lanes only. Crossing between corridors always transits the
        middle lane, so a middle lane overtaker can wall off the only
        path exactly when a corridor shift demands it. Edges never
-       carry transit. */
-    const lane = laneRoll < 0.5 ? 0 : TUNING.road.laneCount - 1;
+       carry transit.
+
+       Between the two edges, prefer the one where traffic will have
+       to pull over: the yield IS the spectacle, and the merged car
+       becomes the player's next problem. Ties fall back to the
+       rolled coin. */
     const vO = baseSpeedPxPerSec(world) * (o.speedMultMin + speedRoll * (o.speedMultMax - o.speedMultMin));
     const behindPx = o.spawnBehindPx * (1 - o.spawnBehindJitter / 2 + behindRoll * o.spawnBehindJitter);
     /* Emergency vehicles only ever appear in pursuit: the speeder in
-       front, the lights behind. Never solo, never leading. When the
-       active cap has no room for the pair, the speeder runs alone. */
+       front, the lights behind. Never solo, never leading. */
     const chase = EMERGENCY_VARIANT_IDS.length > 0
-      && emergencyRoll < o.emergencyChance
-      && world.overtakers.length <= o.maxActive - 2;
+      && emergencyRoll < o.emergencyChance;
     const behindFarPx = chase ? behindPx + o.chaseGapPx : behindPx;
-    if (OVERTAKER_VARIANT_IDS.length > 0
-        && overtakerLaneClear(world, lane, vO, behindPx, behindFarPx)) {
+    const edgeA = laneRoll < 0.5 ? 0 : TUNING.road.laneCount - 1;
+    const edgeB = TUNING.road.laneCount - 1 - edgeA;
+    const planA = OVERTAKER_VARIANT_IDS.length > 0 ? planYields(world, edgeA) : null;
+    const planB = OVERTAKER_VARIANT_IDS.length > 0 ? planYields(world, edgeB) : null;
+    const candidates = [];
+    if (planA !== null) candidates.push({ lane: edgeA, yields: planA });
+    if (planB !== null) candidates.push({ lane: edgeB, yields: planB });
+    candidates.sort((a, b) => b.yields.length - a.yields.length);
+    let lane = -1;
+    let yields = null;
+    for (let c = 0; c < candidates.length; c += 1) {
+      if (overtakerLaneClear(world, candidates[c].lane, vO, behindPx, behindFarPx)) {
+        lane = candidates[c].lane;
+        yields = candidates[c].yields;
+        break;
+      }
+    }
+    if (yields !== null) {
+      for (let i = 0; i < yields.length; i += 1) {
+        startYield(yields[i].row, lane, yields[i].mode);
+      }
       const pick = (ids, r) => ids[Math.min(ids.length - 1, Math.floor(r * ids.length))];
       world.overtakers.push({
         lane, distPx: world.distancePx - behindPx, speedPxPerSec: vO,

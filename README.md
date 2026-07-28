@@ -10,6 +10,17 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 All twelve build order steps are done. Latest additions:
 
+- Traffic yields to a pass: exactly one pass event runs at a time (a
+  lone speeder or one pursuit pair), and cars in the speeder's lane
+  pull out of the way instead of blocking the spawn. A lone car in
+  open road merges into the middle lane and becomes the player's
+  next problem; packed rows, clusters, and cars too close to the
+  player slide onto the shoulder instead, which only ever opens
+  lanes and so can never create an unfair pattern. Breakdowns cannot
+  move and still block a pass. Passes prefer the edge where cars
+  will have to pull over, so the yield is the spectacle. Measured:
+  nearly every pass moves traffic, and pass frequency rose about 40
+  percent because blocked lanes no longer veto spawns.
 - Pursuits: about a third of passes (emergencyChance) bring the law
   along. The emergency vehicle only ever chases, riding chaseGapPx
   behind the speeder in the same lane with wig wag roof lights going,

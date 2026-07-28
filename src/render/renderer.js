@@ -400,8 +400,19 @@ export function createRenderer(canvas) {
         && Math.floor(now / blinkMs + (row.distPx % 7) * 0.29) % 2 === 0;
       for (let lane = 0; lane < row.lanes.length; lane += 1) {
         if (!row.lanes[lane]) continue;
+        /* A yielding car occupies two lanes in the logic while it
+           straddles the line; draw it once, sliding, from its origin
+           lane. Shoulder pulls are drawn separately below. */
+        if (row.yield && lane === row.yield.to) continue;
+        if (row.shoulder && lane === row.shoulder.from) continue;
         const spr = getTrafficSprite(row.variants[lane]);
-        const x = Math.round(laneCenterXPx(lane) - spr.width / 2);
+        let cx = laneCenterXPx(lane);
+        if (row.yield && lane === row.yield.from) {
+          const p = Math.min(1, row.yield.frame / row.yield.total);
+          const ease = p * p * (3 - 2 * p);
+          cx += (laneCenterXPx(row.yield.to) - laneCenterXPx(row.yield.from)) * ease;
+        }
+        const x = Math.round(cx - spr.width / 2);
         const off = row.offsets ? row.offsets[lane] : 0;
         const y = Math.round(screenY - off - spr.height / 2);
         bctx.drawImage(spr, x, y);
@@ -410,6 +421,23 @@ export function createRenderer(canvas) {
           bctx.fillRect(x + 1, y + spr.height - 3, 2, 2);
           bctx.fillRect(x + spr.width - 3, y + spr.height - 3, 2, 2);
         }
+      }
+      /* A shoulder pulled car slides off the road and rides the verge
+         until its row scrolls away. */
+      if (row.shoulder) {
+        const sh = row.shoulder;
+        const road = TUNING.road;
+        const outset = road.laneWidthPx * TUNING.render.shoulderOutsetFrac;
+        const shoulderX = sh.from === 0
+          ? road.roadLeftPx - outset
+          : road.roadLeftPx + road.laneCount * road.laneWidthPx + outset;
+        const p = Math.min(1, sh.frame / sh.total);
+        const ease = p * p * (3 - 2 * p);
+        const cx = laneCenterXPx(sh.from) + (shoulderX - laneCenterXPx(sh.from)) * ease;
+        const spr = getTrafficSprite(sh.variant);
+        const x = Math.round(cx - spr.width / 2);
+        const y = Math.round(screenY - sh.offset - spr.height / 2);
+        bctx.drawImage(spr, x, y);
       }
     }
   }

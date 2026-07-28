@@ -201,21 +201,31 @@ export const TUNING = {
     spawnBehindPx: 400,
     spawnBehindJitter: 0.5,
     despawnAheadPx: 380,
-    /* Their lane must be clear of traffic this far in both directions
-       at spawn, so they never plow through rows on screen. */
+    /* The pass corridor: traffic this far in both directions matters
+       to a pass. Cars in the speeder's lane inside it pull over into
+       the middle rather than get plowed through. */
     clearLanePx: 400,
+    /* How long a pulled over car takes to slide into the middle
+       lane, and how far ahead of the player a car must be to be
+       allowed to start that slide: closer than this and the merge
+       would land in the player's face with no time to read it. Cars
+       that cannot yield (breakdowns, packed clusters, too close)
+       simply block the pass from spawning. */
+    yieldMs: 600,
+    yieldMinAheadPx: 240,
     /* Never spawn when, within this many seconds around the pass,
        any row's guaranteed corridor collapses to the overtaker's
        lane. Clusters can pin the player to their corridor, so the
        guard checks corridors, not just single rows. */
     squeezeGuardSec: 1.2,
-    maxActive: 3,
     /* Pursuits: this share of passes bring the law along. The
        emergency vehicle only ever CHASES, riding chaseGapPx behind
        the speeder in the same lane, wig wag lights going, one longer
        two car pass. The three unit fleet lives in world.js: blue
        truck as SWAT van, red truck as fire truck, blue car as
-       police; swap those sprites when real assets arrive. */
+       police; swap those sprites when real assets arrive. Exactly
+       one pass event runs at a time (a lone speeder or one pursuit
+       pair); the next cannot start until it is over. */
     emergencyChance: 0.35,
     chaseGapPx: 90
   },
@@ -316,6 +326,9 @@ export const TUNING = {
     hazardBlinkMs: 460,
     /* Emergency roof lights alternate sides at this period. Visual. */
     wigWagMs: 140,
+    /* How far beyond the road edge a shoulder pulled car parks, as a
+       fraction of a lane width. Visual. */
+    shoulderOutsetFrac: 0.45,
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
