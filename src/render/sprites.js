@@ -151,18 +151,40 @@ function buildSlick(dir) {
   });
 }
 
-const RUBBLE_ROWS = [
-  '......OO..........',
-  '.....OLLO....OO...',
-  '....OLLDDO..OLLO..',
-  '...OLDDDDOOOLDDO..',
-  '..OLDDMMDDLLDDDO..',
-  '.OLDDMMMMDDDDMDDO.',
-  'OLDDMMDMMMDDMMMDO.',
-  'OLDMMDDDMMMMMDDDDO',
-  'ODDDDDDDDDDDDDDDDO',
-  '.OOOOOOOOOOOOOOOO.'
-];
+/*
+  Rubble: a chunky mound of overlapping rock lumps, sized to read at
+  speed. Lit from the top, shadowed at the base, dark outline.
+*/
+function buildRubble() {
+  const pal = TUNING.palette.city;
+  const w = 24;
+  const h = 16;
+  const lumps = [
+    { cx: 7, cy: 10, rx: 6.5, ry: 5 },
+    { cx: 16, cy: 9, rx: 6.5, ry: 5.5 },
+    { cx: 11, cy: 6, rx: 5, ry: 4 }
+  ];
+  const inside = (x, y) => lumps.some((l) => {
+    const dx = (x - l.cx) / l.rx;
+    const dy = (y - l.cy) / l.ry;
+    return dx * dx + dy * dy <= 1;
+  });
+  return buildSurface(w, h, (ctx) => {
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        if (!inside(x, y)) continue;
+        const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+        let color;
+        if (edge) color = pal.outline;
+        else if (y <= 5) color = pal.rubbleLight;
+        else if (y >= 12) color = pal.rubbleDark;
+        else color = ((x * 7 + y * 5) % 11 < 3) ? pal.rubbleDark : pal.rubbleMid;
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+}
 
 const HEART_ROWS = [
   '.RR...RR.',
@@ -199,9 +221,7 @@ function buildProcedural() {
   const pal = TUNING.palette.city;
   registry.set('obstacle_slick_left', buildSlick(-1));
   registry.set('obstacle_slick_right', buildSlick(1));
-  registry.set('obstacle_rubble', buildPixmap(RUBBLE_ROWS, {
-    O: pal.outline, L: pal.rubbleLight, M: pal.rubbleMid, D: pal.rubbleDark
-  }));
+  registry.set('obstacle_rubble', buildRubble());
   registry.set('ui_heart_full', buildPixmap(HEART_ROWS, {
     R: pal.carBody, W: pal.dash
   }));

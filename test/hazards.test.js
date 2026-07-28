@@ -71,8 +71,11 @@ test('the first lethal contact is a stumble, the second ends the run', () => {
   assert.equal(w.status, 'running', 'first contact is forgiven');
   assert.equal(w.stumbleAvailable, false, 'stumble is spent');
   assert.ok(w.invulnFrames > 0, 'invulnerability granted');
-  /* ride out invulnerability, then hit again */
+  /* ride out invulnerability, then hit again. Clear the road first:
+     rows must stay ordered by distPx, and natural traffic has spawned
+     ahead of where this row is injected. */
   while (w.invulnFrames > 0) step(w, []);
+  w.rows.length = 0;
   w.rows.push(mkRow(w, 40, [false, true, false]));
   for (let f = 0; f < 40 && w.status === 'running'; f += 1) step(w, []);
   assert.equal(w.status, 'dead');

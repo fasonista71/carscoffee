@@ -13,10 +13,15 @@ Build order steps 1 through 9 are done. New in milestone 4:
   and scales passive fuel drain. Transitions ramp over about two
   seconds and announce themselves with a flash and a Tier banner.
 - Oil slicks: not lethal, but they throw the car into the lane their
-  chevrons point at and kill steering for 0.8 seconds. Placement
-  guarantees the slide target is open in the surrounding rows and
-  leaves a full recovery gap, so a slide is never an unavoidable
-  death sentence; it is a setup you mismanage.
+  chevrons point at and kill steering for 0.8 seconds. A slick claims
+  a gap big enough for its recovery guarantee at spawn, and because
+  moving traffic can rearrange itself around a static puddle, two
+  runtime guards close the loop: traffic that drives over a slick
+  smears it away, and a slick never fires unless its target lane is
+  clear for the whole lock distance. A slide is never an unavoidable
+  death sentence; it is a setup you mismanage. Half the slicks put a
+  cup just past the puddle in its own lane, the brief's classic: the
+  safe line and the fueled line differ.
 - Rubble: not lethal. Costs a chunk of fuel, cuts speed briefly
   (which costs score), and ends an active boost.
 - Stumble: the first lethal contact spins the car, drops speed, and
@@ -145,6 +150,9 @@ Runs two suites in Node (18 or newer), no dependencies:
 - `test/hazards.test.js` covers slick slides and steering lockout,
   rubble costs, stumble forgiveness and its one use limit, and
   invulnerability ignoring hazards.
+- `test/distribution.test.js` guards track composition: the center
+  lane stays contested, slicks and rubble actually occur, and every
+  cup sits still.
 - `test/tap.test.js` covers positional tap semantics.
 - `test/purity.test.js` scans every file in `src/game/` for forbidden
   identifiers (window, document, navigator, performance, Date,
@@ -262,10 +270,15 @@ Verified against current sources during this build:
 
 Design choices worth revisiting by feel:
 
-- Tension cups ride along with moving traffic so they stay beside
-  their hazard. It reads as slightly cartoonish (a cup gliding down
-  the road with the pack). If it bothers you in play, the alternative
-  is placing tension cups only against stalled rows.
+- Every coffee cup sits still on the road (one movement treatment,
+  by request). Cups placed beside stalled rows stay in tension for
+  good; cups placed beside moving rows watch their row pull away and
+  decay into free cups.
+- The center lane is deliberately blocked more often than the edges
+  (obstacles.laneBlockWeights and doubleOpenWeights), so camping the
+  middle cannot pay. Movement is the game. A regression test keeps
+  the center at least three quarters as contested as the busiest
+  edge.
 - The fair row gap includes a body extent term (player length plus
   obstacle length), because gaps are measured center to center but
   maneuvering happens in what is left over. This is why traffic

@@ -56,8 +56,12 @@ export const TUNING = {
   obstacles: {
     /* Clear road before the first obstacle appears. GUESS. */
     firstSpawnDistPx: 600,
-    /* How far ahead of the car the generator stays. */
+    /* How far ahead of the car the generator stays: at least this
+       many px, and at least horizonSecs of travel at current speed,
+       so fast tiers still have room to seed slicks with their full
+       recovery offsets. */
     horizonPx: 560,
+    horizonSecs: 3.2,
     /* How far behind the car obstacles are removed. */
     despawnBehindPx: 120,
     /* Human time to notice a pattern before having to act. Feeds the
@@ -66,7 +70,14 @@ export const TUNING = {
     /* Total forgiveness subtracted from combined half extents, so
        near misses feel like near misses. GUESS. Collision boxes are
        per variant now; see TRAFFIC_VARIANTS below. */
-    hitboxShrinkPx: 4
+    hitboxShrinkPx: 4,
+    /* Movement is the game, so camping the center lane must not pay.
+       Single rows block the center this much more often than an edge,
+       and double rows leave an edge open more often than the center.
+       Because cluster corridors inherit from these rows, the bias
+       cascades into whole clusters. GUESSES. */
+    laneBlockWeights: [0.28, 0.44, 0.28],
+    doubleOpenWeights: [0.4, 0.2, 0.4]
   },
 
   traffic: {
@@ -110,16 +121,34 @@ export const TUNING = {
 
   hazards: {
     /* Chance a full gap (never a cluster interior) carries a hazard.
-       GUESS. */
-    spawnChancePerGap: 0.3,
+       Raised from 0.3: traffic smears away a share of slicks, so the
+       spawn rate compensates. GUESS. */
+    spawnChancePerGap: 0.4,
     slick: {
       hitbox: { wPx: 26, hPx: 12 },
       /* Steering is gone for this long after the forced slide begins.
          Brief says roughly 0.8s. */
-      slideLockMs: 800
+      slideLockMs: 800,
+      /* A slick claims a gap big enough for its recovery guarantee
+         (this much beyond the computed recovery), instead of waiting
+         for one to be rolled by luck. Without this, slicks almost
+         never find a legal home. */
+      gapClaimExtraPx: 90,
+      /* The brief's classic: a cup just past the slick in its lane,
+         so the safe line and the fueled line differ. */
+      cupChance: 0.5,
+      cupAheadPx: 55,
+      /* Traffic that drives over a slick smears it away (culled when
+         a row overlaps within this range), and a slick refuses to
+         fire its slide unless the target lane is clear for the lock
+         distance plus this margin. Both guards exist because moving
+         traffic can rearrange itself around a static puddle after
+         spawn time checks have passed. */
+      cullOverlapPx: 60,
+      guardExtraPx: 40
     },
     rubble: {
-      hitbox: { wPx: 18, hPx: 12 },
+      hitbox: { wPx: 22, hPx: 14 },
       fuelCost: 12,
       /* Brief: a brief speed loss, which costs score. GUESSES. */
       slowMs: 750,

@@ -68,8 +68,22 @@ function pickVariant(genState, s, alsoAvoid) {
   { kind: 'tension' | 'gap', laneRoll } and hazard is null or
   { typeRoll, laneRoll }.
 */
+/* Weighted lane pick from a normalized-enough weight list. */
+function pickWeighted(s, weights) {
+  let roll;
+  [roll, s] = nextFloat01(s);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  for (let i = 0; i < weights.length; i += 1) {
+    acc += weights[i] / total;
+    if (roll < acc) return [i, s];
+  }
+  return [weights.length - 1, s];
+}
+
 export function nextRowSpec(genState, tierCfg) {
   const cfg = TUNING.coffee;
+  const o = TUNING.obstacles;
   const laneCount = TUNING.road.laneCount;
   let s = genState.rngState;
   let roll;
@@ -78,11 +92,11 @@ export function nextRowSpec(genState, tierCfg) {
   const lanes = new Array(laneCount).fill(false);
   if (roll < tierCfg.doubleRowChance) {
     let open;
-    [open, s] = nextIntBetween(s, 0, laneCount);
+    [open, s] = pickWeighted(s, o.doubleOpenWeights);
     for (let i = 0; i < laneCount; i += 1) lanes[i] = i !== open;
   } else {
     let blocked;
-    [blocked, s] = nextIntBetween(s, 0, laneCount);
+    [blocked, s] = pickWeighted(s, o.laneBlockWeights);
     lanes[blocked] = true;
   }
 
@@ -127,9 +141,11 @@ export function nextRowSpec(genState, tierCfg) {
   if (roll < TUNING.hazards.spawnChancePerGap) {
     let typeRoll;
     let laneRoll;
+    let cupRoll;
     [typeRoll, s] = nextFloat01(s);
     [laneRoll, s] = nextFloat01(s);
-    hazard = { typeRoll, laneRoll };
+    [cupRoll, s] = nextFloat01(s);
+    hazard = { typeRoll, laneRoll, cupRoll };
   }
 
   genState.rngState = s;

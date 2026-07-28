@@ -139,6 +139,7 @@ export function step(world, intents) {
   advancePlayer(world);
   world.distancePx += currentSpeedPxPerSec(world) * dt;
   advanceTraffic(world, dt);
+  cullOvertakenSlicks(world);
   spawn(world);
   prune(world);
   drainFuel(world, dt);
@@ -323,10 +324,18 @@ function spawn(world) {
   } else {
     minGapPrevPx = fairMinGapForPairPx(world, last ? last.maxHPx : specMaxH, specMaxH);
     gapPx = minGapPrevPx * (1 + spec.gapJitter * (cfg.gapJitterMax - 1));
+    /* A slick claims a gap that fits its recovery guarantee instead
+       of hoping one gets rolled; that is what makes slicks actually
+       appear on the road. */
+    if (last !== null && spec.hazard && spec.hazard.typeRoll < world.slickShare) {
+      gapPx = Math.max(gapPx, slickRecoveryPx(world, specMaxH) + TUNING.hazards.slick.gapClaimExtraPx);
+    }
   }
 
   const at = last ? last.distPx + gapPx : Math.max(TUNING.obstacles.firstSpawnDistPx, world.distancePx + gapPx);
-  if (world.distancePx + TUNING.obstacles.horizonPx < at) return;
+  const horizon = Math.max(TUNING.obstacles.horizonPx,
+    currentSpeedPxPerSec(world) * TUNING.obstacles.horizonSecs);
+  if (world.distancePx + horizon < at) return;
   const row = {
     distPx: at,
     speedPxPerSec: spec.speedFrac * baseSpeedPxPerSec(world),
@@ -355,6 +364,16 @@ function spawn(world) {
     addCoffee(world, spec.coffee, row, gapPx);
   }
   world.pendingSpec = null;
+}
+
+/* Room a forced slide needs before the next row: slide lock plus two
+   lane changes plus reaction time at current speed, plus body
+   extents. */
+function slickRecoveryPx(world, rowMaxH) {
+  const hz = TUNING.hazards;
+  const v = currentSpeedPxPerSec(world);
+  return v * ((hz.slick.slideLockMs + 2 * world.laneTweenMs + TUNING.obstacles.reactionBufferMs) / 1000)
+    + world.player.hitbox.hPx + rowMaxH / 2;
 }
 
 /*
@@ -398,13 +417,16 @@ function addHazard(world, spec, row, gapPx, last) {
   }
   if (pairs.length === 0) return false;
   const pick = pairs[Math.min(pairs.length - 1, Math.floor(spec.hazard.laneRoll * pairs.length))];
-  const v = currentSpeedPxPerSec(world);
-  const recoveryPx = v * ((hz.slick.slideLockMs + 2 * world.laneTweenMs + TUNING.obstacles.reactionBufferMs) / 1000)
-    + world.player.hitbox.hPx + row.maxHPx / 2;
-  const at = row.distPx - recoveryPx;
+  const at = row.distPx - slickRecoveryPx(world, row.maxHPx);
   if (at < last.distPx + 60) return false;
   if (at < world.distancePx + 200) return false;
   world.hazards.push({ type, lane: pick.lane, dir: pick.dir, distPx: at });
+  /* The brief's deliberate classic: a cup just past the slick, in the
+     slick's own lane. Grabbing it means threading into that lane
+     after the puddle; the safe line and the fueled line differ. */
+  if (spec.hazard.cupRoll < hz.slick.cupChance) {
+    world.pickups.push({ lane: pick.lane, distPx: at + hz.slick.cupAheadPx, speedPxPerSec: 0 });
+  }
   return true;
 }
 
@@ -413,8 +435,11 @@ function addCoffee(world, coffee, row, gapPx) {
   if (coffee.kind === 'tension') {
     /* In tension: either the single forced open lane of a double row
        (the safe line and the fueled line coincide), or the lane
-       directly beside the blocked car of a single row. Rides with
-       the row. */
+       directly beside the blocked car of a single row.
+
+       Every cup sits still on the road. One consistent movement
+       treatment, by request: cups beside stalled rows stay in tension
+       for good, cups beside moving rows watch their row pull away. */
     let lane;
     const blockedCount = row.lanes.reduce((n, b) => n + (b ? 1 : 0), 0);
     if (blockedCount >= laneCount - 1) {
@@ -426,7 +451,7 @@ function addCoffee(world, coffee, row, gapPx) {
       if (blocked + 1 < laneCount && !row.lanes[blocked + 1]) options.push(blocked + 1);
       lane = options[Math.min(options.length - 1, Math.floor(coffee.laneRoll * options.length))];
     }
-    world.pickups.push({ lane, distPx: row.distPx, speedPxPerSec: row.speedPxPerSec });
+    world.pickups.push({ lane, distPx: row.distPx, speedPxPerSec: 0 });
   } else {
     /* Free cup, mid gap, and only in a lane that is open in the row
        it precedes, so a cup never lures the player into a blocked
@@ -482,6 +507,47 @@ function collectCoffee(world) {
   }
 }
 
+/*
+  Static puddles versus moving traffic: spawn time checks cannot
+  prevent a fast cluster from rolling forward over a parked slick and
+  parking cars where its slide points. Two runtime guards close that
+  hole. Traffic that overlaps a slick smears it off the road, and a
+  slick never fires its slide unless the target lane is clear for the
+  whole steering lock distance ahead.
+*/
+function cullOvertakenSlicks(world) {
+  const cull = TUNING.hazards.slick.cullOverlapPx;
+  for (let i = world.hazards.length - 1; i >= 0; i -= 1) {
+    const h = world.hazards[i];
+    if (h.type !== 'slick') continue;
+    const target = h.lane + h.dir;
+    for (let r = 0; r < world.rows.length; r += 1) {
+      const dy = world.rows[r].distPx - h.distPx;
+      if (dy > cull) break;
+      if (dy < -cull) continue;
+      if (world.rows[r].lanes[h.lane] || world.rows[r].lanes[target]) {
+        world.hazards.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+function slideTargetBlocked(world, slick) {
+  const hz = TUNING.hazards.slick;
+  const target = slick.lane + slick.dir;
+  const v = currentSpeedPxPerSec(world);
+  const guardPx = v * ((hz.slideLockMs + world.laneTweenMs) / 1000)
+    + world.player.hitbox.hPx + hz.guardExtraPx;
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const dy = world.rows[i].distPx - slick.distPx;
+    if (dy > guardPx) break;
+    if (dy < -hz.cullOverlapPx) continue;
+    if (world.rows[i].lanes[target]) return true;
+  }
+  return false;
+}
+
 function startSlide(world, slick) {
   const p = world.player;
   const target = slick.lane + slick.dir; /* in range by construction */
@@ -506,8 +572,10 @@ function checkHazards(world) {
     if (Math.abs(px - laneCenterXPx(h.lane)) >= halfW) continue;
     if (h.type === 'slick') {
       /* One slide at a time; the lock also guards against the same
-         puddle re triggering while still overlapping. */
+         puddle re triggering while still overlapping. And never slide
+         into a lane that traffic has since parked in. */
       if (world.slideLockFrames > 0) continue;
+      if (slideTargetBlocked(world, h)) continue;
       startSlide(world, h);
     } else {
       world.hazards.splice(i, 1);
