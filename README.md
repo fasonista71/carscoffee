@@ -44,7 +44,10 @@ All twelve build order steps are done. Latest additions:
   two car pass announced by a siren chirp and rumble. The three unit
   fleet is stand in art until real assets arrive: blue truck as SWAT
   van, red truck as fire truck, blue car as police
-  (EMERGENCY_VARIANT_IDS in world.js).
+  (EMERGENCY_VARIANT_IDS in world.js). Light bars sit on each
+  vehicle's own roof via per sprite fractions
+  (render.wigWagRoofFrac): on the trucks that means the CAB, so the
+  flatbed's carried car never wears the lights.
 - Clusters can no longer narrow mid stream: inside a cluster the set
   of open lanes may grow but never shrink, because tight spacing
   leaves no room to cross. A narrowing pattern now takes a full fair

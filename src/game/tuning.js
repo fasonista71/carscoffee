@@ -331,6 +331,12 @@ export const TUNING = {
     hazardBlinkMs: 460,
     /* Emergency roof lights alternate sides at this period. Visual. */
     wigWagMs: 140,
+    /* Where the light bar sits on each emergency sprite, as a
+       fraction of sprite height from the top. The default lands on a
+       car's roof; trucks carry their lights on the CAB (the
+       tow_truck2 flatbed hauls a car, and the lights belong to the
+       truck, not the cargo). Visual. */
+    wigWagRoofFrac: { default: 0.36, tow_truck2: 0.08, truck3: 0.1 },
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }

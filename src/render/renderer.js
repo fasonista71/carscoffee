@@ -9,7 +9,7 @@
   canvas upscaling has gaps. The CSS property stays on as a backstop.
 */
 
-import { TUNING, BUILD_TAG } from '../game/tuning.js';
+import { TUNING, BUILD_TAG, TRAFFIC_VARIANTS } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
 import { getSprite, getTrafficSprite } from './sprites.js';
 import { drawText } from './font.js';
@@ -411,10 +411,15 @@ export function createRenderer(canvas) {
       const y = Math.round(screenY - spr.height / 2);
       bctx.drawImage(spr, x, y);
       /* Wig wag roof lights on emergency vehicles: red and blue trade
-         sides every beat, with a bright white strobe pixel between. */
+         sides every beat, with a bright white strobe pixel between.
+         The bar sits on the vehicle's own roof: per sprite fractions
+         put truck lights on the cab, never on carried cargo. */
       if (ov.emergency) {
         const phase = Math.floor(performance.now() / TUNING.render.wigWagMs) % 2;
-        const barY = y + Math.round(spr.height * 0.36);
+        const fracs = TUNING.render.wigWagRoofFrac;
+        const spriteName = TRAFFIC_VARIANTS[ov.variant].sprite;
+        const roofFrac = fracs[spriteName] !== undefined ? fracs[spriteName] : fracs.default;
+        const barY = y + Math.round(spr.height * roofFrac);
         const cx = x + Math.round(spr.width / 2);
         bctx.fillStyle = phase === 0 ? pal.wigWagRed : pal.wigWagRedDim;
         bctx.fillRect(cx - 5, barY, 4, 2);
