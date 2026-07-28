@@ -84,6 +84,20 @@ In priority order, interleaved with build order steps 11 and 12:
    for distance and speed and basis points for fuel. This is the
    riskiest refactor on the list; it gets a spike and a decision,
    not a silent rewrite.
+9. Smart traffic awareness (backlogged from the pass rework, target
+   the native port). Today a speeder never overlaps traffic because
+   of two structural guarantees: every existing row is vetted before
+   a pass spawns, and rows spawned during a pass are rebuilt off the
+   pass lane. The fuller mechanic is continuous headway awareness:
+   every vehicle, speeders included, reads the speed of whatever is
+   ahead in its lane and brakes to match instead of being prevented
+   by construction, the way the row clamp already works between
+   rows. That would let passes thread dense traffic instead of
+   waiting for a workable moment, let a blocked speeder give up and
+   fade back, and let merges trigger dynamically as the lights
+   close in. It needs the fairness oracle to replay overtaker
+   braking the same way it replays the traffic clamp, which is why
+   it is a milestone of its own and not a patch.
 
 ### Design decisions (Jason's call, prototype can trial them)
 

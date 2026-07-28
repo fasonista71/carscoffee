@@ -10,17 +10,20 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 All twelve build order steps are done. Latest additions:
 
-- Traffic yields to a pass: exactly one pass event runs at a time (a
-  lone speeder or one pursuit pair), and cars in the speeder's lane
-  pull out of the way instead of blocking the spawn. A lone car in
-  open road merges into the middle lane and becomes the player's
-  next problem; packed rows, clusters, and cars too close to the
-  player slide onto the shoulder instead, which only ever opens
-  lanes and so can never create an unfair pattern. Breakdowns cannot
-  move and still block a pass. Passes prefer the edge where cars
-  will have to pull over, so the yield is the spectacle. Measured:
-  nearly every pass moves traffic, and pass frequency rose about 40
-  percent because blocked lanes no longer veto spawns.
+- Traffic yields to a pass, lane to lane only (there is no usable
+  shoulder): exactly one pass event runs at a time (a lone speeder
+  or one pursuit pair), and a lone car in the speeder's lane merges
+  into the middle lane, becoming the player's next problem. Packed
+  rows, clusters, cars too close to the player, and breakdowns
+  cannot merge fairly, and block the pass from spawning instead.
+  Two guarantees keep a speeder from ever driving through traffic:
+  every existing row ahead is vetted at spawn (a slow speeder stays
+  on the road far longer than a fixed distance check covers), and
+  rows spawned during a pass are rebuilt off the pass lane, which
+  also reads as traffic hanging back while the lights go by. Full
+  dynamic headway braking (cars and speeders reading each other's
+  speed continuously) is backlogged in ROADMAP.md for the native
+  port.
 - Pursuits: about a third of passes (emergencyChance) bring the law
   along. The emergency vehicle only ever chases, riding chaseGapPx
   behind the speeder in the same lane with wig wag roof lights going,

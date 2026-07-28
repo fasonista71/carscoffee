@@ -358,57 +358,43 @@ function openMaskOf(lanes) {
 }
 
 /*
-  A forced double row must never open only a lane an approaching
-  overtaker owns: the row and the pass can meet the player together
-  and wall every path. Aggro made this common (it steers the open
-  lane away from the player, and overtakers ride the edges the player
-  flees to), but a natural roll can build the same trap, so every non
-  cluster double row is checked. The open lane moves to an overtaker
-  free lane, still preferring the one farthest from the player. With
-  three lanes and edge only overtakers, the middle always qualifies.
+  While a pass is running, new rows must never conflict with it. Two
+  conflicts exist. A row with a car in the speeder's lane would be
+  driven straight through (the pass vetting at spawn time cannot see
+  rows that do not exist yet). And a double row would either force
+  the player INTO the pass lane (its sole open lane is the speeder's)
+  or put a car in it. So while a speeder is on the road, every
+  conflicting or double spec is rebuilt as one car on a lane the
+  speeder does not use, picked by the rolled lane die. Difficulty
+  dips for those few seconds, which reads as traffic hanging back
+  while the lights scream past.
 */
-function steerOpenLaneOffOvertakers(world, spec) {
+function protectPassLane(world, spec) {
+  if (world.overtakers.length === 0) return;
   const laneCount = TUNING.road.laneCount;
+  const ovLane = world.overtakers[0].lane;
   let blockedCount = 0;
-  let open = -1;
   for (let i = 0; i < laneCount; i += 1) {
     if (spec.lanes[i]) blockedCount += 1;
-    else open = i;
   }
-  if (blockedCount !== laneCount - 1) return;
-  let hot = 0;
-  for (let i = 0; i < world.overtakers.length; i += 1) {
-    const ov = world.overtakers[i];
-    if (ov.distPx - world.distancePx <= 60) hot |= 1 << ov.lane;
-  }
-  if ((hot & (1 << open)) === 0) return;
-  const p = world.player;
-  const committed = p.tween ? p.tween.to : p.lane;
-  let best = -1;
-  let bestDist = -1;
+  if (blockedCount === 1 && !spec.lanes[ovLane]) return;
+  const candidates = [];
   for (let i = 0; i < laneCount; i += 1) {
-    if (hot & (1 << i)) continue;
-    const d = Math.abs(i - committed);
-    if (d > bestDist) {
-      bestDist = d;
-      best = i;
+    if (i !== ovLane) candidates.push(i);
+  }
+  const keep = candidates[Math.min(candidates.length - 1,
+    Math.floor(spec.aggroLaneRoll * candidates.length))];
+  let variant = -1;
+  for (let i = 0; i < laneCount; i += 1) {
+    if (spec.lanes[i]) {
+      variant = spec.variants[i];
+      break;
     }
   }
-  if (best < 0) return;
-  const rolledVariants = [];
-  for (let i = 0; i < laneCount; i += 1) {
-    if (spec.lanes[i]) rolledVariants.push(spec.variants[i]);
-  }
-  const lanes = new Array(laneCount).fill(true);
-  lanes[best] = false;
+  const lanes = new Array(laneCount).fill(false);
+  lanes[keep] = true;
   const variants = new Array(laneCount).fill(-1);
-  let vi = 0;
-  for (let i = 0; i < laneCount; i += 1) {
-    if (lanes[i]) {
-      variants[i] = rolledVariants[vi];
-      vi += 1;
-    }
-  }
+  variants[keep] = variant;
   spec.lanes = lanes;
   spec.variants = variants;
 }
@@ -444,10 +430,20 @@ function spawn(world) {
     }
   }
   const keepsOpenLanes = (openMaskOf(spec.lanes) & lastOpenMask) === lastOpenMask;
-  const tight = wantTight && keepsOpenLanes;
+  let tight = wantTight && keepsOpenLanes;
+  /* A tight continuation that conflicts with a running pass drops
+     out of the cluster so protectPassLane may rebuild it. */
+  if (tight && world.overtakers.length > 0) {
+    const ovLane = world.overtakers[0].lane;
+    let blockedCount = 0;
+    for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+      if (spec.lanes[l]) blockedCount += 1;
+    }
+    if (spec.lanes[ovLane] || blockedCount > 1) tight = false;
+  }
   if (!tight) {
     applyAggro(world, spec, cfg);
-    steerOpenLaneOffOvertakers(world, spec);
+    protectPassLane(world, spec);
   }
   /* The stored extent covers the full stagger span, so every gap
      floor, the traffic clamp, and the oracle's windows stay
@@ -526,7 +522,6 @@ function spawn(world) {
     breakdown,
     tight,
     yield: null,
-    shoulder: null,
     maxHPx: specMaxH,
     minGapPrevPx
   };
@@ -922,87 +917,69 @@ function updateOvertakers(world, dt) {
 function planYields(world, lane) {
   const o = TUNING.overtakers;
   const yields = [];
+  /* Every existing row ahead is vetted, not just a fixed span: a
+     slow speeder is on the road long enough to catch rows far past
+     the old 400px check, and an unvetted row is exactly how a pass
+     once drove straight through traffic. Rows spawned DURING the
+     pass are handled separately by protectPassLane. */
   for (let i = 0; i < world.rows.length; i += 1) {
     const row = world.rows[i];
     const dy = row.distPx - world.distancePx;
     if (dy < -o.clearLanePx) continue;
-    if (dy > o.clearLanePx) break;
     if (!row.lanes[lane]) continue;
     /* A dead car cannot move, and a row already mid maneuver cannot
        start another. Either blocks the pass entirely. */
-    if (row.yield || row.shoulder || row.breakdown) return null;
+    if (row.yield || row.breakdown) return null;
     let blockedCount = 0;
     for (let l = 0; l < TUNING.road.laneCount; l += 1) {
       if (row.lanes[l]) blockedCount += 1;
     }
-    /* Two ways out of the speeder's path. A lone car in open road
-       merges into the middle lane and becomes the player's next
-       problem. Anything that cannot do that fairly (packed rows,
-       bumper to bumper clusters, rows already close to the player)
-       pulls onto the shoulder instead, which only ever OPENS lanes
-       and so can never create an unfair pattern. */
-    let mode = 'shoulder';
-    if (blockedCount === 1 && dy > -60) {
+    /* Only a lane to lane merge exists (the road has no usable
+       shoulder), and a merge must be fair: the car must be alone in
+       its row, and when the row is visible or ahead of the player it
+       must be far enough out and not packed in a cluster, so the
+       merge never lands in the player's face. Rows well behind the
+       player may merge freely; the player never meets them again. */
+    if (blockedCount !== 1) return null;
+    if (dy > -60) {
       const next = world.rows[i + 1];
-      if (dy >= o.yieldMinAheadPx && !row.tight && !(next && next.tight)) {
-        mode = 'merge';
-      }
+      if (dy < o.yieldMinAheadPx || row.tight || (next && next.tight)) return null;
     }
-    yields.push({ row, mode });
+    yields.push(row);
   }
   return yields;
 }
 
 /*
-  The pulled over car slides out of the speeder's lane. A merge goes
-  into the middle: while it slides both lanes count as occupied,
-  which is the conservative truth of a car straddling the line, and
-  the merge always finishes long before the row reaches the player
-  because of the yieldMinAheadPx floor. A shoulder pull slides off
-  the road entirely: the origin lane stays occupied until the car is
-  fully off, then simply opens.
+  The pulled over car merges out of the speeder's lane into the
+  middle. While it slides both lanes count as occupied, which is the
+  conservative truth of a car straddling the line, and the merge
+  always finishes long before the row reaches the player because of
+  the yieldMinAheadPx floor. The merged car then sits in the middle
+  lane: the pass leaves the road genuinely rearranged.
 */
-function startYield(row, fromLane, mode) {
+function startYield(row, fromLane) {
   const total = Math.max(1, msToFrames(TUNING.overtakers.yieldMs));
   row.lanes = row.lanes.slice();
   row.variants = row.variants.slice();
   row.offsets = row.offsets ? row.offsets.slice() : new Array(TUNING.road.laneCount).fill(0);
-  if (mode === 'merge') {
-    const toLane = fromLane === 0 ? 1 : TUNING.road.laneCount - 2;
-    row.yield = { from: fromLane, to: toLane, frame: 0, total };
-    row.lanes[toLane] = true;
-    row.variants[toLane] = row.variants[fromLane];
-    row.offsets[toLane] = row.offsets[fromLane];
-  } else {
-    row.shoulder = {
-      from: fromLane,
-      variant: row.variants[fromLane],
-      offset: row.offsets[fromLane],
-      frame: 0,
-      total
-    };
-  }
+  const toLane = fromLane === 0 ? 1 : TUNING.road.laneCount - 2;
+  row.yield = { from: fromLane, to: toLane, frame: 0, total };
+  row.lanes[toLane] = true;
+  row.variants[toLane] = row.variants[fromLane];
+  row.offsets[toLane] = row.offsets[fromLane];
 }
 
 function updateYields(world) {
   for (let i = 0; i < world.rows.length; i += 1) {
     const row = world.rows[i];
-    if (row.yield) {
-      row.yield.frame += 1;
-      if (row.yield.frame >= row.yield.total) {
-        row.lanes[row.yield.from] = false;
-        row.variants[row.yield.from] = -1;
-        row.offsets[row.yield.from] = 0;
-        row.yield = null;
-      }
-    }
-    if (row.shoulder && row.shoulder.frame < row.shoulder.total) {
-      row.shoulder.frame += 1;
-      if (row.shoulder.frame >= row.shoulder.total && row.lanes[row.shoulder.from]) {
-        row.lanes[row.shoulder.from] = false;
-        row.variants[row.shoulder.from] = -1;
-        row.offsets[row.shoulder.from] = 0;
-      }
+    if (!row.yield) continue;
+    row.yield.frame += 1;
+    if (row.yield.frame >= row.yield.total) {
+      row.lanes[row.yield.from] = false;
+      row.variants[row.yield.from] = -1;
+      row.offsets[row.yield.from] = 0;
+      row.yield = null;
     }
   }
 }
@@ -1116,9 +1093,7 @@ function maybeSpawnOvertaker(world) {
       }
     }
     if (yields !== null) {
-      for (let i = 0; i < yields.length; i += 1) {
-        startYield(yields[i].row, lane, yields[i].mode);
-      }
+      for (let i = 0; i < yields.length; i += 1) startYield(yields[i], lane);
       const pick = (ids, r) => ids[Math.min(ids.length - 1, Math.floor(r * ids.length))];
       world.overtakers.push({
         lane, distPx: world.distancePx - behindPx, speedPxPerSec: vO,

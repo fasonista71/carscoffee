@@ -201,16 +201,17 @@ export const TUNING = {
     spawnBehindPx: 400,
     spawnBehindJitter: 0.5,
     despawnAheadPx: 380,
-    /* The pass corridor: traffic this far in both directions matters
-       to a pass. Cars in the speeder's lane inside it pull over into
-       the middle rather than get plowed through. */
+    /* How far behind the player the pass vetting reaches. Ahead of
+       the player EVERY existing row is vetted, because a slow speeder
+       stays on the road long enough to catch rows far out; rows
+       spawned during the pass are steered off its lane instead. */
     clearLanePx: 400,
-    /* How long a pulled over car takes to slide into the middle
-       lane, and how far ahead of the player a car must be to be
-       allowed to start that slide: closer than this and the merge
-       would land in the player's face with no time to read it. Cars
-       that cannot yield (breakdowns, packed clusters, too close)
-       simply block the pass from spawning. */
+    /* How long a merging car takes to slide into the middle lane,
+       and how far ahead of the player a car must be to be allowed to
+       start that merge: closer than this and it would land in the
+       player's face with no time to read it. There is no shoulder;
+       cars that cannot merge into a lane (breakdowns, packed
+       clusters, too close) simply block the pass from spawning. */
     yieldMs: 600,
     yieldMinAheadPx: 240,
     /* Never spawn when, within this many seconds around the pass,
@@ -326,9 +327,6 @@ export const TUNING = {
     hazardBlinkMs: 460,
     /* Emergency roof lights alternate sides at this period. Visual. */
     wigWagMs: 140,
-    /* How far beyond the road edge a shoulder pulled car parks, as a
-       fraction of a lane width. Visual. */
-    shoulderOutsetFrac: 0.45,
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
