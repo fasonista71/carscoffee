@@ -19,7 +19,7 @@
 const ATLAS_URL = 'assets/cars.atlas';
 const IMAGE_URL = 'assets/cars.png';
 
-import { TRAFFIC_VARIANTS } from '../game/tuning.js';
+import { TUNING, TRAFFIC_VARIANTS } from '../game/tuning.js';
 
 /* Registry keys used by the game map to atlas frame names here. */
 const ALIASES = {
@@ -102,7 +102,112 @@ export function loadSprites() {
       ctx.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
       registry.set(name, c);
     }
+    buildProcedural();
   });
+}
+
+/*
+  Procedural sprites for things the sheet does not cover: hazards and
+  HUD icons. Built once at load, same registry, same swap seam: PNG
+  replacements later just claim these keys.
+*/
+function buildSurface(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  draw(ctx);
+  return c;
+}
+
+function buildSlick(dir) {
+  const pal = TUNING.palette.city;
+  const w = 26;
+  const h = 12;
+  return buildSurface(w, h, (ctx) => {
+    /* outline blob then inner puddle */
+    for (let y = 0; y < h; y += 1) {
+      const ry = ((y + 0.5) / h) * 2 - 1;
+      const half = Math.floor(Math.sqrt(Math.max(0, 1 - ry * ry)) * (w / 2));
+      if (half <= 0) continue;
+      ctx.fillStyle = pal.outline;
+      ctx.fillRect(w / 2 - half, y, half * 2, 1);
+      if (y > 0 && y < h - 1 && half > 2) {
+        ctx.fillStyle = pal.slick;
+        ctx.fillRect(w / 2 - half + 1, y, half * 2 - 2, 1);
+      }
+    }
+    /* three chevrons pointing in the slide direction */
+    ctx.fillStyle = pal.slickArrow;
+    const cy = Math.floor(h / 2);
+    for (let c0 = 0; c0 < 3; c0 += 1) {
+      const baseX = dir > 0 ? 6 + c0 * 6 : w - 8 - c0 * 6;
+      for (let k = -2; k <= 2; k += 1) {
+        const off = 2 - Math.abs(k);
+        const x = dir > 0 ? baseX + off : baseX - off;
+        ctx.fillRect(x, cy + k, 1, 1);
+      }
+    }
+  });
+}
+
+const RUBBLE_ROWS = [
+  '......OO..........',
+  '.....OLLO....OO...',
+  '....OLLDDO..OLLO..',
+  '...OLDDDDOOOLDDO..',
+  '..OLDDMMDDLLDDDO..',
+  '.OLDDMMMMDDDDMDDO.',
+  'OLDDMMDMMMDDMMMDO.',
+  'OLDMMDDDMMMMMDDDDO',
+  'ODDDDDDDDDDDDDDDDO',
+  '.OOOOOOOOOOOOOOOO.'
+];
+
+const HEART_ROWS = [
+  '.RR...RR.',
+  'RWRR.RRRR',
+  'RRRRRRRRR',
+  'RRRRRRRRR',
+  '.RRRRRRR.',
+  '..RRRRR..',
+  '...RRR...',
+  '....R....'
+];
+
+function buildPixmap(rows, colors) {
+  const h = rows.length;
+  const w = rows[0].length;
+  for (const r of rows) {
+    if (r.length !== w) throw new Error('Pixmap row length mismatch');
+  }
+  return buildSurface(w, h, (ctx) => {
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        const ch = rows[y][x];
+        if (ch === '.') continue;
+        const color = colors[ch];
+        if (!color) throw new Error('Pixmap uses unmapped char ' + ch);
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+}
+
+function buildProcedural() {
+  const pal = TUNING.palette.city;
+  registry.set('obstacle_slick_left', buildSlick(-1));
+  registry.set('obstacle_slick_right', buildSlick(1));
+  registry.set('obstacle_rubble', buildPixmap(RUBBLE_ROWS, {
+    O: pal.outline, L: pal.rubbleLight, M: pal.rubbleMid, D: pal.rubbleDark
+  }));
+  registry.set('ui_heart_full', buildPixmap(HEART_ROWS, {
+    R: pal.carBody, W: pal.dash
+  }));
+  registry.set('ui_heart_empty', buildPixmap(HEART_ROWS, {
+    R: pal.heartEmpty, W: pal.heartEmpty
+  }));
 }
 
 export function getSprite(key) {

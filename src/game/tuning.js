@@ -57,19 +57,12 @@ export const TUNING = {
     /* Clear road before the first obstacle appears. GUESS. */
     firstSpawnDistPx: 600,
     /* How far ahead of the car the generator stays. */
-    horizonPx: 480,
+    horizonPx: 560,
     /* How far behind the car obstacles are removed. */
     despawnBehindPx: 120,
     /* Human time to notice a pattern before having to act. Feeds the
-       fairness gap between obstacle rows. Tightened from 350 after
-       play testing read as too easy. GUESS. */
+       fairness gap between obstacle rows. GUESS. */
     reactionBufferMs: 260,
-    /* Row gaps are the fair minimum times 1 to this. Lower means
-       denser, harder track. Tightened from 1.9. GUESS. */
-    gapJitterMax: 1.35,
-    /* Chance a row blocks two lanes instead of one. Raised from 0.3
-       for difficulty. GUESS. */
-    doubleRowChance: 0.42,
     /* Total forgiveness subtracted from combined half extents, so
        near misses feel like near misses. GUESS. Collision boxes are
        per variant now; see TRAFFIC_VARIANTS below. */
@@ -77,15 +70,6 @@ export const TUNING = {
   },
 
   traffic: {
-    /* Chance a row of cars is stalled (speed zero) rather than
-       moving. Lowered from 0.4 so more traffic moves. GUESS. */
-    stalledChance: 0.3,
-    /* Moving rows travel at this fraction of the player's base speed,
-       chosen per row. The band is wide on purpose: near stalled
-       traffic rushes at you, fast traffic creeps back and forces long
-       passes. Widened from 0.25 to 0.5 for difficulty. GUESS. */
-    speedFracMin: 0.12,
-    speedFracMax: 0.62,
     /* Rear traffic slows to match the row ahead this many px before
        that pair's minimum gap would be violated. Keeps moving rows
        from ever bunching into an unfair wall. */
@@ -93,16 +77,62 @@ export const TUNING = {
     /* Clusters: rows may pack bumper to bumper when a guaranteed open
        corridor runs through them (every corridor lane stays open), so
        traffic reads crowded without ever demanding a lane change
-       there is no room to make. Chance a row joins the cluster when
-       it can, the longest cluster before a full gap is forced, and
-       the extra breathing room between packed bumpers. GUESSES. */
-    clusterChance: 0.8,
+       there is no room to make. */
     clusterMaxLen: 6,
     /* When continuing a cluster, incompatible lane patterns are
        rerolled up to this many extra times. Keeps clusters long and
        the road crowded. */
     clusterRerolls: 2,
     tightExtraGapPx: 8
+  },
+
+  /*
+    Difficulty tiers, entered at distance milestones. Each tier sets
+    the dials that make the road harder: scroll speed, how loose the
+    gaps run, how often rows force a single lane, how much traffic
+    clusters, how mixed the traffic speeds are, and how few rows sit
+    still. Passive fuel drain scales with the tier's speed. Tier
+    transitions ramp the speed over about two seconds rather than
+    stepping it, and announce themselves with a banner and flash.
+    All values are GUESSES to be tuned by feel.
+  */
+  tiers: [
+    { atMeters: 0,    speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62 },
+    { atMeters: 300,  speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66 },
+    { atMeters: 700,  speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7 },
+    { atMeters: 1200, speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72 },
+    { atMeters: 1800, speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74 },
+    { atMeters: 2600, speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75 }
+  ],
+  /* Per frame step toward a new tier's speed multiplier. At 0.003 a
+     12 percent tier jump ramps over roughly 40 frames. GUESS. */
+  tierRampPerFrame: 0.003,
+
+  hazards: {
+    /* Chance a full gap (never a cluster interior) carries a hazard.
+       GUESS. */
+    spawnChancePerGap: 0.3,
+    slick: {
+      hitbox: { wPx: 26, hPx: 12 },
+      /* Steering is gone for this long after the forced slide begins.
+         Brief says roughly 0.8s. */
+      slideLockMs: 800
+    },
+    rubble: {
+      hitbox: { wPx: 18, hPx: 12 },
+      fuelCost: 12,
+      /* Brief: a brief speed loss, which costs score. GUESSES. */
+      slowMs: 750,
+      slowFactor: 0.6
+    }
+  },
+
+  stumble: {
+    /* One free lethal contact per run: spin, speed drop, and this
+       much blinking invulnerability. Brief says roughly 1.2s. */
+    invulnMs: 1200,
+    spinMs: 750,
+    slowMs: 1000
   },
 
   fuel: {
@@ -168,7 +198,13 @@ export const TUNING = {
       carWindow: '#5fcde4',
       tire: '#1a1c2c',
       text: '#f4f4f4',
-      dim: 'rgba(26, 28, 44, 0.6)'
+      dim: 'rgba(26, 28, 44, 0.6)',
+      slick: '#241839',
+      slickArrow: '#8d7ae0',
+      rubbleLight: '#b3a58c',
+      rubbleMid: '#8a7a66',
+      rubbleDark: '#5c5044',
+      heartEmpty: '#3a3f52'
     }
   }
 };

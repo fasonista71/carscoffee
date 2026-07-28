@@ -74,11 +74,40 @@ export function createRenderer(canvas) {
     }
   }
 
-  function drawPlayer(laneFloat) {
+  /*
+    Spin: chunky quarter turn rotations while spinFrames runs, the
+    8 bit read of a spinout. Blink: invulnerability alternates player
+    visibility every few frames, the classic forgiveness signal.
+  */
+  function drawPlayer(view) {
+    if (view.invulnFrames > 0 && Math.floor(view.invulnFrames / 4) % 2 === 1) return;
     const spr = getSprite('player_car');
-    const x = Math.round(laneCenterXPx(laneFloat) - spr.width / 2);
-    const y = Math.round(TUNING.render.playerYPx - spr.height / 2);
-    bctx.drawImage(spr, x, y);
+    const cx = laneCenterXPx(view.laneFloat);
+    const cy = TUNING.render.playerYPx;
+    if (view.spinFrames > 0) {
+      const quarter = Math.floor(view.spinFrames / 4) % 4;
+      bctx.save();
+      bctx.translate(Math.round(cx), Math.round(cy));
+      bctx.rotate(quarter * (Math.PI / 2));
+      bctx.drawImage(spr, Math.round(-spr.width / 2), Math.round(-spr.height / 2));
+      bctx.restore();
+      return;
+    }
+    bctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
+  }
+
+  /* Road features draw under everything that drives over them. */
+  function drawHazards(view) {
+    for (let i = 0; i < view.hazards.length; i += 1) {
+      const h = view.hazards[i];
+      const key = h.type === 'rubble' ? 'obstacle_rubble'
+        : (h.dir > 0 ? 'obstacle_slick_right' : 'obstacle_slick_left');
+      const spr = getSprite(key);
+      const screenY = TUNING.render.playerYPx - (h.distPx - view.distancePx);
+      if (screenY < -24 || screenY > H + 24) continue;
+      const x = Math.round(laneCenterXPx(h.lane) - spr.width / 2);
+      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
+    }
   }
 
   /*
@@ -182,6 +211,27 @@ export function createRenderer(canvas) {
       bctx.fillRect(barX - 3, barY - 1, 1, fb.hPx + 2);
       bctx.fillRect(barX + fb.wPx + 2, barY - 1, 1, fb.hPx + 2);
     }
+
+    /* stumble heart at the bar's right end */
+    const heart = getSprite(view.stumbleAvailable ? 'ui_heart_full' : 'ui_heart_empty');
+    bctx.drawImage(heart, barX + fb.wPx + 5, Math.round(barY + fb.hPx / 2 - heart.height / 2));
+  }
+
+  /* Brief HUD: score, high score, fuel meter, stumble indicator. */
+  function drawScore(view, pal) {
+    drawText(bctx, view.meters + ' m', 3, 3, pal.text, { scale: 1, align: 'left' });
+    drawText(bctx, 'hi ' + view.high, W - 3, 3, pal.text, { scale: 1, align: 'right' });
+  }
+
+  function drawTierBanner(view, pal) {
+    if (view.tierFlashFrames <= 0) return;
+    const f = view.tierFlashFrames;
+    /* strongest at the moment of the change, fading out */
+    const alpha = Math.min(0.45, (f / 90) * 0.45);
+    bctx.fillStyle = 'rgba(255, 255, 255, ' + alpha.toFixed(3) + ')';
+    bctx.fillRect(0, 0, W, H);
+    drawText(bctx, 'Tier ' + (view.tier + 1), W / 2, 120, pal.edgeLine, { scale: 2, align: 'center' });
+    drawText(bctx, 'Faster. Denser.', W / 2, 140, pal.text, { scale: 1, align: 'center' });
   }
 
   function drawTitle(pal) {
@@ -196,10 +246,15 @@ export function createRenderer(canvas) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
     const cause = view.deathCause === 'fuel' ? 'Out of fuel' : 'Crashed';
-    drawText(bctx, cause, W / 2, 104, pal.carBody, { scale: 2, align: 'center' });
-    drawText(bctx, view.meters + ' m', W / 2, 136, pal.text, { scale: 2, align: 'center' });
-    drawText(bctx, 'Tap or press a key', W / 2, 176, pal.text, { scale: 1, align: 'center' });
-    drawText(bctx, 'to restart', W / 2, 186, pal.text, { scale: 1, align: 'center' });
+    drawText(bctx, cause, W / 2, 100, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m', W / 2, 130, pal.text, { scale: 2, align: 'center' });
+    if (view.newBest) {
+      drawText(bctx, 'New best!', W / 2, 152, pal.edgeLine, { scale: 1, align: 'center' });
+    } else {
+      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 152, pal.text, { scale: 1, align: 'center' });
+    }
+    drawText(bctx, 'Tap or press a key', W / 2, 180, pal.text, { scale: 1, align: 'center' });
+    drawText(bctx, 'to restart', W / 2, 190, pal.text, { scale: 1, align: 'center' });
   }
 
   function drawPaused(pal) {
@@ -217,11 +272,14 @@ export function createRenderer(canvas) {
   function drawFrame(view) {
     const pal = TUNING.palette.city;
     drawRoad(view.distancePx, pal);
+    drawHazards(view);
     drawPickups(view);
     drawTraffic(view);
-    drawPlayer(view.laneFloat);
+    drawPlayer(view);
     if (view.mode === 'playing' || view.mode === 'paused' || view.mode === 'gameOver') {
       drawFuelBar(view, pal);
+      drawScore(view, pal);
+      drawTierBanner(view, pal);
     }
     if (view.mode === 'title') drawTitle(pal);
     if (view.mode === 'paused') drawPaused(pal);

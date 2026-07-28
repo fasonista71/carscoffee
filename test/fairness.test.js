@@ -25,10 +25,13 @@ import { createWorld, step, currentSpeedPxPerSec } from '../src/game/world.js';
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
 
 TUNING.fuel.passiveDrainPerSec = 0;
+TUNING.hazards.rubble.fuelCost = 0; /* the oracle tests dodging, not fuel */
 
-const SPEED_MULTIPLIERS = [1, 1.27, 1.53, 1.87, 2.27, 2.67];
 const SEED_COUNT = 100;
-const FRAMES = 6000; /* 100 seconds of driving per run */
+/* 200 seconds of escalating driving per run: every run climbs
+   through all six tiers, so each tier's regime is covered by all 100
+   seeds, including the transitions between them. */
+const FRAMES = 12000;
 const LOOKAHEAD_SEC = 3.5;
 const PREDICT_DT = 1 / 30;
 
@@ -128,32 +131,33 @@ function nearestRowSec(world, vP) {
   return Infinity;
 }
 
-test('an oracle player survives the real simulation for every seed at every speed', () => {
-  for (const mult of SPEED_MULTIPLIERS) {
-    for (let seed = 1; seed <= SEED_COUNT; seed += 1) {
-      const world = createWorld({
-        seed,
-        vehicle: VEHICLES.sports,
-        environment: ENVIRONMENTS.city
-      });
-      world.speedMultiplier = mult;
-      for (let f = 0; f < FRAMES; f += 1) {
-        const intents = [];
-        if (!world.player.tween) {
-          const vP = currentSpeedPxPerSec(world);
-          if (nearestRowSec(world, vP) < 1.5) {
-            const cautiousMargin = (TUNING.obstacles.reactionBufferMs / 1000) * 0.8;
-            let move = planFirstMove(world, cautiousMargin);
-            if (move === 'doomed') move = planFirstMove(world, 0);
-            assert.notEqual(move, 'doomed',
-              `oracle doomed: seed ${seed} mult ${mult} frame ${f} at ${Math.round(world.distancePx)}px`);
-            if (move !== 0) intents.push({ type: 'lane', dir: move });
-          }
+test('an oracle player survives the real simulation through every tier for every seed', () => {
+  for (let seed = 1; seed <= SEED_COUNT; seed += 1) {
+    const world = createWorld({
+      seed,
+      vehicle: VEHICLES.sports,
+      environment: ENVIRONMENTS.city
+    });
+    let topTier = 0;
+    for (let f = 0; f < FRAMES; f += 1) {
+      const intents = [];
+      if (!world.player.tween) {
+        const vP = currentSpeedPxPerSec(world);
+        if (nearestRowSec(world, vP) < 1.5) {
+          const cautiousMargin = (TUNING.obstacles.reactionBufferMs / 1000) * 0.8;
+          let move = planFirstMove(world, cautiousMargin);
+          if (move === 'doomed') move = planFirstMove(world, 0);
+          assert.notEqual(move, 'doomed',
+            `oracle doomed: seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
+          if (move !== 0) intents.push({ type: 'lane', dir: move });
         }
-        step(world, intents);
-        assert.equal(world.status, 'running',
-          `oracle died (${world.deathCause}): seed ${seed} mult ${mult} frame ${f} at ${Math.round(world.distancePx)}px`);
       }
+      step(world, intents);
+      topTier = Math.max(topTier, world.tier);
+      assert.equal(world.status, 'running',
+        `oracle died (${world.deathCause}): seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
     }
+    assert.equal(topTier, TUNING.tiers.length - 1,
+      `run never reached the top tier: seed ${seed}`);
   }
 });

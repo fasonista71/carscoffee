@@ -58,13 +58,17 @@ function pickVariant(genState, s, alsoAvoid) {
 }
 
 /*
-  Rolls the next row spec. Mutates genState.rngState. Returns
-  { lanes, variants, speedFrac, gapJitter, coffee }, where coffee is
-  null or { kind: 'tension' | 'gap', laneRoll }.
+  Rolls the next row spec. Mutates genState.rngState. tierCfg carries
+  the current tier's dials (doubleRowChance, stalledChance,
+  speedFracMin, speedFracMax); the world resolves gap sizes, cluster
+  membership, and hazard placement, so those arrive as raw rolls.
+
+  Returns { lanes, variants, speedFrac, gapJitter, clusterRoll,
+  tightJitter, coffee, hazard }, where coffee is null or
+  { kind: 'tension' | 'gap', laneRoll } and hazard is null or
+  { typeRoll, laneRoll }.
 */
-export function nextRowSpec(genState) {
-  const o = TUNING.obstacles;
-  const t = TUNING.traffic;
+export function nextRowSpec(genState, tierCfg) {
   const cfg = TUNING.coffee;
   const laneCount = TUNING.road.laneCount;
   let s = genState.rngState;
@@ -72,7 +76,7 @@ export function nextRowSpec(genState) {
 
   [roll, s] = nextFloat01(s);
   const lanes = new Array(laneCount).fill(false);
-  if (roll < o.doubleRowChance) {
+  if (roll < tierCfg.doubleRowChance) {
     let open;
     [open, s] = nextIntBetween(s, 0, laneCount);
     for (let i = 0; i < laneCount; i += 1) lanes[i] = i !== open;
@@ -95,10 +99,10 @@ export function nextRowSpec(genState) {
 
   let speedFrac = 0;
   [roll, s] = nextFloat01(s);
-  if (roll >= t.stalledChance) {
+  if (roll >= tierCfg.stalledChance) {
     let f;
     [f, s] = nextFloat01(s);
-    speedFrac = t.speedFracMin + f * (t.speedFracMax - t.speedFracMin);
+    speedFrac = tierCfg.speedFracMin + f * (tierCfg.speedFracMax - tierCfg.speedFracMin);
   }
 
   let gapJitter;
@@ -118,6 +122,16 @@ export function nextRowSpec(genState) {
     coffee = { kind: tensionRoll < cfg.tensionRatio ? 'tension' : 'gap', laneRoll };
   }
 
+  let hazard = null;
+  [roll, s] = nextFloat01(s);
+  if (roll < TUNING.hazards.spawnChancePerGap) {
+    let typeRoll;
+    let laneRoll;
+    [typeRoll, s] = nextFloat01(s);
+    [laneRoll, s] = nextFloat01(s);
+    hazard = { typeRoll, laneRoll };
+  }
+
   genState.rngState = s;
-  return { lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter, coffee };
+  return { lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter, coffee, hazard };
 }

@@ -57,12 +57,15 @@ export function textWidth(text, scale = 1) {
 }
 
 /*
-  align: 'left' or 'center', relative to x. Unknown characters render
-  as blank space. Text is uppercased; the font has no lowercase.
+  align: 'left', 'center', or 'right', relative to x. Unknown
+  characters render as blank space. Text is uppercased; the font has
+  no lowercase.
 */
 export function drawText(ctx, text, x, y, color, { scale = 1, align = 'left' } = {}) {
   const s = String(text).toUpperCase();
-  let px = align === 'center' ? Math.round(x - textWidth(s, scale) / 2) : Math.round(x);
+  let px = Math.round(x);
+  if (align === 'center') px = Math.round(x - textWidth(s, scale) / 2);
+  else if (align === 'right') px = Math.round(x - textWidth(s, scale));
   ctx.fillStyle = color;
   for (let i = 0; i < s.length; i += 1) {
     const glyph = GLYPHS[s[i]];

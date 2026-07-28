@@ -10,6 +10,9 @@ import { createWorld, step, isBoosting, currentSpeedPxPerSec } from '../src/game
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
 
 TUNING.obstacles.firstSpawnDistPx = 1e9;
+/* Pin the run to tier zero so drain and speed stay constant; tier
+   escalation is covered by the fairness suite. */
+TUNING.tiers.splice(1);
 
 function mkWorld() {
   return createWorld({ seed: 7, vehicle: VEHICLES.sports, environment: ENVIRONMENTS.city });
@@ -58,7 +61,9 @@ test('boost presses during an active boost neither extend nor restart it', () =>
   step(w, [{ type: 'boost' }]);
   step(w, [{ type: 'boost' }]);
   const boostFrames = Math.round((TUNING.boost.durationMs / 1000) * TUNING.logic.hz);
-  assert.equal(w.boostFramesLeft, boostFrames - 2);
+  /* timers tick at the top of the step, so after two steps exactly
+     one decrement has happened since the boost was set */
+  assert.equal(w.boostFramesLeft, boostFrames - 1);
 });
 
 test('a coffee cup refills a chunk, capped at the maximum', () => {

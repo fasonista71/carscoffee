@@ -27,6 +27,17 @@ let pending = [];
 let prevSnap = { distancePx: 0, laneFloat: 1 };
 let currSnap = prevSnap;
 
+/* Persisted high score, per vehicle and environment so future
+   combos never collide. */
+const HIGH_KEY = 'cc.high.sports.city.v1';
+let high = 0;
+try {
+  high = Number(localStorage.getItem(HIGH_KEY)) || 0;
+} catch (e) {
+  high = 0;
+}
+let newBest = false;
+
 const overlay = createDevOverlay(() => world);
 
 function snapshot() {
@@ -45,6 +56,7 @@ function startRun() {
   /* Pick up any live overlay tuning done on the title screen. */
   world.laneTweenMs = TUNING.movement.laneTweenMs;
   pending = [];
+  newBest = false;
   prevSnap = currSnap = snapshot();
   mode = 'playing';
 }
@@ -105,7 +117,19 @@ const loop = createLoop({
     pending = [];
     step(world, intents);
     currSnap = snapshot();
-    if (world.status === 'dead') mode = 'gameOver';
+    if (world.status === 'dead') {
+      mode = 'gameOver';
+      const meters = Math.floor(distanceMeters(world));
+      if (meters > high) {
+        high = meters;
+        newBest = true;
+        try {
+          localStorage.setItem(HIGH_KEY, String(high));
+        } catch (e) {
+          /* private mode etc.; the run still works without persistence */
+        }
+      }
+    }
   },
   render(alpha) {
     let view;
@@ -120,10 +144,18 @@ const loop = createLoop({
     }
     view.rows = world ? world.rows : [];
     view.pickups = world ? world.pickups : [];
+    view.hazards = world ? world.hazards : [];
     view.fuel = world ? world.fuel : TUNING.fuel.max;
     view.boosting = world ? isBoosting(world) : false;
     view.deathCause = world ? world.deathCause : null;
     view.meters = world ? Math.floor(distanceMeters(world)) : 0;
+    view.spinFrames = world ? world.spinFrames : 0;
+    view.invulnFrames = world ? world.invulnFrames : 0;
+    view.tier = world ? world.tier : 0;
+    view.tierFlashFrames = world ? world.tierFlashFrames : 0;
+    view.stumbleAvailable = world ? world.stumbleAvailable : true;
+    view.high = high;
+    view.newBest = newBest;
     renderer.drawFrame(view);
 
     fpsFrames += 1;

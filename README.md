@@ -3,7 +3,30 @@
 An 8 bit style top down endless driver. Browser prototype, built as a
 vertical slice: one vehicle, one environment, the complete core loop.
 
-## Current status: milestone 3 of the build order
+## Current status: milestone 4 of the build order
+
+Build order steps 1 through 9 are done. New in milestone 4:
+
+- Six difficulty tiers at distance milestones (300, 700, 1200, 1800,
+  2600 meters). Each raises scroll speed, traffic density, cluster
+  pressure, double row frequency, and the spread of traffic speeds,
+  and scales passive fuel drain. Transitions ramp over about two
+  seconds and announce themselves with a flash and a Tier banner.
+- Oil slicks: not lethal, but they throw the car into the lane their
+  chevrons point at and kill steering for 0.8 seconds. Placement
+  guarantees the slide target is open in the surrounding rows and
+  leaves a full recovery gap, so a slide is never an unavoidable
+  death sentence; it is a setup you mismanage.
+- Rubble: not lethal. Costs a chunk of fuel, cuts speed briefly
+  (which costs score), and ends an active boost.
+- Stumble: the first lethal contact spins the car, drops speed, and
+  grants 1.2 seconds of blinking invulnerability instead of ending
+  the run. The heart by the fuel gauge shows whether it is spent.
+- Score and HUD per the brief: distance top left, high score top
+  right (persisted), fuel gauge, stumble heart. Game over shows the
+  result, your best, and celebrates a new one.
+
+From milestone 3:
 
 Build order steps 1 through 6 are done, plus items pulled forward by
 agreement: the dev tuning overlay (movement and fuel slices) and the
@@ -48,9 +71,9 @@ From milestone 1:
 - Dev overlay with live movement sliders
 - Headless determinism test and a game purity guard test
 
-Not built yet, by design: oil slicks, rubble, stumble, speed tiers,
-persisted high score, audio, parallax and juice. Next up is build
-order step 7.
+Not built yet, by design: audio (step 10), parallax and juice
+(step 11), the full dev overlay (step 12). The two select screens
+from brief section 9 are also still to come.
 
 ## How to run
 
@@ -119,6 +142,9 @@ Runs two suites in Node (18 or newer), no dependencies:
   its seed, speed, and road position.
 - `test/fuel.test.js` covers the fuel spine: drain timing, boost
   duration, gating and no restacking, and coffee refills.
+- `test/hazards.test.js` covers slick slides and steering lockout,
+  rubble costs, stumble forgiveness and its one use limit, and
+  invulnerability ignoring hazards.
 - `test/tap.test.js` covers positional tap semantics.
 - `test/purity.test.js` scans every file in `src/game/` for forbidden
   identifiers (window, document, navigator, performance, Date,
@@ -156,6 +182,12 @@ they do to feel:
 | fuel.coffeeRefill | 18 | How much a cup matters. |
 | boost.durationMs / speedMultiplier / minFuel | 1200 / 1.45 / 10 | The whole boost decision in three numbers. |
 | coffee.spawnChancePerRow | 0.22 | Cup frequency. At this setting the fuel math is deliberately tight: collecting most cups roughly breaks even, missing many ends the run. |
+| tiers[] | 6 entries | The difficulty curve. Each entry sets speed, gap looseness, double row rate, cluster pressure, stalled share, and the traffic speed band for one tier, entered at its atMeters milestone. |
+| tierRampPerFrame | 0.003 | How gradually a tier's speed jump arrives. |
+| hazards.spawnChancePerGap | 0.3 | How often a full gap carries a slick or rubble (split by the environment's obstacle weights). |
+| hazards.slick.slideLockMs | 800 | How long a slick owns your steering. |
+| hazards.rubble.fuelCost / slowMs / slowFactor | 12 / 750 / 0.6 | What rubble takes from you. |
+| stumble.invulnMs / spinMs / slowMs | 1200 / 750 / 1000 | The shape of the one free mistake. |
 | coffee.tensionRatio | 0.75 | Share of cups placed against hazards rather than free. Keep at or above 0.7 per the brief. |
 | render.dash*, render.edgeLine* | | Road paint dimensions. Cosmetic. |
 
