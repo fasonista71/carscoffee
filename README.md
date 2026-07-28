@@ -8,7 +8,20 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 ## Current status: milestone 6. The build order is complete.
 
-All twelve build order steps are done. New in milestone 6:
+All twelve build order steps are done. Latest additions:
+
+- Scenery themes per tier: mountain roads to start, then desert,
+  snow, beach, and cityscape as the tiers climb, each with its own
+  ground color and roadside props on both parallax bands. The theme
+  switches under the tier banner. Colors live in
+  TUNING.sceneryThemes; drawing styles in the renderer.
+- HUD rearranged: hearts sit centered on the top row between the
+  distance and best plates; the gauge row is the coffee meter on the
+  left two thirds and a labeled Boost meter on the right third.
+- The oil slick grew to 34x16 with thicker, brighter chevrons and a
+  sheen streak, with the hitbox to match.
+
+Earlier in milestone 6:
 
 - Phone menu taps fixed three ways: buttons meet the 44 point touch
   minimum with padded hit areas, a slightly sloppy press now presses

@@ -127,10 +127,10 @@ function buildSurface(w, h, draw) {
 
 function buildSlick(dir) {
   const pal = TUNING.palette.city;
-  const w = 26;
-  const h = 12;
+  const w = 34;
+  const h = 16;
   return buildSurface(w, h, (ctx) => {
-    /* outline blob then inner puddle */
+    /* outline blob, inner puddle, sheen streak */
     for (let y = 0; y < h; y += 1) {
       const ry = ((y + 0.5) / h) * 2 - 1;
       const half = Math.floor(Math.sqrt(Math.max(0, 1 - ry * ry)) * (w / 2));
@@ -141,16 +141,20 @@ function buildSlick(dir) {
         ctx.fillStyle = pal.slick;
         ctx.fillRect(w / 2 - half + 1, y, half * 2 - 2, 1);
       }
+      if (y === 3 && half > 8) {
+        ctx.fillStyle = pal.slickSheen;
+        ctx.fillRect(w / 2 - half + 4, y, half - 3, 1);
+      }
     }
-    /* three chevrons pointing in the slide direction */
+    /* three thick chevrons pointing in the slide direction */
     ctx.fillStyle = pal.slickArrow;
     const cy = Math.floor(h / 2);
     for (let c0 = 0; c0 < 3; c0 += 1) {
-      const baseX = dir > 0 ? 6 + c0 * 6 : w - 8 - c0 * 6;
-      for (let k = -2; k <= 2; k += 1) {
-        const off = 2 - Math.abs(k);
+      const baseX = dir > 0 ? 7 + c0 * 8 : w - 9 - c0 * 8;
+      for (let k = -3; k <= 3; k += 1) {
+        const off = 3 - Math.abs(k);
         const x = dir > 0 ? baseX + off : baseX - off;
-        ctx.fillRect(x, cy + k, 1, 1);
+        ctx.fillRect(x, cy + k, 2, 1);
       }
     }
   });

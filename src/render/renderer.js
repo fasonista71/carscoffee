@@ -66,49 +66,158 @@ export function createRenderer(canvas) {
 
   /*
     Brief section 6: parallax layers. In a top down view that means
-    roadside bands scrolling at different rates: far buildings drift
-    slower than the road, near trees ride with it.
+    roadside bands scrolling at different rates: the far band drifts
+    slower than the road, the near band rides with it. Each tier has
+    its own theme: mountain roads, desert, snow, beach, cityscape.
   */
-  function drawScenery(distancePx, pal) {
-    const sc = TUNING.render.scenery;
-    const period = sc.periodPx;
+  function themeFor(tier) {
+    const t = TUNING.tiers[Math.min(tier || 0, TUNING.tiers.length - 1)];
+    return { key: t.theme, c: TUNING.sceneryThemes[t.theme] };
+  }
 
-    function band(x0, bandW, factor, kind, salt) {
-      const scroll = distancePx * factor;
-      const offset = scroll % period;
-      const base = Math.floor(scroll / period);
-      for (let k = -1; k <= Math.ceil(H / period) + 1; k += 1) {
-        const y = Math.round(k * period + (period - offset));
-        const idx = base + k + salt * 7919;
-        const h = hash32(idx);
-        if (kind === 'blocks') {
-          const bh = 26 + (h % 22);
-          const bw = bandW - 3;
-          bctx.fillStyle = pal.outline;
-          bctx.fillRect(x0, y, bw + 1, bh + 1);
-          bctx.fillStyle = (h & 4) ? pal.building : pal.buildingDark;
-          bctx.fillRect(x0 + 1, y + 1, bw - 1, bh - 1);
-          bctx.fillStyle = pal.dash;
-          bctx.fillRect(x0 + 3 + (h % 4), y + 5, 2, 2);
-          bctx.fillRect(x0 + 3 + ((h >> 3) % 4), y + 13, 2, 2);
-        } else {
-          const r = 4 + (h % 3);
-          const cx = x0 + 3 + ((h >> 5) % Math.max(1, bandW - 2 * r - 4)) + r;
-          const cy = y + r;
-          bctx.fillStyle = pal.treeDark;
-          bctx.fillRect(cx - r, cy - r + 1, 2 * r, 2 * r - 2);
-          bctx.fillRect(cx - r + 1, cy - r, 2 * r - 2, 2 * r);
-          bctx.fillStyle = pal.tree;
-          bctx.fillRect(cx - r + 1, cy - r + 2, 2 * r - 2, 2 * r - 4);
-          bctx.fillRect(cx - r + 2, cy - r + 1, 2 * r - 4, 2 * r - 2);
+  function bandItems(x0, bandW, factor, salt, distancePx, itemFn) {
+    const period = TUNING.render.scenery.periodPx;
+    const scroll = distancePx * factor;
+    const offset = scroll % period;
+    const base = Math.floor(scroll / period);
+    for (let k = -1; k <= Math.ceil(H / period) + 1; k += 1) {
+      const y = Math.round(k * period + (period - offset));
+      itemFn(x0, bandW, y, hash32(base + k + salt * 7919));
+    }
+  }
+
+  function itemPeak(c) {
+    return (x0, bw, y, h) => {
+      const ph = 22 + (h % 16);
+      const cx = x0 + Math.floor(bw / 2);
+      for (let r = 0; r < ph; r += 1) {
+        const half = Math.max(1, Math.round((r / ph) * (bw - 2) / 2));
+        bctx.fillStyle = (h & 2) ? c.far : c.farDark;
+        bctx.fillRect(cx - half, y + r, half * 2, 1);
+        if (r < 5) {
+          bctx.fillStyle = c.farAccent;
+          bctx.fillRect(cx - Math.max(1, half - 1), y + r, Math.max(1, half), 1);
         }
       }
-    }
+    };
+  }
 
-    band(0, 15, sc.farFactor, 'blocks', 1);
-    band(W - 15, 15, sc.farFactor, 'blocks', 2);
-    band(16, 13, 1, 'trees', 3);
-    band(W - 29, 13, 1, 'trees', 4);
+  function itemMesa(c) {
+    return (x0, bw, y, h) => {
+      const mh = 16 + (h % 14);
+      const mw = bw - 3;
+      bctx.fillStyle = c.farDark;
+      bctx.fillRect(x0 + 1, y, mw, mh);
+      bctx.fillStyle = c.far;
+      bctx.fillRect(x0 + 1, y, mw, 4);
+      bctx.fillStyle = c.farAccent;
+      bctx.fillRect(x0 + 1, y, mw, 1);
+    };
+  }
+
+  function itemBuilding(c) {
+    return (x0, bw, y, h) => {
+      const bh = 26 + (h % 22);
+      const bwid = bw - 3;
+      bctx.fillStyle = TUNING.palette.city.outline;
+      bctx.fillRect(x0, y, bwid + 1, bh + 1);
+      bctx.fillStyle = (h & 4) ? c.far : c.farDark;
+      bctx.fillRect(x0 + 1, y + 1, bwid - 1, bh - 1);
+      bctx.fillStyle = c.farAccent;
+      bctx.fillRect(x0 + 3 + (h % 4), y + 5, 2, 2);
+      bctx.fillRect(x0 + 3 + ((h >> 3) % 4), y + 13, 2, 2);
+    };
+  }
+
+  function itemPine(c) {
+    return (x0, bw, y, h) => {
+      const ph = 11 + (h % 4);
+      const cx = x0 + 2 + ((h >> 5) % Math.max(1, bw - 10)) + 4;
+      for (let r = 0; r < ph; r += 1) {
+        const half = Math.max(1, Math.round((r / ph) * 4));
+        bctx.fillStyle = (r % 3 === 0) ? c.nearDark : c.near;
+        bctx.fillRect(cx - half, y + r, half * 2, 1);
+      }
+      bctx.fillStyle = c.trunk;
+      bctx.fillRect(cx - 1, y + ph, 2, 2);
+    };
+  }
+
+  function itemCactus(c) {
+    return (x0, bw, y, h) => {
+      const cx = x0 + 3 + ((h >> 5) % Math.max(1, bw - 8));
+      const ch = 10 + (h % 5);
+      bctx.fillStyle = c.near;
+      bctx.fillRect(cx, y, 3, ch);
+      bctx.fillRect(cx - 3, y + 3, 3, 2);
+      bctx.fillRect(cx - 3, y + 1, 2, 4);
+      bctx.fillRect(cx + 3, y + 5, 3, 2);
+      bctx.fillRect(cx + 4, y + 2, 2, 5);
+      bctx.fillStyle = c.nearDark;
+      bctx.fillRect(cx + 1, y, 1, ch);
+    };
+  }
+
+  function itemPalm(c) {
+    return (x0, bw, y, h) => {
+      const cx = x0 + 4 + ((h >> 5) % Math.max(1, bw - 9));
+      bctx.fillStyle = c.trunk;
+      for (let r = 0; r < 9; r += 1) {
+        bctx.fillRect(cx + Math.round(r / 4), y + 5 + r, 2, 1);
+      }
+      bctx.fillStyle = c.near;
+      bctx.fillRect(cx - 4, y + 3, 4, 2);
+      bctx.fillRect(cx + 2, y + 3, 4, 2);
+      bctx.fillRect(cx - 3, y + 1, 3, 2);
+      bctx.fillRect(cx + 1, y + 1, 3, 2);
+      bctx.fillStyle = c.nearDark;
+      bctx.fillRect(cx - 1, y + 2, 3, 2);
+    };
+  }
+
+  function itemTreeBlob(c) {
+    return (x0, bw, y, h) => {
+      const r = 4 + (h % 3);
+      const cx = x0 + 3 + ((h >> 5) % Math.max(1, bw - 2 * r - 4)) + r;
+      const cy = y + r;
+      bctx.fillStyle = c.nearDark;
+      bctx.fillRect(cx - r, cy - r + 1, 2 * r, 2 * r - 2);
+      bctx.fillRect(cx - r + 1, cy - r, 2 * r - 2, 2 * r);
+      bctx.fillStyle = c.near;
+      bctx.fillRect(cx - r + 1, cy - r + 2, 2 * r - 2, 2 * r - 4);
+      bctx.fillRect(cx - r + 2, cy - r + 1, 2 * r - 4, 2 * r - 2);
+    };
+  }
+
+  function drawScenery(distancePx, tier) {
+    const { key, c } = themeFor(tier);
+    const sc = TUNING.render.scenery;
+    if (key === 'beach') {
+      /* the far band is open water with drifting foam */
+      bctx.fillStyle = c.far;
+      bctx.fillRect(0, 0, 15, H);
+      bctx.fillRect(W - 15, 0, 15, H);
+      bctx.fillStyle = c.farDark;
+      bctx.fillRect(13, 0, 2, H);
+      bctx.fillRect(W - 15, 0, 2, H);
+      const foam = (x0, bw, y, h) => {
+        bctx.fillStyle = c.farAccent;
+        bctx.fillRect(x0 + 2 + (h % 7), y, 4, 1);
+        bctx.fillRect(x0 + 1 + ((h >> 4) % 7), y + 22, 5, 1);
+      };
+      bandItems(0, 15, sc.farFactor, 1, distancePx, foam);
+      bandItems(W - 15, 15, sc.farFactor, 2, distancePx, foam);
+    } else {
+      const farItem = key === 'desert' ? itemMesa(c)
+        : (key === 'city' ? itemBuilding(c) : itemPeak(c));
+      bandItems(0, 15, sc.farFactor, 1, distancePx, farItem);
+      bandItems(W - 15, 15, sc.farFactor, 2, distancePx, farItem);
+    }
+    const nearItem = key === 'desert' ? itemCactus(c)
+      : (key === 'beach' ? itemPalm(c)
+        : (key === 'city' ? itemTreeBlob(c) : itemPine(c)));
+    bandItems(16, 13, 1, 3, distancePx, nearItem);
+    bandItems(W - 29, 13, 1, 4, distancePx, nearItem);
   }
 
   /* Pickup puffs and similar one shot particles. Render only. */
@@ -154,10 +263,10 @@ export function createRenderer(canvas) {
     bctx.globalAlpha = 1;
   }
 
-  function drawRoad(distancePx, pal) {
-    bctx.fillStyle = pal.offroad;
+  function drawRoad(distancePx, pal, tier) {
+    bctx.fillStyle = themeFor(tier).c.offroad;
     bctx.fillRect(0, 0, W, H);
-    drawScenery(distancePx, pal);
+    drawScenery(distancePx, tier);
 
     const roadW = TUNING.road.laneWidthPx * TUNING.road.laneCount;
     const left = TUNING.road.roadLeftPx;
@@ -377,9 +486,11 @@ export function createRenderer(canvas) {
       bctx.fillRect(barX + fb.wPx + 2, barY - 1, 1, fb.hPx + 2);
     }
 
-    /* boost pill, then the three hearts */
+    /* labeled boost meter on the right third of the row */
     const bp = TUNING.render.boostPill;
-    const bpX = barX + fb.wPx + 6;
+    const labelX = barX + fb.wPx + 8;
+    drawText(bctx, 'Boost', labelX, barY + 1, pal.text, { scale: 1, align: 'left' });
+    const bpX = labelX + 22;
     const bpY = Math.round(barY + fb.hPx / 2 - bp.hPx / 2);
     drawPlate(bpX, bpY, bp.wPx, bp.hPx, pal);
     if (view.boosting) {
@@ -390,12 +501,6 @@ export function createRenderer(canvas) {
       bctx.fillRect(bpX + 1, bpY + 1, bp.wPx - 2, bp.hPx - 2);
       bctx.fillStyle = pal.carDark;
       bctx.fillRect(bpX + 1, bpY + bp.hPx - 2, bp.wPx - 2, 1);
-    }
-    let hx = bpX + bp.wPx + 6;
-    for (let i = 0; i < TUNING.lives.max; i += 1) {
-      const spr = getSprite(i < view.hearts ? 'ui_heart_full' : 'ui_heart_empty');
-      bctx.drawImage(spr, hx, Math.round(barY + fb.hPx / 2 - spr.height / 2));
-      hx += spr.width + 2;
     }
   }
 
@@ -411,6 +516,16 @@ export function createRenderer(canvas) {
     drawPlate(hiX, p.yPx, p.wPx, p.hPx, pal);
     drawText(bctx, String(view.high), hiX + p.wPx / 2, p.yPx + 4, pal.edgeLine,
       { scale: 2, align: 'center' });
+    /* the three hearts sit between the two plates */
+    const heartSpr = getSprite('ui_heart_full');
+    const heartsW = TUNING.lives.max * (heartSpr.width + 2) - 2;
+    let hx = Math.round(W / 2 - heartsW / 2);
+    const hy = p.yPx + Math.round(p.hPx / 2 - heartSpr.height / 2);
+    for (let i = 0; i < TUNING.lives.max; i += 1) {
+      const spr = getSprite(i < view.hearts ? 'ui_heart_full' : 'ui_heart_empty');
+      bctx.drawImage(spr, hx, hy);
+      hx += spr.width + 2;
+    }
   }
 
   function drawTierBanner(view, pal) {
@@ -535,7 +650,7 @@ export function createRenderer(canvas) {
     const sy = view.shakeY | 0;
     bctx.save();
     bctx.translate(sx, sy);
-    drawRoad(view.distancePx, pal);
+    drawRoad(view.distancePx, pal, view.tier);
     drawSpeedLines(view, pal);
     drawHazards(view);
     drawPickups(view);

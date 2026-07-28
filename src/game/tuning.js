@@ -115,12 +115,12 @@ export const TUNING = {
     All values are GUESSES to be tuned by feel.
   */
   tiers: [
-    { atMeters: 0,     speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62 },
-    { atMeters: 2000,  speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66 },
-    { atMeters: 4000,  speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7 },
-    { atMeters: 6000,  speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72 },
-    { atMeters: 8000,  speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74 },
-    { atMeters: 10000, speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75 }
+    { atMeters: 0,     theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62 },
+    { atMeters: 2000,  theme: 'desert',   speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66 },
+    { atMeters: 4000,  theme: 'snow',     speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7 },
+    { atMeters: 6000,  theme: 'beach',    speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72 },
+    { atMeters: 8000,  theme: 'city',     speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74 },
+    { atMeters: 10000, theme: 'city',     speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -132,7 +132,9 @@ export const TUNING = {
        spawn rate compensates. GUESS. */
     spawnChancePerGap: 0.4,
     slick: {
-      hitbox: { wPx: 26, hPx: 12 },
+      /* Grown from 26x12 after device feedback: it needs to read
+         instantly at speed. */
+      hitbox: { wPx: 30, hPx: 14 },
       /* Steering is gone for this long after the forced slide begins.
          Brief says roughly 0.8s. */
       slideLockMs: 800,
@@ -249,9 +251,12 @@ export const TUNING = {
        distance and best plates with double size chunky digits, row
        two holds the fuel gauge, stumble heart, and boost pill. */
     hudBandHPx: 42,
-    fuelBar: { wPx: 58, hPx: 8, yPx: 28, cupGapPx: 3 },
-    hudPlate: { wPx: 58, hPx: 17, yPx: 3, marginPx: 2 },
-    boostPill: { wPx: 24, hPx: 8 },
+    /* Row one: distance plate, the three hearts centered, best
+       plate. Row two: coffee gauge on the left two thirds, labeled
+       boost meter on the right third. */
+    fuelBar: { wPx: 84, hPx: 8, yPx: 28, cupGapPx: 3 },
+    hudPlate: { wPx: 54, hPx: 17, yPx: 3, marginPx: 2 },
+    boostPill: { wPx: 42, hPx: 8 },
     /* Menu layout: one primary button plus option rows, hit tested in
        logical coordinates. Restart taps are ignored for a beat after
        a menu opens, so a frantic last tap cannot start a new run. */
@@ -265,9 +270,22 @@ export const TUNING = {
     },
     /* Cup shiver rate. Purely visual. */
     coffeeJiggleHz: 6,
-    /* Roadside parallax: the far band of buildings scrolls slower
-       than the road, the near band of trees rides with it. */
+    /* Roadside parallax: the far band scrolls slower than the road,
+       the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
+  },
+
+  /*
+    Scenery themes, one per tier: the run climbs from mountain roads
+    through desert, snow, and beach into the cityscape. Colors only;
+    the drawing styles live in render.
+  */
+  sceneryThemes: {
+    mountain: { offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a' },
+    desert:   { offroad: '#ddba75', far: '#b97e4b', farDark: '#94603a', farAccent: '#d19a63', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#4e9e3f' },
+    snow:     { offroad: '#e9edf4', far: '#c7d0dd', farDark: '#a6b1c2', farAccent: '#ffffff', near: '#2f5c4a', nearDark: '#234636', trunk: '#5a4632' },
+    beach:    { offroad: '#ecd493', far: '#3f9edb', farDark: '#2f7fb8', farAccent: '#f4f4f4', near: '#3f8a3a', nearDark: '#2f6b2c', trunk: '#8a6238' },
+    city:     { offroad: '#7ec850', far: '#9aa7c4', farDark: '#7c88a6', farAccent: '#f4f4f4', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#7a5a3a' }
   },
 
   /* City palette, roughly 11 colors. Cheerful, high contrast. */
@@ -290,7 +308,8 @@ export const TUNING = {
       tree: '#4e9e3f',
       treeDark: '#3c7a31',
       slick: '#241839',
-      slickArrow: '#8d7ae0',
+      slickSheen: '#43306b',
+      slickArrow: '#c2b1ff',
       rubbleLight: '#b3a58c',
       rubbleMid: '#8a7a66',
       rubbleDark: '#5c5044',
