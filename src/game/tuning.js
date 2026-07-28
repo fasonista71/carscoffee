@@ -68,14 +68,10 @@ export const TUNING = {
     gapJitterMax: 1.9,
     /* Chance a row blocks two lanes instead of one. GUESS. */
     doubleRowChance: 0.3,
-    /* Uniform collision box for stalled cars regardless of which art
-       variant is drawn. Slightly smaller than the art reads. */
-    stalledHitbox: { wPx: 24, hPx: 44 },
     /* Total forgiveness subtracted from combined half extents, so
-       near misses feel like near misses. GUESS. */
-    hitboxShrinkPx: 4,
-    /* Must match the variant list in render sprites. */
-    stalledVariantCount: 7
+       near misses feel like near misses. GUESS. Collision boxes are
+       per variant now; see TRAFFIC_VARIANTS below. */
+    hitboxShrinkPx: 4
   },
 
   traffic: {
@@ -136,7 +132,8 @@ export const TUNING = {
     dashGapPx: 12,
     dashWidthPx: 2,
     edgeLineWidthPx: 2,
-    fuelBar: { x: 4, y: 4, w: 80, h: 5 },
+    /* Centered cartoon gauge: cup icon plus capsule bar. */
+    fuelBar: { wPx: 96, hPx: 8, yPx: 8, cupGapPx: 3 },
     /* Cup shiver rate. Purely visual. */
     coffeeJiggleHz: 6
   },
@@ -165,6 +162,70 @@ export const TUNING = {
   driven structure from day one. Adding a vehicle later must be a new
   entry here plus art, never a logic change.
 */
+
+/*
+  The traffic pool: every usable vehicle frame in the sheet, with its
+  true size as its collision box, so a truck occupies its visual
+  length and a bike is as small as it looks. Excluded on purpose:
+  the taxi family (cut by request), the dumptruck (wider than a
+  lane), and the porsche (it is the player). Render maps sprite names
+  to atlas frames; the generator picks by index with an anti repeat
+  memory so neighbors rarely match.
+*/
+export const TRAFFIC_VARIANTS = [
+  { sprite: 'tow_truck', wPx: 33, hPx: 70 },
+  { sprite: 'tow_truck2', wPx: 33, hPx: 70 },
+  { sprite: 'tow_truck3', wPx: 33, hPx: 69 },
+  { sprite: 'truck2', wPx: 33, hPx: 66 },
+  { sprite: 'truck3', wPx: 33, hPx: 66 },
+  { sprite: 'landcruiser', wPx: 29, hPx: 56 },
+  { sprite: 'landcruiser2', wPx: 29, hPx: 56 },
+  { sprite: 'landcruiser3', wPx: 29, hPx: 56 },
+  { sprite: 'van', wPx: 29, hPx: 56 },
+  { sprite: 'raptor', wPx: 28, hPx: 55 },
+  { sprite: 'raptor2', wPx: 28, hPx: 55 },
+  { sprite: 'pickup', wPx: 28, hPx: 51 },
+  { sprite: 'pickup2', wPx: 28, hPx: 51 },
+  { sprite: 'pickup3', wPx: 28, hPx: 51 },
+  { sprite: 'suv', wPx: 28, hPx: 50 },
+  { sprite: 'suv2', wPx: 28, hPx: 50 },
+  { sprite: 'van2', wPx: 27, hPx: 50 },
+  { sprite: 'van3', wPx: 27, hPx: 50 },
+  { sprite: 'mustang2', wPx: 26, hPx: 49 },
+  { sprite: 'mustang3', wPx: 26, hPx: 47 },
+  { sprite: 'camaro', wPx: 26, hPx: 48 },
+  { sprite: 'camaro2', wPx: 26, hPx: 48 },
+  { sprite: 'challenger2', wPx: 28, hPx: 48 },
+  { sprite: 'challenger3', wPx: 28, hPx: 48 },
+  { sprite: 'lexus', wPx: 26, hPx: 48 },
+  { sprite: 'lexus2', wPx: 26, hPx: 48 },
+  { sprite: 'lexus3', wPx: 26, hPx: 48 },
+  { sprite: 'gwagon', wPx: 27, hPx: 47 },
+  { sprite: 'gwagon2', wPx: 27, hPx: 47 },
+  { sprite: 'patrol', wPx: 27, hPx: 47 },
+  { sprite: 'patrol2', wPx: 27, hPx: 47 },
+  { sprite: 'bmw', wPx: 25, hPx: 47 },
+  { sprite: 'bmw2', wPx: 25, hPx: 47 },
+  { sprite: 'bmw3', wPx: 25, hPx: 47 },
+  { sprite: 'lancer', wPx: 26, hPx: 47 },
+  { sprite: 'lancer2', wPx: 26, hPx: 47 },
+  { sprite: 'lambo', wPx: 27, hPx: 46 },
+  { sprite: 'lambo2', wPx: 27, hPx: 46 },
+  { sprite: 'wrangler', wPx: 24, hPx: 46 },
+  { sprite: 'wrangler2', wPx: 24, hPx: 46 },
+  { sprite: 'wrangler3', wPx: 24, hPx: 46 },
+  { sprite: 'wrangler4', wPx: 24, hPx: 46 },
+  { sprite: 'sunny', wPx: 25, hPx: 45 },
+  { sprite: 'tida', wPx: 24, hPx: 43 },
+  { sprite: 'tida2', wPx: 24, hPx: 43 },
+  { sprite: 'tida3', wPx: 24, hPx: 43 },
+  { sprite: 'mini', wPx: 24, hPx: 42 },
+  { sprite: 'convertible', wPx: 24, hPx: 41 },
+  { sprite: 'figo', wPx: 24, hPx: 41 },
+  { sprite: 'figo2', wPx: 24, hPx: 41 },
+  { sprite: 'bike', wPx: 16, hPx: 33 },
+  { sprite: 'bike2', wPx: 16, hPx: 35 }
+];
 
 export const VEHICLES = {
   sports: {

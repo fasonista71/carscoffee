@@ -19,19 +19,12 @@
 const ATLAS_URL = 'assets/cars.atlas';
 const IMAGE_URL = 'assets/cars.png';
 
+import { TRAFFIC_VARIANTS } from '../game/tuning.js';
+
 /* Registry keys used by the game map to atlas frame names here. */
 const ALIASES = {
   player_car: 'porsche'
 };
-
-/*
-  Art variants for stalled car obstacles. Order matters: the generator
-  picks an index, so this list must stay in sync with
-  TUNING.obstacles.stalledVariantCount.
-*/
-export const STALLED_VARIANT_NAMES = [
-  'van', 'pickup', 'suv', 'bmw', 'lancer', 'sunny', 'figo'
-];
 
 const registry = new Map();
 
@@ -92,7 +85,10 @@ export function loadSprites() {
   });
   return Promise.all([atlasReady, imageReady, coffeeReady]).then(([text, img]) => {
     const frames = parseAtlas(text);
-    const needed = new Set([...Object.values(ALIASES), ...STALLED_VARIANT_NAMES]);
+    const needed = new Set([
+      ...Object.values(ALIASES),
+      ...TRAFFIC_VARIANTS.map((v) => v.sprite)
+    ]);
     for (const name of needed) {
       const f = frames[name];
       if (!f || f.w == null || f.x == null) {
@@ -115,6 +111,6 @@ export function getSprite(key) {
   return spr;
 }
 
-export function getStalledSprite(variant) {
-  return getSprite(STALLED_VARIANT_NAMES[variant % STALLED_VARIANT_NAMES.length]);
+export function getTrafficSprite(variant) {
+  return getSprite(TRAFFIC_VARIANTS[variant % TRAFFIC_VARIANTS.length].sprite);
 }

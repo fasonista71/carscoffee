@@ -29,11 +29,32 @@
   oracle across 100 seeds at six speeds.
 */
 
-import { TUNING } from './tuning.js';
+import { TUNING, TRAFFIC_VARIANTS } from './tuning.js';
 import { nextFloat01, nextIntBetween } from './rng.js';
 
+/* How many recent variant picks to avoid repeating. */
+const RECENT_WINDOW = 6;
+const REROLL_TRIES = 4;
+
 export function createGenState(rngState) {
-  return { rngState };
+  return { rngState, recent: [] };
+}
+
+/*
+  Picks an art variant, rerolling a bounded number of times to avoid
+  anything used recently (previous rows or the other lane of this
+  row). Bounded so it stays deterministic and cannot loop; with a 50+
+  variant pool the first roll almost always lands.
+*/
+function pickVariant(genState, s, alsoAvoid) {
+  let v = 0;
+  for (let attempt = 0; attempt < REROLL_TRIES; attempt += 1) {
+    [v, s] = nextIntBetween(s, 0, TRAFFIC_VARIANTS.length);
+    if (!genState.recent.includes(v) && !alsoAvoid.includes(v)) break;
+  }
+  genState.recent.push(v);
+  if (genState.recent.length > RECENT_WINDOW) genState.recent.shift();
+  return [v, s];
 }
 
 /*
@@ -62,11 +83,13 @@ export function nextRowSpec(genState) {
   }
 
   const variants = new Array(laneCount).fill(-1);
+  const usedThisRow = [];
   for (let i = 0; i < laneCount; i += 1) {
     if (lanes[i]) {
       let v;
-      [v, s] = nextIntBetween(s, 0, o.stalledVariantCount);
+      [v, s] = pickVariant(genState, s, usedThisRow);
       variants[i] = v;
+      usedThisRow.push(v);
     }
   }
 

@@ -19,7 +19,9 @@ headless determinism test. New in milestone 3:
 - Variable traffic speeds: rows are stalled or move at a fraction of
   the player's speed, and a traffic clamp slows rear rows before they
   could bunch into an unfair wall
-- HUD fuel bar (yellow, red when low, boost rails while boosting)
+- HUD fuel gauge: a centered cartoon capsule with the coffee cup as
+  its icon, segment ticks, highlight and shadow bands, red fill with
+  a shivering cup when low, and a bright ring while boosting
 - The fairness gate upgraded to an oracle that drives the real
   simulation with clamp aware prediction, 100 seeds at six speeds
 
@@ -178,11 +180,16 @@ plus its atlas live in assets/ and are sliced at load by
 `src/render/sprites.js`.
 
 The swap seam: game logic knows only sprite keys (`player_car`,
-`pickup_coffee`) and art variant indices, never files or pixels. To
-change art, edit the urls, aliases, and variant name list at the top
-of sprites.js. Nothing outside `render/` changes. The player car is
-currently the `porsche` frame; the traffic pool is 7 frames chosen
-for silhouette variety (the taxi frame was cut by request). The
+`pickup_coffee`) and art variant indices, never files or pixels. The
+traffic pool is the TRAFFIC_VARIANTS list in tuning.js: 52 frames,
+nearly the whole sheet, each with its true size as its collision box,
+so trucks occupy their visual length and bikes are as small as they
+look. Excluded: the taxi family (cut by request), the dumptruck
+(wider than a lane), and the porsche (the player). The generator
+avoids repeating any of the last six picks, so neighbors rarely
+match. Because hitbox heights vary, fair gaps and the traffic clamp
+are computed per pair of rows: truck follows truck at a bigger
+distance than mini follows mini. The
 coffee cup is Jason's art, reduced to its native 16x20 pixels with a
 transparent background, stored as assets/coffee.png. Its shiver is
 render only and never affects collection. Text uses a 3x5 bitmap

@@ -7,7 +7,7 @@
   the headless tests directly.
 */
 
-import { TUNING } from './tuning.js';
+import { TUNING, TRAFFIC_VARIANTS } from './tuning.js';
 import { seedToState } from './rng.js';
 import { createPlayer, laneCenterXPx, playerLaneFloat } from './entities.js';
 import { createGenState, nextRowSpec } from './generator.js';
@@ -57,22 +57,34 @@ export function distanceMeters(world) {
 }
 
 /*
-  The fair minimum row separation at this instant: a worst case two
-  lane crossing plus reaction time at the player's current speed, PLUS
-  the combined body extent of a player and an obstacle. The extent
-  term matters: gaps are measured center to center, but the road a
-  player can actually maneuver in is what remains after both bodies'
-  lengths are subtracted. Without it, minimum gaps leave almost no
-  usable corridor. Spawn spacing and the traffic clamp both derive
+  The fair minimum separation between a specific pair of rows: a worst
+  case two lane crossing plus reaction time at the player's current
+  speed, PLUS the body extents involved. The extent term matters: gaps
+  are measured center to center, but the road a player can actually
+  maneuver in is what remains after the bodies' lengths are
+  subtracted. Hitboxes vary per vehicle now, so a truck behind a truck
+  needs more room than two minis; that is why this takes the two rows'
+  tallest hitboxes. Spawn spacing and the traffic clamp both derive
   from this, so the guarantee follows live tuning and boost
   automatically.
 */
-export function fairMinGapPx(world) {
+export function fairMinGapForPairPx(world, maxHA, maxHB) {
   const o = TUNING.obstacles;
   const v = currentSpeedPxPerSec(world);
   const timePx = v * ((2 * world.laneTweenMs + o.reactionBufferMs) / 1000);
-  const extentPx = world.player.hitbox.hPx + o.stalledHitbox.hPx - 2 * o.hitboxShrinkPx;
+  const extentPx = world.player.hitbox.hPx + (maxHA + maxHB) / 2 - 2 * o.hitboxShrinkPx;
   return timePx + extentPx;
+}
+
+/* Tallest hitbox in the whole pool, for conservative scan bounds. */
+export const TRAFFIC_MAX_H_PX = TRAFFIC_VARIANTS.reduce((m, v) => Math.max(m, v.hPx), 0);
+
+function rowMaxHPx(lanes, variants) {
+  let m = 0;
+  for (let i = 0; i < lanes.length; i += 1) {
+    if (lanes[i]) m = Math.max(m, TRAFFIC_VARIANTS[variants[i]].hPx);
+  }
+  return m;
 }
 
 /*
@@ -185,8 +197,9 @@ function advanceTraffic(world, dt) {
      fair gap of the row ahead. This is what keeps variable speeds
      from ever assembling an unfair wall, and it also means rows never
      trade places, so the array stays ordered by distPx. */
-  const minGap = fairMinGapPx(world) + TUNING.traffic.clampMarginPx;
   for (let i = rows.length - 2; i >= 0; i -= 1) {
+    const minGap = fairMinGapForPairPx(world, rows[i].maxHPx, rows[i + 1].maxHPx)
+      + TUNING.traffic.clampMarginPx;
     if (rows[i + 1].distPx - rows[i].distPx < minGap &&
         rows[i].speedPxPerSec > rows[i + 1].speedPxPerSec) {
       rows[i].speedPxPerSec = rows[i + 1].speedPxPerSec;
@@ -202,14 +215,17 @@ function spawn(world) {
   if (!world.pendingSpec) world.pendingSpec = nextRowSpec(world.gen);
   const spec = world.pendingSpec;
   const last = world.rows.length > 0 ? world.rows[world.rows.length - 1] : null;
-  const gapPx = fairMinGapPx(world) * (1 + spec.gapJitter * (TUNING.obstacles.gapJitterMax - 1));
+  const specMaxH = rowMaxHPx(spec.lanes, spec.variants);
+  const fairMin = fairMinGapForPairPx(world, last ? last.maxHPx : specMaxH, specMaxH);
+  const gapPx = fairMin * (1 + spec.gapJitter * (TUNING.obstacles.gapJitterMax - 1));
   const at = last ? last.distPx + gapPx : Math.max(TUNING.obstacles.firstSpawnDistPx, world.distancePx + gapPx);
   if (world.distancePx + TUNING.obstacles.horizonPx < at) return;
   const row = {
     distPx: at,
     speedPxPerSec: spec.speedFrac * baseSpeedPxPerSec(world),
     lanes: spec.lanes,
-    variants: spec.variants
+    variants: spec.variants,
+    maxHPx: specMaxH
   };
   world.rows.push(row);
   if (spec.coffee) addCoffee(world, spec.coffee, row, gapPx);
@@ -296,15 +312,18 @@ function checkCollision(world) {
   const p = world.player;
   const o = TUNING.obstacles;
   const px = laneCenterXPx(playerLaneFloat(p));
-  const halfW = (p.hitbox.wPx + o.stalledHitbox.wPx) / 2 - o.hitboxShrinkPx;
-  const halfH = (p.hitbox.hPx + o.stalledHitbox.hPx) / 2 - o.hitboxShrinkPx;
+  const maxHalfH = (p.hitbox.hPx + TRAFFIC_MAX_H_PX) / 2;
   for (let i = 0; i < world.rows.length; i += 1) {
     const row = world.rows[i];
     const dy = row.distPx - world.distancePx;
-    if (dy > halfH) break; /* rows stay ordered by distPx */
-    if (dy < -halfH) continue;
+    if (dy > maxHalfH) break; /* rows stay ordered by distPx */
+    if (dy < -maxHalfH) continue;
     for (let lane = 0; lane < TUNING.road.laneCount; lane += 1) {
-      if (row.lanes[lane] && Math.abs(px - laneCenterXPx(lane)) < halfW) {
+      if (!row.lanes[lane]) continue;
+      const v = TRAFFIC_VARIANTS[row.variants[lane]];
+      const halfW = (p.hitbox.wPx + v.wPx) / 2 - o.hitboxShrinkPx;
+      const halfH = (p.hitbox.hPx + v.hPx) / 2 - o.hitboxShrinkPx;
+      if (Math.abs(dy) < halfH && Math.abs(px - laneCenterXPx(lane)) < halfW) {
         world.status = 'dead';
         world.deathCause = 'crash';
         return;

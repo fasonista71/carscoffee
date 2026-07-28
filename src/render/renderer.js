@@ -11,7 +11,7 @@
 
 import { TUNING } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
-import { getSprite, getStalledSprite } from './sprites.js';
+import { getSprite, getTrafficSprite } from './sprites.js';
 import { drawText } from './font.js';
 
 export function createRenderer(canvas) {
@@ -93,7 +93,7 @@ export function createRenderer(canvas) {
       if (screenY < -64 || screenY > H + 64) continue;
       for (let lane = 0; lane < row.lanes.length; lane += 1) {
         if (!row.lanes[lane]) continue;
-        const spr = getStalledSprite(row.variants[lane]);
+        const spr = getTrafficSprite(row.variants[lane]);
         const x = Math.round(laneCenterXPx(lane) - spr.width / 2);
         bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
       }
@@ -120,17 +120,67 @@ export function createRenderer(canvas) {
     }
   }
 
+  /*
+    Cartoon fuel gauge, centered at the top: the coffee cup as the
+    icon, a chunky capsule bar with pixel rounded corners, a highlight
+    band up top and a shadow band below for depth, and segment ticks.
+    Low fuel turns the fill red and the cup shivers. Boost wraps the
+    capsule in a bright ring.
+  */
   function drawFuelBar(view, pal) {
     const fb = TUNING.render.fuelBar;
+    const cup = getSprite('pickup_coffee');
+    const totalW = cup.width + fb.cupGapPx + fb.wPx;
+    const x0 = Math.round((W - totalW) / 2);
+    const barX = x0 + cup.width + fb.cupGapPx;
+    const barY = fb.yPx;
+    const low = view.fuel <= TUNING.fuel.lowThreshold;
+
+    /* cup icon, shivering when low */
+    let cupJx = 0;
+    if (low) {
+      const t = performance.now() / 1000;
+      cupJx = Math.round(Math.sin(t * TUNING.render.coffeeJiggleHz * Math.PI * 2));
+    }
+    const cupY = Math.round(barY + fb.hPx / 2 - cup.height / 2);
+    bctx.drawImage(cup, x0 + cupJx, cupY);
+
+    /* capsule outline with pixel rounded corners */
     bctx.fillStyle = pal.outline;
-    bctx.fillRect(fb.x - 1, fb.y - 1, fb.w + 2, fb.h + 2);
+    bctx.fillRect(barX + 1, barY - 2, fb.wPx - 2, fb.hPx + 4);
+    bctx.fillRect(barX - 1, barY, fb.wPx + 2, fb.hPx);
+    bctx.fillRect(barX, barY - 1, fb.wPx, fb.hPx + 2);
+
+    /* empty interior */
+    bctx.fillStyle = pal.road;
+    bctx.fillRect(barX + 1, barY, fb.wPx - 2, fb.hPx);
+
+    /* fill with highlight and shadow bands */
     const frac = Math.max(0, Math.min(1, view.fuel / TUNING.fuel.max));
-    bctx.fillStyle = view.fuel <= TUNING.fuel.lowThreshold ? pal.carBody : pal.edgeLine;
-    bctx.fillRect(fb.x, fb.y, Math.round(fb.w * frac), fb.h);
+    const fillW = Math.round((fb.wPx - 2) * frac);
+    if (fillW > 0) {
+      bctx.fillStyle = low ? pal.carBody : pal.edgeLine;
+      bctx.fillRect(barX + 1, barY, fillW, fb.hPx);
+      bctx.fillStyle = pal.dash;
+      bctx.fillRect(barX + 1, barY, fillW, 1);
+      bctx.fillStyle = low ? pal.carDark : pal.outline;
+      bctx.fillRect(barX + 1, barY + fb.hPx - 1, fillW, 1);
+    }
+
+    /* segment ticks every 20 percent */
+    bctx.fillStyle = pal.outline;
+    for (let i = 1; i < 5; i += 1) {
+      const tx = barX + Math.round((fb.wPx - 2) * (i / 5));
+      bctx.fillRect(tx, barY, 1, fb.hPx);
+    }
+
+    /* boost ring */
     if (view.boosting) {
       bctx.fillStyle = pal.dash;
-      bctx.fillRect(fb.x - 1, fb.y - 3, fb.w + 2, 1);
-      bctx.fillRect(fb.x - 1, fb.y + fb.h + 2, fb.w + 2, 1);
+      bctx.fillRect(barX - 1, barY - 4, fb.wPx + 2, 1);
+      bctx.fillRect(barX - 1, barY + fb.hPx + 3, fb.wPx + 2, 1);
+      bctx.fillRect(barX - 3, barY - 1, 1, fb.hPx + 2);
+      bctx.fillRect(barX + fb.wPx + 2, barY - 1, 1, fb.hPx + 2);
     }
   }
 
