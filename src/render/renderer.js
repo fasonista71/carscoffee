@@ -311,6 +311,16 @@ export function createRenderer(canvas) {
       return;
     }
     bctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
+    /* blinking BOOST! callout when an overtaker is bearing down on
+       this lane and a boost is banked, so the escape move is obvious */
+    if (view.boostHint && !view.boosting
+      && Math.floor(performance.now() / TUNING.render.boostHintBlinkMs) % 2 === 0) {
+      const pal = TUNING.palette.city;
+      const tx = Math.round(cx);
+      const ty = Math.round(cy - spr.height / 2 - 12);
+      drawText(bctx, 'BOOST!', tx + 1, ty + 1, pal.outline, { scale: 1, align: 'center' });
+      drawText(bctx, 'BOOST!', tx, ty, pal.dash, { scale: 1, align: 'center' });
+    }
   }
 
   /*
@@ -489,7 +499,10 @@ export function createRenderer(canvas) {
     /* labeled boost meter on the right third of the row */
     const bp = TUNING.render.boostPill;
     const labelX = barX + fb.wPx + 8;
-    drawText(bctx, 'Boost', labelX, barY + 1, pal.text, { scale: 1, align: 'left' });
+    const hintOn = view.boostHint && !view.boosting
+      && (Math.floor(performance.now() / TUNING.render.boostHintBlinkMs) % 2 === 0);
+    drawText(bctx, 'Boost', labelX, barY + 1, hintOn ? pal.dash : pal.text,
+      { scale: 1, align: 'left' });
     const bpX = labelX + 22;
     const bpY = Math.round(barY + fb.hPx / 2 - bp.hPx / 2);
     drawPlate(bpX, bpY, bp.wPx, bp.hPx, pal);
@@ -497,10 +510,18 @@ export function createRenderer(canvas) {
       bctx.fillStyle = pal.dash;
       bctx.fillRect(bpX + 1, bpY + 1, Math.round((bp.wPx - 2) * view.boostFrac), bp.hPx - 2);
     } else if (view.boostReady) {
-      bctx.fillStyle = pal.edgeLine;
+      bctx.fillStyle = hintOn ? pal.dash : pal.edgeLine;
       bctx.fillRect(bpX + 1, bpY + 1, bp.wPx - 2, bp.hPx - 2);
       bctx.fillStyle = pal.carDark;
       bctx.fillRect(bpX + 1, bpY + bp.hPx - 2, bp.wPx - 2, 1);
+    }
+    /* pulse ring around the pill while the hint is live */
+    if (hintOn) {
+      bctx.fillStyle = pal.dash;
+      bctx.fillRect(bpX - 1, bpY - 3, bp.wPx + 2, 1);
+      bctx.fillRect(bpX - 1, bpY + bp.hPx + 2, bp.wPx + 2, 1);
+      bctx.fillRect(bpX - 3, bpY - 1, 1, bp.hPx + 2);
+      bctx.fillRect(bpX + bp.wPx + 2, bpY - 1, 1, bp.hPx + 2);
     }
   }
 

@@ -14,6 +14,7 @@ const PATTERNS = {
   boost_start: [12],
   tier_up: [20, 25, 20],
   overtake: [8, 20, 8],
+  boost_hint: [10, 30, 10],
   game_over: [80]
 };
 

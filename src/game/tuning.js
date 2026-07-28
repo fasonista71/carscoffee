@@ -1,6 +1,6 @@
 /* Shown small on the title screen so a stale phone cache is visible
    at a glance. Bump when shipping. */
-export const BUILD_TAG = 'M6';
+export const BUILD_TAG = 'M7';
 
 /*
   Every gameplay number lives here. Nothing elsewhere in the codebase is
@@ -73,7 +73,7 @@ export const TUNING = {
     despawnBehindPx: 120,
     /* Human time to notice a pattern before having to act. Feeds the
        fairness gap between obstacle rows. GUESS. */
-    reactionBufferMs: 260,
+    reactionBufferMs: 230,
     /* Total forgiveness subtracted from combined half extents, so
        near misses feel like near misses. GUESS. Collision boxes are
        per variant now; see TRAFFIC_VARIANTS below. */
@@ -96,7 +96,7 @@ export const TUNING = {
        corridor runs through them (every corridor lane stays open), so
        traffic reads crowded without ever demanding a lane change
        there is no room to make. */
-    clusterMaxLen: 6,
+    clusterMaxLen: 7,
     /* When continuing a cluster, incompatible lane patterns are
        rerolled up to this many extra times. Keeps clusters long and
        the road crowded. */
@@ -114,13 +114,20 @@ export const TUNING = {
     stepping it, and announce themselves with a banner and flash.
     All values are GUESSES to be tuned by feel.
   */
+  /*
+    aggro: the share of full gap rows that deliberately target the
+    player, dropping a single block onto the player's lane or opening
+    a forced row's lane far from the player. Movement is the game;
+    aggro is what makes sitting still lose. overtakerChance: per
+    second odds of a sports car blasting past from behind.
+  */
   tiers: [
-    { atMeters: 0,     theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62 },
-    { atMeters: 2000,  theme: 'desert',   speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66 },
-    { atMeters: 4000,  theme: 'snow',     speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7 },
-    { atMeters: 6000,  theme: 'beach',    speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72 },
-    { atMeters: 8000,  theme: 'city',     speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74 },
-    { atMeters: 10000, theme: 'city',     speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75 }
+    { atMeters: 0,     theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62, aggro: 0.22, overtakerChance: 0 },
+    { atMeters: 2000,  theme: 'desert',   speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66, aggro: 0.32, overtakerChance: 0.22 },
+    { atMeters: 4000,  theme: 'snow',     speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7,  aggro: 0.4,  overtakerChance: 0.27 },
+    { atMeters: 6000,  theme: 'beach',    speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72, aggro: 0.48, overtakerChance: 0.32 },
+    { atMeters: 8000,  theme: 'city',     speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74, aggro: 0.55, overtakerChance: 0.36 },
+    { atMeters: 10000, theme: 'city',     speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75, aggro: 0.62, overtakerChance: 0.4 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -166,13 +173,13 @@ export const TUNING = {
   },
 
   overtakers: {
-    /* Sports cars that catch up from behind and speed past, once in a
-       while, past this tier index (tier 1 starts at 2000 meters). */
-    minTier: 1,
-    chancePerSec: 0.12,
-    speedMultMin: 1.9,
-    speedMultMax: 2.3,
+    /* Sports cars that catch up from behind and speed past. How often
+       is per tier (overtakerChance); speed and spawn distance vary
+       per car so passes never feel scripted. */
+    speedMultMin: 1.7,
+    speedMultMax: 2.6,
     spawnBehindPx: 400,
+    spawnBehindJitter: 0.5,
     despawnAheadPx: 380,
     /* Their lane must be clear of traffic this far in both directions
        at spawn, so they never plow through rows on screen. */
@@ -182,7 +189,7 @@ export const TUNING = {
        lane. Clusters can pin the player to their corridor, so the
        guard checks corridors, not just single rows. */
     squeezeGuardSec: 1.2,
-    maxActive: 2
+    maxActive: 3
   },
 
   stumble: {
@@ -199,6 +206,9 @@ export const TUNING = {
        appear on the road as rare pickups, like coffee. */
     start: 3,
     max: 3,
+    /* Heart pickups only appear once at least two hearts are spent;
+       until then the road never offers a refill. */
+    minSpentForPickup: 2,
     pickupChancePerGap: 0.07,
     hitbox: { wPx: 14, hPx: 12 }
   },
@@ -270,6 +280,9 @@ export const TUNING = {
     },
     /* Cup shiver rate. Purely visual. */
     coffeeJiggleHz: 6,
+    /* Blink period for the boost prompt (label, pill ring, and the
+       BOOST! callout over the car). Purely visual. */
+    boostHintBlinkMs: 130,
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }

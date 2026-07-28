@@ -96,6 +96,7 @@ export function createAudio() {
     fuel_low() { blip(523, 0.09, 'square', 0.16); blip(523, 0.09, 'square', 0.16, 0.14); },
     tier_up() { blip(523, 0.09, 'square', 0.16); blip(659, 0.09, 'square', 0.16, 0.08); blip(784, 0.16, 'square', 0.16, 0.16); },
     overtake() { noiseBurst(0.25, 0.08); blip(160, 0.25, 'triangle', 0.1, 0, 420); },
+    boost_hint() { blip(1175, 0.05, 'square', 0.14); blip(1175, 0.05, 'square', 0.14, 0.09); },
     game_over() { blip(392, 0.14, 'square', 0.14); blip(330, 0.14, 'square', 0.14, 0.14); blip(262, 0.3, 'square', 0.14, 0.28); }
   };
 

@@ -20,6 +20,7 @@ export const AUDIO_EVENTS = [
   'fuel_low',
   'tier_up',
   'overtake',
+  'boost_hint',
   'game_over',
   'music_loop'
 ];

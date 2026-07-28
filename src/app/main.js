@@ -248,6 +248,7 @@ const loop = createLoop({
     view.boosting = world ? isBoosting(world) : false;
     view.boostFrac = world ? world.boostFramesLeft / BOOST_TOTAL_FRAMES : 0;
     view.boostReady = world ? world.fuel >= TUNING.boost.minFuel : true;
+    view.boostHint = world ? world.boostHint : false;
     view.deathCause = world ? world.deathCause : null;
     view.meters = world ? Math.floor(distanceMeters(world)) : 0;
     view.spinFrames = world ? world.spinFrames : 0;

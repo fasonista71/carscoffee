@@ -10,6 +10,31 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 All twelve build order steps are done. Latest additions:
 
+- Aggro traffic: a rising share of full gap rows per tier (22 to 62
+  percent, TUNING.tiers[].aggro) target the player directly. A single
+  block lands on your committed lane; a forced double row opens the
+  lane farthest from you. Spacing and corridor rules are untouched,
+  so every targeted pattern is still provably escapable; it just
+  refuses to be dodged by standing still.
+- Overtakers are per tier now (TUNING.tiers[].overtakerChance, 0 to
+  40 percent per second check), with jittered spawn distance, so
+  passes get frequent and unpredictable late. Two new fairness rules
+  came out of the oracle: concurrent overtakers must share a lane
+  (opposite edge passes plus one middle blocked row would wall all
+  three lanes), and a forced double row never opens only a lane an
+  approaching overtaker owns.
+- The boost prompt: while a sports car is bearing down from behind
+  and a boost is banked, the Boost meter pulses, a BOOST! callout
+  flashes over your car, and the rising edge gets a chirp and a
+  rumble. Scooting forward is the escape Jason asked to make obvious.
+- Hearts are no longer replenishable until you have spent at least
+  two (TUNING.lives.minSpentForPickup); the road offers no refill
+  before that.
+- The fairness oracle got smarter with the game: its cautious pass
+  now steers around rubble and slicks like a competent player. Seed
+  23 taught this: the old oracle drove blind into rubble with a
+  sports car closing in the same lane, and the slowdown compressed
+  its escape window.
 - Scenery themes per tier: mountain roads to start, then desert,
   snow, beach, and cityscape as the tiers climb, each with its own
   ground color and roadside props on both parallax bands. The theme

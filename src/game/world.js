@@ -28,6 +28,7 @@ export function createWorld({ seed, vehicle, environment }) {
     deathCause: null,
     fuel: TUNING.fuel.max,
     boostFramesLeft: 0,
+    boostHint: false,
     /* Hazard and forgiveness state. */
     slideLockFrames: 0,
     slowFrames: 0,
@@ -149,6 +150,7 @@ export function step(world, intents) {
   spawn(world);
   updateOvertakers(world, dt);
   maybeSpawnOvertaker(world);
+  updateBoostHint(world);
   prune(world);
   drainFuel(world, dt);
   if (world.status !== 'running') return world;
@@ -293,12 +295,119 @@ function advanceTraffic(world, dt) {
   }
 }
 
+/*
+  The intelligence dial. A share of full gap rows (rising per tier)
+  target the player directly: a single block lands on the player's
+  committed lane, and a forced row opens the lane farthest from the
+  player. Spacing and corridor rules are untouched, so every targeted
+  pattern is still provably escapable; it just refuses to be dodged by
+  standing still.
+*/
+function applyAggro(world, spec, cfg) {
+  if (spec.aggroApplied) return;
+  spec.aggroApplied = true;
+  if (spec.aggroRoll >= cfg.aggro) return;
+  const laneCount = TUNING.road.laneCount;
+  const p = world.player;
+  const committed = p.tween ? p.tween.to : p.lane;
+  const blockedLanes = [];
+  for (let i = 0; i < laneCount; i += 1) {
+    if (spec.lanes[i]) blockedLanes.push(i);
+  }
+  if (blockedLanes.length === 1) {
+    const from = blockedLanes[0];
+    if (from === committed) return;
+    const v = spec.variants[from];
+    spec.lanes = spec.lanes.slice();
+    spec.variants = spec.variants.slice();
+    spec.lanes[from] = false;
+    spec.variants[from] = -1;
+    spec.lanes[committed] = true;
+    spec.variants[committed] = v;
+  } else if (blockedLanes.length === laneCount - 1) {
+    let far;
+    if (committed === 0) far = laneCount - 1;
+    else if (committed === laneCount - 1) far = 0;
+    else far = spec.aggroLaneRoll < 0.5 ? 0 : laneCount - 1;
+    if (spec.lanes.indexOf(false) === far) return;
+    const rolledVariants = blockedLanes.map((l) => spec.variants[l]);
+    const lanes = new Array(laneCount).fill(true);
+    lanes[far] = false;
+    const variants = new Array(laneCount).fill(-1);
+    let vi = 0;
+    for (let i = 0; i < laneCount; i += 1) {
+      if (lanes[i]) {
+        variants[i] = rolledVariants[vi];
+        vi += 1;
+      }
+    }
+    spec.lanes = lanes;
+    spec.variants = variants;
+  }
+}
+
 function openMaskOf(lanes) {
   let m = 0;
   for (let i = 0; i < lanes.length; i += 1) {
     if (!lanes[i]) m |= 1 << i;
   }
   return m;
+}
+
+/*
+  A forced double row must never open only a lane an approaching
+  overtaker owns: the row and the pass can meet the player together
+  and wall every path. Aggro made this common (it steers the open
+  lane away from the player, and overtakers ride the edges the player
+  flees to), but a natural roll can build the same trap, so every non
+  cluster double row is checked. The open lane moves to an overtaker
+  free lane, still preferring the one farthest from the player. With
+  three lanes and edge only overtakers, the middle always qualifies.
+*/
+function steerOpenLaneOffOvertakers(world, spec) {
+  const laneCount = TUNING.road.laneCount;
+  let blockedCount = 0;
+  let open = -1;
+  for (let i = 0; i < laneCount; i += 1) {
+    if (spec.lanes[i]) blockedCount += 1;
+    else open = i;
+  }
+  if (blockedCount !== laneCount - 1) return;
+  let hot = 0;
+  for (let i = 0; i < world.overtakers.length; i += 1) {
+    const ov = world.overtakers[i];
+    if (ov.distPx - world.distancePx <= 60) hot |= 1 << ov.lane;
+  }
+  if ((hot & (1 << open)) === 0) return;
+  const p = world.player;
+  const committed = p.tween ? p.tween.to : p.lane;
+  let best = -1;
+  let bestDist = -1;
+  for (let i = 0; i < laneCount; i += 1) {
+    if (hot & (1 << i)) continue;
+    const d = Math.abs(i - committed);
+    if (d > bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  if (best < 0) return;
+  const rolledVariants = [];
+  for (let i = 0; i < laneCount; i += 1) {
+    if (spec.lanes[i]) rolledVariants.push(spec.variants[i]);
+  }
+  const lanes = new Array(laneCount).fill(true);
+  lanes[best] = false;
+  const variants = new Array(laneCount).fill(-1);
+  let vi = 0;
+  for (let i = 0; i < laneCount; i += 1) {
+    if (lanes[i]) {
+      variants[i] = rolledVariants[vi];
+      vi += 1;
+    }
+  }
+  spec.lanes = lanes;
+  spec.variants = variants;
 }
 
 function spawn(world) {
@@ -327,10 +436,15 @@ function spawn(world) {
       rerolls += 1;
     }
   }
+  let keepsCorridor = (openMaskOf(spec.lanes) & world.corridorMask) === world.corridorMask;
+  const tight = wantTight && keepsCorridor;
+  if (!tight) {
+    applyAggro(world, spec, cfg);
+    steerOpenLaneOffOvertakers(world, spec);
+  }
   const specMaxH = rowMaxHPx(spec.lanes, spec.variants);
   const openMask = openMaskOf(spec.lanes);
-  const keepsCorridor = (openMask & world.corridorMask) === world.corridorMask;
-  const tight = wantTight && keepsCorridor;
+  keepsCorridor = (openMask & world.corridorMask) === world.corridorMask;
 
   let minGapPrevPx;
   let gapPx;
@@ -383,8 +497,10 @@ function spawn(world) {
     addCoffee(world, spec.coffee, row, gapPx);
   }
   /* Rare heart pickups, gap only, always in a lane open in the row
-     they precede, offset from where cups and rubble sit. */
+     they precede, offset from where cups and rubble sit. The road
+     offers no refill until enough hearts are spent. */
   if (!tight && last !== null && !hazardPlaced
+      && TUNING.lives.max - world.hearts >= TUNING.lives.minSpentForPickup
       && spec.heartRoll < TUNING.lives.pickupChancePerGap) {
     const open = [];
     for (let l = 0; l < TUNING.road.laneCount; l += 1) {
@@ -721,8 +837,15 @@ function updateOvertakers(world, dt) {
   }
 }
 
-function overtakerLaneClear(world, lane, vO) {
+function overtakerLaneClear(world, lane, vO, behindPx) {
   const o = TUNING.overtakers;
+  /* Concurrent overtakers must share a lane. Two passes on opposite
+     edges can overlap while any middle blocked row reaches the
+     player, and that walls all three lanes at once. A same lane
+     train is just a longer pass with the usual escapes. */
+  for (let i = 0; i < world.overtakers.length; i += 1) {
+    if (world.overtakers[i].lane !== lane) return false;
+  }
   for (let i = 0; i < world.rows.length; i += 1) {
     const dy = world.rows[i].distPx - world.distancePx;
     if (dy < -o.clearLanePx) continue;
@@ -743,8 +866,8 @@ function overtakerLaneClear(world, lane, vO) {
   const vFast = vBase * TUNING.boost.speedMultiplier;
   const vSlow = vBase * TUNING.hazards.rubble.slowFactor;
   const g = o.squeezeGuardSec;
-  const tMeetMin = o.spawnBehindPx / Math.max(1, vO - vSlow);
-  const tMeetMax = o.spawnBehindPx / Math.max(1, vO - vFast);
+  const tMeetMin = behindPx / Math.max(1, vO - vSlow);
+  const tMeetMax = behindPx / Math.max(1, vO - vFast);
   const laneBit = 1 << lane;
   const fullMask = (1 << TUNING.road.laneCount) - 1;
   for (let i = 0; i < world.rows.length; i += 1) {
@@ -777,33 +900,60 @@ function overtakerLaneClear(world, lane, vO) {
 
 function maybeSpawnOvertaker(world) {
   const o = TUNING.overtakers;
-  if (world.tier < o.minTier) return;
+  const chance = tierConfig(world).overtakerChance;
+  if (!chance || chance <= 0) return;
   if (world.overtakers.length >= o.maxActive) return;
   if (world.frame % TUNING.logic.hz !== 0) return;
   let s = world.rngState;
   let roll;
   [roll, s] = nextFloat01(s);
-  if (roll < o.chancePerSec) {
+  if (roll < chance) {
     let laneRoll;
     let speedRoll;
     let variantRoll;
+    let behindRoll;
     [laneRoll, s] = nextFloat01(s);
     [speedRoll, s] = nextFloat01(s);
     [variantRoll, s] = nextFloat01(s);
+    [behindRoll, s] = nextFloat01(s);
     /* Edge lanes only. Crossing between corridors always transits the
        middle lane, so a middle lane overtaker can wall off the only
        path exactly when a corridor shift demands it. Edges never
        carry transit. */
     const lane = laneRoll < 0.5 ? 0 : TUNING.road.laneCount - 1;
     const vO = baseSpeedPxPerSec(world) * (o.speedMultMin + speedRoll * (o.speedMultMax - o.speedMultMin));
-    if (OVERTAKER_VARIANT_IDS.length > 0 && overtakerLaneClear(world, lane, vO)) {
+    const behindPx = o.spawnBehindPx * (1 - o.spawnBehindJitter / 2 + behindRoll * o.spawnBehindJitter);
+    if (OVERTAKER_VARIANT_IDS.length > 0 && overtakerLaneClear(world, lane, vO, behindPx)) {
       const variant = OVERTAKER_VARIANT_IDS[Math.min(OVERTAKER_VARIANT_IDS.length - 1,
         Math.floor(variantRoll * OVERTAKER_VARIANT_IDS.length))];
-      world.overtakers.push({ lane, distPx: world.distancePx - o.spawnBehindPx, speedPxPerSec: vO, variant });
+      world.overtakers.push({ lane, distPx: world.distancePx - behindPx, speedPxPerSec: vO, variant });
       world.events.push('overtake');
     }
   }
   world.rngState = s;
+}
+
+/*
+  The boost prompt: while a speeding car is bearing down from behind
+  and a boost is banked, say so. Scooting forward moves the player
+  past the spot where the pass and the traffic would squeeze
+  together, which is exactly the moment Jason described. The app
+  layer pulses the meter and flashes a callout; the rising edge also
+  gets a sound and a rumble. The lane chevrons already say where the
+  car is coming; this says the escape move is ready.
+*/
+function updateBoostHint(world) {
+  const was = world.boostHint;
+  world.boostHint = false;
+  if (world.fuel < TUNING.boost.minFuel || isBoosting(world)) return;
+  for (let i = 0; i < world.overtakers.length; i += 1) {
+    const dy = world.overtakers[i].distPx - world.distancePx;
+    if (dy > -TUNING.overtakers.spawnBehindPx && dy < -40) {
+      world.boostHint = true;
+      if (!was) world.events.push('boost_hint');
+      return;
+    }
+  }
 }
 
 function checkOvertakerCollision(world) {

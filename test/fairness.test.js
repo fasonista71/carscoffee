@@ -42,7 +42,7 @@ const PREDICT_DT = 1 / 30;
   the rear to front clamp keeps them from closing inside the fair gap,
   exactly as world.advanceTraffic does.
 */
-function predictWindows(world, vP) {
+function predictWindows(world, vP, includeHazards) {
   const o = TUNING.obstacles;
   const pH = world.player.hitbox.hPx;
   const rows = world.rows.map((r) => ({
@@ -90,6 +90,29 @@ function predictWindows(world, vP) {
       lanes
     });
   }
+  /* A competent player also steers around static hazards. The
+     cautious pass treats them as blocked; the exact doom pass does
+     not, because rubble is a soft penalty and may sit in the only
+     survivable lane by design. Seed 23 taught this: the oracle drove
+     blind into rubble with a sports car closing in the same lane, and
+     the slowdown compressed an escape window the plan relied on. */
+  if (includeHazards) {
+    for (const hz of world.hazards) {
+      const hH = TUNING.hazards[hz.type].hitbox.hPx;
+      const halfH = (pH + hH) / 2;
+      const dy = hz.distPx - world.distancePx;
+      const tCenter = dy / vP;
+      if (tCenter - halfH / vP > LOOKAHEAD_SEC) continue;
+      if (tCenter + halfH / vP <= 0.05) continue;
+      const lanes = new Array(TUNING.road.laneCount).fill(false);
+      lanes[hz.lane] = true;
+      result.push({
+        tStart: Math.max(0, tCenter - halfH / vP),
+        tEnd: tCenter + halfH / vP,
+        lanes
+      });
+    }
+  }
   return result.sort((a, b) => a.tStart - b.tStart);
 }
 
@@ -107,7 +130,7 @@ function predictWindows(world, vP) {
   collision partway through the tween; used only by the final doom
   check, never by the cautious pass.
 */
-function planFirstMove(world, marginSec, tweenScale = 1) {
+function planFirstMove(world, marginSec, tweenScale = 1, includeHazards = false) {
   const p = world.player;
   const laneCount = TUNING.road.laneCount;
   const committed = p.tween ? p.tween.to : p.lane;
@@ -115,7 +138,7 @@ function planFirstMove(world, marginSec, tweenScale = 1) {
   const slotSec = (world.laneTweenMs / 1000) * tweenScale;
   const slots = Math.max(2, Math.ceil(LOOKAHEAD_SEC / slotSec));
 
-  const events = predictWindows(world, vP);
+  const events = predictWindows(world, vP, includeHazards);
   const blocked = [];
   for (let s = 0; s < slots; s += 1) blocked.push(new Array(laneCount).fill(false));
   for (const ev of events) {
@@ -201,7 +224,8 @@ test('an oracle player survives the real simulation through every tier for every
         const vP = currentSpeedPxPerSec(world);
         if (nearestThreatSec(world, vP) < 1.5) {
           const cautiousMargin = (TUNING.obstacles.reactionBufferMs / 1000) * 0.8;
-          let move = planFirstMove(world, cautiousMargin);
+          let move = planFirstMove(world, cautiousMargin, 1, true);
+          if (move === 'doomed') move = planFirstMove(world, cautiousMargin);
           if (move === 'doomed') move = planFirstMove(world, 0, 0.75);
           assert.notEqual(move, 'doomed',
             `oracle doomed: seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
