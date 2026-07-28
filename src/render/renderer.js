@@ -349,7 +349,21 @@ export function createRenderer(canvas) {
       if (screenY < -70 || screenY > H + 70) continue;
       const spr = getTrafficSprite(ov.variant);
       const x = Math.round(laneCenterXPx(ov.lane) - spr.width / 2);
-      bctx.drawImage(spr, x, Math.round(screenY - spr.height / 2));
+      const y = Math.round(screenY - spr.height / 2);
+      bctx.drawImage(spr, x, y);
+      /* Wig wag roof lights on emergency vehicles: red and blue trade
+         sides every beat, with a bright white strobe pixel between. */
+      if (ov.emergency) {
+        const phase = Math.floor(performance.now() / TUNING.render.wigWagMs) % 2;
+        const barY = y + Math.round(spr.height * 0.36);
+        const cx = x + Math.round(spr.width / 2);
+        bctx.fillStyle = phase === 0 ? pal.wigWagRed : pal.wigWagRedDim;
+        bctx.fillRect(cx - 5, barY, 4, 2);
+        bctx.fillStyle = phase === 0 ? pal.wigWagBlueDim : pal.wigWagBlue;
+        bctx.fillRect(cx + 1, barY, 4, 2);
+        bctx.fillStyle = '#ffffff';
+        bctx.fillRect(cx - 1, barY + (phase === 0 ? 0 : 1), 2, 1);
+      }
     }
   }
 

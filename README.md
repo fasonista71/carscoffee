@@ -10,6 +10,20 @@ review and the native iOS port path, lives in ROADMAP.md.
 
 All twelve build order steps are done. Latest additions:
 
+- Pursuits: about a third of passes (emergencyChance) bring the law
+  along. The emergency vehicle only ever chases, riding chaseGapPx
+  behind the speeder in the same lane with wig wag roof lights going,
+  red and blue trading sides with a white strobe between, one long
+  two car pass announced by a siren chirp and rumble. The three unit
+  fleet is stand in art until real assets arrive: blue truck as SWAT
+  van, red truck as fire truck, blue car as police
+  (EMERGENCY_VARIANT_IDS in world.js).
+- Clusters can no longer narrow mid stream: inside a cluster the set
+  of open lanes may grow but never shrink, because tight spacing
+  leaves no room to cross. A narrowing pattern now takes a full fair
+  gap first. This closed a latent trap the oracle found (seed 71):
+  middle blocked rows luring the player wide, then tight double rows
+  walling that side off with no time to escape.
 - Organic packs: each car slides up to staggerMaxPx forward or back
   of its row line, and bumper gaps inside clusters vary over a wider
   span (tightGapJitterSpan), so traffic staggers like the real thing

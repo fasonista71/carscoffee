@@ -420,26 +420,30 @@ function spawn(world) {
   const last = world.rows.length > 0 ? world.rows[world.rows.length - 1] : null;
 
   /* A row may pack tightly behind the previous one only if EVERY
-     current corridor lane stays open through it. Then a player
-     driving any corridor lane survives the whole cluster without
-     needing a lane change there is no room to make. Anything else
-     takes a full fair gap, which allows a worst case crossing.
-     When a cluster wants to continue but the rolled pattern is
-     incompatible, reroll a bounded number of times; this is what
-     keeps the road crowded. */
+     lane the previous row left open stays open through it: inside a
+     cluster the open set may grow but never shrink. Tight spacing
+     leaves no room to cross, so any lane a player might legally be
+     driving through the cluster must stay driveable to its end. A
+     pattern that narrows the road (seed 71 taught this: three middle
+     blocked rows luring the player left, then two tight double rows
+     walling the left at 80px spacing) instead takes a full fair gap,
+     which buys the worst case two lane crossing. When a cluster wants
+     to continue but the rolled pattern narrows, reroll a bounded
+     number of times; this is what keeps the road crowded. */
+  const lastOpenMask = last !== null ? openMaskOf(last.lanes) : 0;
   const wantTight = last !== null
     && world.clusterLen < t.clusterMaxLen
     && spec.clusterRoll < cfg.clusterChance;
   if (wantTight) {
     let rerolls = 0;
     while (rerolls < t.clusterRerolls
-        && (openMaskOf(spec.lanes) & world.corridorMask) !== world.corridorMask) {
+        && (openMaskOf(spec.lanes) & lastOpenMask) !== lastOpenMask) {
       spec = nextRowSpec(world.gen, cfg);
       rerolls += 1;
     }
   }
-  let keepsCorridor = (openMaskOf(spec.lanes) & world.corridorMask) === world.corridorMask;
-  const tight = wantTight && keepsCorridor;
+  const keepsOpenLanes = (openMaskOf(spec.lanes) & lastOpenMask) === lastOpenMask;
+  const tight = wantTight && keepsOpenLanes;
   if (!tight) {
     applyAggro(world, spec, cfg);
     steerOpenLaneOffOvertakers(world, spec);
@@ -449,7 +453,6 @@ function spawn(world) {
      conservative no matter how the cars lean inside the row. */
   const specMaxH = rowMaxHPx(spec.lanes, spec.variants) + 2 * t.staggerMaxPx;
   const openMask = openMaskOf(spec.lanes);
-  keepsCorridor = (openMask & world.corridorMask) === world.corridorMask;
 
   let minGapPrevPx;
   let gapPx;
@@ -876,6 +879,15 @@ const OVERTAKER_VARIANT_IDS = ['lambo', 'lambo2', 'camaro', 'camaro2',
   .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
   .filter((i) => i >= 0);
 
+/* The emergency fleet, three stand ins until real art arrives: the
+   blue truck is the SWAT van, the red truck is the fire truck, the
+   blue car is the police unit. The renderer adds the wig wag roof
+   lights that sell the idea. They only ever appear in pursuit,
+   chasing a speeder from behind. */
+const EMERGENCY_VARIANT_IDS = ['truck3', 'tow_truck2', 'mini']
+  .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
+  .filter((i) => i >= 0);
+
 function updateOvertakers(world, dt) {
   const o = TUNING.overtakers;
   for (let i = world.overtakers.length - 1; i >= 0; i -= 1) {
@@ -887,7 +899,10 @@ function updateOvertakers(world, dt) {
   }
 }
 
-function overtakerLaneClear(world, lane, vO, behindPx) {
+/* behindFarPx covers a chase pair: the pass interval runs from the
+   lead car's earliest arrival to the trailing car's latest. For a
+   lone car both bounds come from the same spawn distance. */
+function overtakerLaneClear(world, lane, vO, behindPx, behindFarPx = behindPx) {
   const o = TUNING.overtakers;
   /* Concurrent overtakers must share a lane. Two passes on opposite
      edges can overlap while any middle blocked row reaches the
@@ -917,7 +932,7 @@ function overtakerLaneClear(world, lane, vO, behindPx) {
   const vSlow = vBase * TUNING.hazards.rubble.slowFactor;
   const g = o.squeezeGuardSec;
   const tMeetMin = behindPx / Math.max(1, vO - vSlow);
-  const tMeetMax = behindPx / Math.max(1, vO - vFast);
+  const tMeetMax = behindFarPx / Math.max(1, vO - vFast);
   const laneBit = 1 << lane;
   const fullMask = (1 << TUNING.road.laneCount) - 1;
   for (let i = 0; i < world.rows.length; i += 1) {
@@ -962,10 +977,14 @@ function maybeSpawnOvertaker(world) {
     let speedRoll;
     let variantRoll;
     let behindRoll;
+    let emergencyRoll;
+    let chaseRoll;
     [laneRoll, s] = nextFloat01(s);
     [speedRoll, s] = nextFloat01(s);
     [variantRoll, s] = nextFloat01(s);
     [behindRoll, s] = nextFloat01(s);
+    [emergencyRoll, s] = nextFloat01(s);
+    [chaseRoll, s] = nextFloat01(s);
     /* Edge lanes only. Crossing between corridors always transits the
        middle lane, so a middle lane overtaker can wall off the only
        path exactly when a corridor shift demands it. Edges never
@@ -973,11 +992,29 @@ function maybeSpawnOvertaker(world) {
     const lane = laneRoll < 0.5 ? 0 : TUNING.road.laneCount - 1;
     const vO = baseSpeedPxPerSec(world) * (o.speedMultMin + speedRoll * (o.speedMultMax - o.speedMultMin));
     const behindPx = o.spawnBehindPx * (1 - o.spawnBehindJitter / 2 + behindRoll * o.spawnBehindJitter);
-    if (OVERTAKER_VARIANT_IDS.length > 0 && overtakerLaneClear(world, lane, vO, behindPx)) {
-      const variant = OVERTAKER_VARIANT_IDS[Math.min(OVERTAKER_VARIANT_IDS.length - 1,
-        Math.floor(variantRoll * OVERTAKER_VARIANT_IDS.length))];
-      world.overtakers.push({ lane, distPx: world.distancePx - behindPx, speedPxPerSec: vO, variant });
-      world.events.push('overtake');
+    /* Emergency vehicles only ever appear in pursuit: the speeder in
+       front, the lights behind. Never solo, never leading. When the
+       active cap has no room for the pair, the speeder runs alone. */
+    const chase = EMERGENCY_VARIANT_IDS.length > 0
+      && emergencyRoll < o.emergencyChance
+      && world.overtakers.length <= o.maxActive - 2;
+    const behindFarPx = chase ? behindPx + o.chaseGapPx : behindPx;
+    if (OVERTAKER_VARIANT_IDS.length > 0
+        && overtakerLaneClear(world, lane, vO, behindPx, behindFarPx)) {
+      const pick = (ids, r) => ids[Math.min(ids.length - 1, Math.floor(r * ids.length))];
+      world.overtakers.push({
+        lane, distPx: world.distancePx - behindPx, speedPxPerSec: vO,
+        variant: pick(OVERTAKER_VARIANT_IDS, variantRoll), emergency: false
+      });
+      if (chase) {
+        world.overtakers.push({
+          lane, distPx: world.distancePx - behindFarPx, speedPxPerSec: vO,
+          variant: pick(EMERGENCY_VARIANT_IDS, chaseRoll), emergency: true
+        });
+        world.events.push('siren');
+      } else {
+        world.events.push('overtake');
+      }
     }
   }
   world.rngState = s;
@@ -996,9 +1033,11 @@ function updateBoostHint(world) {
   const was = world.boostHint;
   world.boostHint = false;
   if (world.fuel < TUNING.boost.minFuel || isBoosting(world)) return;
+  const o = TUNING.overtakers;
+  const windowPx = o.spawnBehindPx + o.chaseGapPx;
   for (let i = 0; i < world.overtakers.length; i += 1) {
     const dy = world.overtakers[i].distPx - world.distancePx;
-    if (dy > -TUNING.overtakers.spawnBehindPx && dy < -40) {
+    if (dy > -windowPx && dy < -40) {
       world.boostHint = true;
       if (!was) world.events.push('boost_hint');
       return;

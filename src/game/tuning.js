@@ -99,8 +99,10 @@ export const TUNING = {
     clusterMaxLen: 7,
     /* When continuing a cluster, incompatible lane patterns are
        rerolled up to this many extra times. Keeps clusters long and
-       the road crowded. */
-    clusterRerolls: 2,
+       the road crowded. Raised from 2 when the tight rule got
+       stricter (open lanes may never narrow inside a cluster), which
+       rejects more rolls. */
+    clusterRerolls: 4,
     tightExtraGapPx: 8,
     /* Organic packs: each car in a row slides up to this far forward
        or back of the row line, so clusters stagger like real traffic
@@ -207,7 +209,15 @@ export const TUNING = {
        lane. Clusters can pin the player to their corridor, so the
        guard checks corridors, not just single rows. */
     squeezeGuardSec: 1.2,
-    maxActive: 3
+    maxActive: 3,
+    /* Pursuits: this share of passes bring the law along. The
+       emergency vehicle only ever CHASES, riding chaseGapPx behind
+       the speeder in the same lane, wig wag lights going, one longer
+       two car pass. The three unit fleet lives in world.js: blue
+       truck as SWAT van, red truck as fire truck, blue car as
+       police; swap those sprites when real assets arrive. */
+    emergencyChance: 0.35,
+    chaseGapPx: 90
   },
 
   stumble: {
@@ -304,6 +314,8 @@ export const TUNING = {
     /* Stopped cars run their hazard flashers at this period, each row
        phase shifted so the road never blinks in unison. Visual. */
     hazardBlinkMs: 460,
+    /* Emergency roof lights alternate sides at this period. Visual. */
+    wigWagMs: 140,
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
@@ -345,6 +357,10 @@ export const TUNING = {
       slickSheen: '#43306b',
       slickArrow: '#c2b1ff',
       hazardLight: '#ffb937',
+      wigWagRed: '#ff2a2a',
+      wigWagRedDim: '#701414',
+      wigWagBlue: '#2a6aff',
+      wigWagBlueDim: '#142d70',
       rubbleLight: '#b3a58c',
       rubbleMid: '#8a7a66',
       rubbleDark: '#5c5044',
