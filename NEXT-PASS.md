@@ -16,15 +16,19 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `904241f` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-193352/` |
-| Versioned directory | `v6f2b30db45` |
+| Built | 19 September 2026 from commit `c2e8a0f` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-195410/` |
+| Versioned directory | `v2da11d0ff5` |
 
-Six commits sit between the live build and this one: the four device testing
+Eight commits sit between the live build and this one: the four device testing
 fixes (corner buttons, the legend, the full board, the sound note), the design
 backlog, boost rubber that is a line rather than a dotted one, taxi and tow
-truck lights with the world clock that pause actually freezes, and the board
-and build tag placement. Until Jason uploads it, the table above this one
+truck lights with the world clock that makes pause actually freeze, the board
+and build tag placement, the Tier 2 re-read, and the two lane tap.
+
+One thing in that list is not finished and should not be forgotten behind a
+green harness: the fairness oracle does not know about the two lane tap. See
+D1 in `DESIGN-BACKLOG.md`. Until Jason uploads it, the table above this one
 is still what a player gets. Move the row up when he does, do not add a third
 table.
 
