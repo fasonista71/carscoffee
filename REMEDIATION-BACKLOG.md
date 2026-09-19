@@ -18,11 +18,38 @@ thing I kept the better evidence and cite both.
 TIER1-M8.md for what changed and how each one was verified. The detail is kept
 below for the record, each item marked DONE.
 
-Tiers 2, 3 and 4 are open: thirteen undesigned states, ten test-quality items
-and fifteen drift hazards. Two further changes landed from Jason's own device
-testing and are written up at the end of TIER1-M8.md: menu press states with
-confirmation sounds, and stronger pickup presentation. Swipe down to pause
-closes half of 2.2.
+**Tier 2 is most of the way closed too**, which the item text below does not
+say, because the fixes landed across several sessions without anyone coming
+back to this file. Re-read against the code on 19 September:
+
+| Item | State |
+|---|---|
+| 2.1 teaching the controls | Mostly done. How to play is six illustrated rows, and the first run calls out the steer, the boost and the coffee. Nothing teaches tap your own lane to boost. |
+| 2.2 no route back to the title | **Open.** Pause offers Resume and Restart. There is still no way to the title, so a car or a sound setting cannot be changed without finishing the run. |
+| 2.3 the empty board | Done. Five numbered slots with placeholders. |
+| 2.4 title spacing | Done. The board hangs off the last menu row instead of a constant y. |
+| 2.5 the hidden car preview | Done. Cycling a car puts it on a plate, and the chosen car parks on the title screen. |
+| 2.6 the 44pt claim | Done. `hitPadFor` sizes the pad in CSS pixels, so the target holds at any scale. |
+| 2.7 the tier banner's colours | **Open, ASK.** |
+| 2.8 the initials modal as a second design system | **Open**, and superseded by D5 in `DESIGN-BACKLOG.md`: drawing the picker in the canvas removes the modal rather than restyling it. |
+| 2.9 invisible to assistive technology | Done as far as it honestly can be. Role, label and fallback text. No attempt at announcing the road, and the label says so. |
+| 2.10 no reduced motion path | **Open, ASK.** The one item here with real accessibility weight. |
+| 2.11 the unreadable build tag | Done. Plated, in the text colour. |
+| 2.12 the dead N/A branch | Done. Branch removed. |
+| 2.13 `textWidth('')` | Done. Returns 0. |
+
+So Tier 2 is three items, two of which are Jason's call: a route back to the
+title, the tier banner, and reduced motion.
+
+Tiers 3 and 4 have also moved: the determinism test runs its full 10,000
+frames (3.1), nitro has its own suite (3.3), and `tools/browser/upgrade.mjs`
+exists. The rest of those two tiers has not been re-checked item by item, so
+treat their text below as the last known state rather than as current.
+
+Two further changes landed from Jason's own device testing and are written up
+at the end of TIER1-M8.md: menu press states with confirmation sounds, and
+stronger pickup presentation. Swipe down to pause closed half of 2.2 and was
+then reverted in the controls review, since a pause button covers it.
 
 ---
 
