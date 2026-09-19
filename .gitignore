@@ -1,4 +1,30 @@
+# macOS
 .DS_Store
+
+# Dependencies and build output
 node_modules/
 _dist/
+
+# This environment cannot delete on the owner's machine, so removed
+# files are parked here rather than deleted.
 _to_delete/
+
+# Working scratch from Claude sessions: intermediate renders, previews,
+# test captures. None of it is input to the build.
+Claude outputs/
+
+# The native Swift spike. Not part of the web build, and its Packages
+# directory alone is 91MB of checkouts and build artifacts.
+CarsAndCoffee/
+
+# jasonpfields.com embed page. Ships separately from the itch build.
+site/
+
+# Trailer and marketing tooling.
+tools/trailer/
+
+# Input diagnostic page, deliberately excluded from the itch bundle.
+probe.html
+
+# Editor and agent settings.
+.claude/
