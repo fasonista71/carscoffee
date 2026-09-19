@@ -16,13 +16,15 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `f084b59` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-190123/` |
-| Versioned directory | `v38d1c77293` |
+| Built | 19 September 2026 from commit `904241f` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-193352/` |
+| Versioned directory | `v6f2b30db45` |
 
-Two commits sit between the live build and this one: the four device testing
-fixes (corner buttons, the legend, the full board, the sound note) and this
-file plus `DESIGN-BACKLOG.md`. Until Jason uploads it, the table above this one
+Six commits sit between the live build and this one: the four device testing
+fixes (corner buttons, the legend, the full board, the sound note), the design
+backlog, boost rubber that is a line rather than a dotted one, taxi and tow
+truck lights with the world clock that pause actually freezes, and the board
+and build tag placement. Until Jason uploads it, the table above this one
 is still what a player gets. Move the row up when he does, do not add a third
 table.
 
