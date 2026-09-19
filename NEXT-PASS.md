@@ -16,15 +16,16 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `c2e8a0f` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-195410/` |
-| Versioned directory | `v2da11d0ff5` |
+| Built | 19 September 2026 from commit `2776527` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-204644/` |
+| Versioned directory | `v46549b7ffe` |
 
-Eight commits sit between the live build and this one: the four device testing
-fixes (corner buttons, the legend, the full board, the sound note), the design
-backlog, boost rubber that is a line rather than a dotted one, taxi and tow
-truck lights with the world clock that makes pause actually freeze, the board
-and build tag placement, the Tier 2 re-read, and the two lane tap.
+Thirteen commits sit between the live build and this one. The ones a player
+will notice: both corner buttons in the HUD, a legible How to play, a full
+five row board, an honest sound note, boost rubber that is a line rather than
+a dotted one, taxi and tow truck lights, a two lane tap with a screech, a
+readable build tag, initials entry on an arcade wheel instead of a text field,
+and fullscreen on itch no longer taking the sound with it.
 
 One thing in that list is not finished and should not be forgotten behind a
 green harness: the fairness oracle does not know about the two lane tap. See
