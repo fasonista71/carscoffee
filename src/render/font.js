@@ -51,10 +51,20 @@ const GLYPHS = {
   /* Only reachable from the haptics row's N/A fallback, but a missing
      glyph there would render 'N A'. */
   '/': [0b001, 0b001, 0b010, 0b100, 0b100],
+  /* The help button on the title screen. A glyph the font does not
+     have draws as nothing at all, which is how the plus sign spent a
+     release rendering both pickup callouts with their first character
+     missing, so test/font.test.js now checks the strings the game
+     draws against this table rather than trusting a reading of it. */
+  '?': [0b110, 0b001, 0b010, 0b000, 0b010],
   '.': [0b000, 0b000, 0b000, 0b000, 0b010],
   '!': [0b010, 0b010, 0b010, 0b000, 0b010],
   ' ': [0b000, 0b000, 0b000, 0b000, 0b000]
 };
+
+/* The glyph table, for anything that needs to know what can be
+   drawn. */
+export const GLYPH_CHARS = Object.keys(GLYPHS);
 
 export const GLYPH_W = 3;
 export const GLYPH_H = 5;

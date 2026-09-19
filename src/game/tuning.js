@@ -301,7 +301,25 @@ export const TUNING = {
        about 10px below the band with the whole callout in clear
        road. showMs is how long it stays up afterwards. */
     coffeeLeadPx: 200,
-    coffeeShowMs: 3200
+    coffeeShowMs: 3200,
+    /*
+      The control lessons. Nothing in the product ever told a player
+      how to steer: every string the game can show was extracted and
+      not one mentioned tapping, swiping or lanes. Left and right get
+      found by flailing on a three lane runner; swipe up to boost does
+      not, and the BOOST! prompt appears over the car without saying
+      what to do about it.
+
+      Both are taught at the moment they first matter, in the same
+      callout language as the coffee lesson, once each per browser.
+      steerShowMs is how long the steering callout hangs about on a run
+      that never uses it: long enough to read twice, short enough that
+      it is not still there when the first row arrives.
+    */
+    steerShowMs: 5000,
+    /* Time a lesson has to be genuinely on screen before it counts as
+       taught. The same budget the coffee lesson is spent on. */
+    readMs: 1200
   },
 
   stumble: {

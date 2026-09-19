@@ -678,6 +678,13 @@ export function createRenderer(canvas) {
       const ty = Math.round(cy - spr.height / 2 - 12);
       drawText(bctx, 'BOOST!', tx + 1, ty + 1, pal.outline, { scale: 1, align: 'center' });
       drawText(bctx, 'BOOST!', tx, ty, pal.dash, { scale: 1, align: 'center' });
+      /* The prompt used to shout the name of a move without ever
+         saying how to make it. The first few times, it says. */
+      if (view.boostTip) {
+        drawText(bctx, 'SWIPE UP', tx + 1, ty - 7, pal.outline, { scale: 1, align: 'center' });
+        drawText(bctx, 'SWIPE UP', tx, ty - 8, pal.text, { scale: 1, align: 'center' });
+        boostTipDrawn = true;
+      }
     }
   }
 
@@ -953,6 +960,31 @@ export function createRenderer(canvas) {
   */
   let tipLatchDistPx = null;
   let tipLatchLane = 0;
+  /* Set by the draw calls, read back by the app: a lesson is only
+     spent once it has actually been on screen, which is what stopped
+     the coffee lesson being burned by a frame nobody saw. */
+  let boostTipDrawn = false;
+
+  /*
+    The first thing a player needs and the one thing the game never
+    said. It hangs over the car rather than off an object, because the
+    object in this lesson is the car, and it leaves as soon as the
+    player steers: a lesson that stays up after it has been learned is
+    a nag.
+  */
+  function drawSteerTip(view, pal) {
+    if (!view.steerTip) return false;
+    const l1 = 'Tap a lane';
+    const l2 = 'to move there';
+    const w = Math.max(textWidth(l1, 1), textWidth(l2, 1)) + 10;
+    const h = 15;
+    const x = Math.round((W - w) / 2);
+    const y = TUNING.render.playerYPx - 42;
+    drawPlate(x, y, w, h, pal);
+    drawText(bctx, l1, W / 2, y + 2, pal.edgeLine, { scale: 1, align: 'center' });
+    drawText(bctx, l2, W / 2, y + 9, pal.text, { scale: 1, align: 'center' });
+    return true;
+  }
 
   function drawCoffeeTip(view, pal) {
     if (!view.coffeeTip) { tipLatchDistPx = null; return false; }
@@ -1237,6 +1269,11 @@ export function createRenderer(canvas) {
   function menuLayout(mode, showSoundTip, hapticsSupported = true) {
     const m = TUNING.render.menu;
     const items = [];
+    /* The legend screen is a single button: everything above it is
+       reading. */
+    if (mode === 'howto') {
+      return [{ id: 'primary', label: 'Back', x: Math.round((W - m.primary.wPx) / 2), y: 170, w: m.primary.wPx, h: m.primary.hPx }];
+    }
     let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 122);
     const primaryLabel = mode === 'title' ? 'Start' : (mode === 'paused' ? 'Resume' : 'Go again');
     items.push({ id: 'primary', label: primaryLabel, x: Math.round((W - m.primary.wPx) / 2), y, w: m.primary.wPx, h: m.primary.hPx });
@@ -1285,7 +1322,7 @@ export function createRenderer(canvas) {
     finger actually was.
   */
   function hitTestMenu(mode, lx, ly, showSoundTip, hapticsSupported = true) {
-    if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver') return null;
+    if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver' && mode !== 'howto') return null;
     if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
     const pad = TUNING.render.menu.hitPadPx;
     let bestId = null;
@@ -1453,6 +1490,59 @@ export function createRenderer(canvas) {
     drawText(bctx, name, W / 2, y + h - 9, pal.edgeLine, { scale: 1, align: 'center' });
   }
 
+  /*
+    The way in to the legend. A row in the menu would have cost the
+    board its space on the shorter layout, so it is a corner button,
+    the same shape and the same hit box as the pause control during a
+    run: top right, bounded in y by the band it sits in.
+  */
+  function helpRect() {
+    const b = TUNING.render.pauseBtn;
+    return { x: W - b.wPx - 3, y: 3, w: b.wPx, h: b.hPx };
+  }
+
+  function hitTestHelp(lx, ly) {
+    if (!Number.isFinite(lx) || !Number.isFinite(ly)) return false;
+    const b = TUNING.render.pauseBtn;
+    return lx >= W - b.hitWPx && ly >= 0 && ly <= TUNING.render.hudBandHPx;
+  }
+
+  function drawHelpButton(view, pal) {
+    const r = helpRect();
+    const down = view.pressedMenuId === 'help' ? 1 : 0;
+    drawPlate(r.x, r.y + down, r.w, r.h, pal, down ? pal.outline : undefined);
+    drawText(bctx, '?', r.x + r.w / 2, r.y + down + 4, pal.text, { scale: 2, align: 'center' });
+  }
+
+  /*
+    The legend. Every character in it is in the font, and the lines are
+    the verbs in the order a player meets them: steer, boost, fuel,
+    pause. It is reachable from the title for as long as anyone wants
+    it, which is the half of the teaching the one time prompts cannot
+    do, because a returning player has already spent those.
+  */
+  const HOW_TO_LINES = [
+    ['Tap a lane', 'to move into it'],
+    ['Swipe up to boost', 'or tap the lane you are in'],
+    ['Coffee is fuel', 'Grab every cup'],
+    ['Pause', 'the button top right']
+  ];
+
+  function drawHowTo(view, pal) {
+    bctx.fillStyle = pal.dim;
+    bctx.fillRect(0, 0, W, H);
+    drawPlate(10, 16, W - 20, 20, pal);
+    drawText(bctx, 'How to play', W / 2, 22, pal.edgeLine, { scale: 2, align: 'center' });
+    let y = 48;
+    for (const [l1, l2] of HOW_TO_LINES) {
+      drawPlate(10, y, W - 20, 21, pal);
+      drawText(bctx, l1, 17, y + 4, pal.edgeLine, { scale: 1, align: 'left' });
+      drawText(bctx, l2, 17, y + 12, pal.text, { scale: 1, align: 'left' });
+      y += 27;
+    }
+    drawMenu(view, pal, 'howto');
+  }
+
   function drawTitle(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
@@ -1467,6 +1557,7 @@ export function createRenderer(canvas) {
        shoulder: recessive to the point of being unreadable, which is
        no use to a player being asked which build they are on. */
     drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.building, { scale: 1, align: 'right' });
+    drawHelpButton(view, pal);
   }
 
   /*
@@ -1572,7 +1663,9 @@ export function createRenderer(canvas) {
     drawOvertakerWarnings(view, pal);
     drawPlayer(view);
     drawParticles();
+    boostTipDrawn = false;
     view.coffeeTipDrawn = drawCoffeeTip(view, pal);
+    view.steerTipDrawn = drawSteerTip(view, pal);
     bctx.restore();
     /* The game over screen states the distance and the best in full
        size, so the run HUD is redundant there, and dropping it frees
@@ -1583,11 +1676,13 @@ export function createRenderer(canvas) {
       drawScore(view, pal);
       drawTierBanner(view, pal);
     }
+    view.boostTipDrawn = boostTipDrawn;
     if (view.mode === 'title') drawTitle(view, pal);
+    if (view.mode === 'howto') drawHowTo(view, pal);
     if (view.mode === 'paused') drawPaused(view, pal);
     if (view.mode === 'gameOver') drawGameOver(pal, view);
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, addPuff, addPickupPop };
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, hitTestHelp, addPuff, addPickupPop };
 }

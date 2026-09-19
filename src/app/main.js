@@ -85,6 +85,18 @@ let coffeeTipUntilMs = 0;
    has actually been up long enough to read. */
 let coffeeTipShownMs = 0;
 const COFFEE_TIP_READ_MS = 1200;
+/*
+  The control lessons, spent the same way: on reading time rather than
+  on the moment they were triggered. Steering is taught at the start of
+  a run until the player steers; boost is taught on the prompt that
+  already fires when a speeder is bearing down, which is the moment the
+  move is worth making.
+*/
+let steerTipDone = loadSetting('cc.steertip.v1', '0') === '1';
+let boostTipDone = loadSetting('cc.boosttip.v1', '0') === '1';
+let steerTipShownMs = 0;
+let boostTipShownMs = 0;
+let runStartedMs = 0;
 let hapticsOn = loadSetting('cc.haptics.v1', '1') === '1';
 audio.setMuted(!soundOn);
 haptics.setEnabled(hapticsOn);
@@ -197,6 +209,7 @@ function startRun() {
   pending = [];
   newBest = false;
   newEntryIndex = -1;
+  runStartedMs = performance.now();
   prevSnap = currSnap = snapshot();
   mode = 'playing';
   audio.startMusic();
@@ -279,22 +292,43 @@ function uiSound(name) {
 
 function menuIdAt(clientX, clientY) {
   if (initials.isOpen()) return null;
-  if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver') return null;
+  if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver' && mode !== 'howto') return null;
   const p = renderer.screenToLogical(clientX, clientY);
   return renderer.hitTestMenu(mode, p.x, p.y, soundTipVisible() && mode === 'title', haptics.supported);
 }
 
+function helpAt(clientX, clientY) {
+  if (mode !== 'title' || initials.isOpen()) return false;
+  const p = renderer.screenToLogical(clientX, clientY);
+  return renderer.hitTestHelp(p.x, p.y);
+}
+
 function handleMenuPress(clientX, clientY) {
   if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+  if (helpAt(clientX, clientY)) {
+    pressedMenuId = 'help';
+    uiSound('ui_press');
+    return;
+  }
   const id = menuIdAt(clientX, clientY);
   if (!id || id === 'soundtip') return;
   pressedMenuId = id;
   uiSound('ui_press');
 }
 
+function openHowTo() {
+  mode = 'howto';
+  menuEnteredAt = performance.now();
+}
+
 function handleMenuTap(clientX, clientY) {
   if (initials.isOpen()) return;
   if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+  if (helpAt(clientX, clientY)) {
+    uiSound('ui_confirm');
+    openHowTo();
+    return;
+  }
   const p = renderer.screenToLogical(clientX, clientY);
   const id = renderer.hitTestMenu(mode, p.x, p.y, soundTipVisible() && mode === 'title', haptics.supported);
   if (!id) return;
@@ -305,7 +339,8 @@ function handleMenuTap(clientX, clientY) {
   }
   if (id === 'primary') {
     uiSound('ui_confirm');
-    if (mode === 'paused') resumeRun();
+    if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
+    else if (mode === 'paused') resumeRun();
     else startRun();
   } else if (id === 'restart') {
     uiSound('ui_confirm');
@@ -362,6 +397,7 @@ function onIntent(intent) {
   if (intent.type === 'pause') {
     if (mode === 'playing') pauseRun();
     else if (mode === 'paused') resumeRun();
+    else if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
     return;
   }
   if (intent.type === 'pressEnd') {
@@ -375,7 +411,8 @@ function onIntent(intent) {
     if (intent.type === 'confirm' || intent.type === 'restart') {
       if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
       uiSound('ui_confirm');
-      if (intent.type === 'restart' && mode !== 'title') startRun();
+      if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
+      else if (intent.type === 'restart' && mode !== 'title') startRun();
       else if (mode === 'paused') resumeRun();
       else startRun();
       return;
@@ -471,6 +508,12 @@ const loop = createLoop({
           ev === 'heart_pickup' ? 'heart' : (ev === 'nitro_pickup' ? 'nitro' : 'coffee')
         );
       }
+      /* Steering is learned by steering. The lesson goes as soon as
+         the player does it, whether or not they read the words. */
+      if (ev === 'lane_change' && !steerTipDone) {
+        steerTipDone = true;
+        saveSetting('cc.steertip.v1', '1');
+      }
       if (ev === 'coffee_seen' && !coffeeTipDone) {
         coffeeTipUntilMs = performance.now() + TUNING.tips.coffeeShowMs;
       }
@@ -538,6 +581,9 @@ const loop = createLoop({
       view.shakeY = 0;
     }
     view.coffeeTip = !coffeeTipDone && performance.now() < coffeeTipUntilMs;
+    view.steerTip = !steerTipDone && mode === 'playing'
+      && performance.now() - runStartedMs < TUNING.tips.steerShowMs;
+    view.boostTip = !boostTipDone;
     view.playerSpriteKey = world ? world.player.spriteKey : VEHICLES[vehicleId].spriteKey;
     view.high = world ? getHigh(world.vehicleId) : getHigh(vehicleId);
     view.newBest = newBest;
@@ -554,11 +600,29 @@ const loop = createLoop({
 
     /* drawFrame sets coffeeTipDrawn. Only time the player could
        actually have read counts toward spending the lesson. */
+    const tipDt = Math.min(100, shakeNow - (lastTipMs || shakeNow));
     if (view.coffeeTipDrawn && !coffeeTipDone) {
-      coffeeTipShownMs += Math.min(100, shakeNow - (lastTipMs || shakeNow));
+      coffeeTipShownMs += tipDt;
       if (coffeeTipShownMs >= COFFEE_TIP_READ_MS) {
         coffeeTipDone = true;
         saveSetting('cc.coffeetip.v1', '1');
+      }
+    }
+    if (view.steerTipDrawn && !steerTipDone) {
+      steerTipShownMs += tipDt;
+      if (steerTipShownMs >= TUNING.tips.readMs * 2) {
+        /* Twice the reading time: a player who has looked at this
+           twice and still not steered is not going to learn it from a
+           third showing. */
+        steerTipDone = true;
+        saveSetting('cc.steertip.v1', '1');
+      }
+    }
+    if (view.boostTipDrawn && !boostTipDone) {
+      boostTipShownMs += tipDt;
+      if (boostTipShownMs >= TUNING.tips.readMs) {
+        boostTipDone = true;
+        saveSetting('cc.boosttip.v1', '1');
       }
     }
     lastTipMs = shakeNow;
