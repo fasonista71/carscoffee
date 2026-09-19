@@ -677,33 +677,40 @@ export const OBSTACLE_SPRITES = [
 ];
 
 /*
-  The roadside, assets/scenery.png: one strip per place, each thirty
-  pixels wide and six hundred tall, in this order.
+  The roadside, assets/scenery.png: two strips per place, the left
+  verge and the right verge as they were drawn, then the sea. Thirty
+  pixels wide, 544 tall, in this order.
 
-  Strips rather than tiles. The tile squares in the sheet Jason sent
-  are crops out of a larger scene, so their props are cut off at the
-  square's edge and their borders tiled into seams. A verge taken
-  whole has neither problem: nothing is clipped that was not clipped
-  in the art, and there are no joins to show.
+  Nothing is mirrored and nothing is flipped. Each side of the road
+  gets the verge that was drawn for that side, so the shoulder, the
+  light and the lie of the ground all run the way the artist drew
+  them. The one exception is the sea, which is cut from the east verge
+  and mirrored when the coast is on the west, because that is the
+  difference between water on one side and water on the other.
 
-  It repeats by mirroring: every other pass down the strip is drawn
-  upside down, so the end of one always meets the start of the next.
-  That doubles the distance before anything looks familiar and costs
-  nothing but a flip.
-
-  beach_water is the sea verge, kept as its own strip so a stretch of
-  coast can be on the left, the right, both, or neither.
+  Each strip loops on itself: the crop was chosen so its two ends
+  match, and the last few rows cross fade into the first, so the
+  repeat has no seam without turning anything upside down.
 */
 export const SCENERY_STRIPS = [
-  'mountain', 'farmland', 'desert', 'volcanic', 'snow',
-  'forest', 'beach', 'cliffs', 'city', 'beach_water'
+  'mountain_left', 'mountain_right',
+  'farmland_left', 'farmland_right',
+  'desert_left', 'desert_right',
+  'volcanic_left', 'volcanic_right',
+  'snow_left', 'snow_right',
+  'forest_left', 'forest_right',
+  'beach_left', 'beach_right',
+  'cliffs_left', 'cliffs_right',
+  'city_left', 'city_right',
+  'sea'
 ];
 
-export const SCENERY_STRIP_H = 600;
+export const SCENERY_STRIP_H = 544;
 
-/* Which place has a sea verge, and how often a pass down the strip
-   draws it rather than the land one. */
-export const SCENERY_SEA = { beach: 'beach_water' };
+/* Which place has a coast, and how often a pass down the strip is
+   water rather than land. Rolled per side, so a stretch can have the
+   sea to the east, to the west, on both, or on neither. */
+export const SCENERY_SEA_THEMES = ['beach'];
 export const SCENERY_SEA_IN = 3;
 
 export const PLAYER_SPRITES = ['fourbyfour', 'sport_coupe', 'classic'];

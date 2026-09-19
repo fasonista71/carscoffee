@@ -11,7 +11,7 @@
 
 import {
   TUNING, BUILD_TAG, TRAFFIC_VARIANTS, OBSTACLE_SPRITES,
-  SCENERY_STRIP_H, SCENERY_SEA, SCENERY_SEA_IN
+  SCENERY_STRIP_H, SCENERY_SEA_THEMES, SCENERY_SEA_IN
 } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
 import { getSprite, getTrafficSprite, sceneryStrip } from './sprites.js';
@@ -108,48 +108,23 @@ export function createRenderer(canvas) {
   /*
     The roadside.
 
-    It used to be drawn by code: fifteen small functions stacking
-    rectangles into peaks, pines, cows and parasols, in two strips
-    scrolling at different speeds to fake depth. That is replaced by
-    Jason's tile set, which is drawn from above like the cars are:
-    thirty pixel squares, eight per place, tiled down both sides.
+    One strip per side, scrolling down the screen the way the road
+    does, because the car is driving into the picture and everything
+    beside it has to come back past the player.
 
-    One strip per side now rather than two. The tiles are continuous
-    ground rather than props on a background, so a near strip moving
-    faster than a far one would tear the ground in half rather than
-    read as depth. The depth is in the art instead.
+    Each side draws the verge that was drawn for that side. Nothing is
+    mirrored: a flipped verge reads as the same stretch of road twice,
+    and the light in the art stops making sense. The strips loop on
+    themselves instead, cut and cross faded at the build so the repeat
+    has no seam.
 
-    Which tile lands in which slot comes off the same hash the old
-    props used, keyed to the slot's absolute position, so the roadside
-    is stable as it scrolls, repeats no more often than the tile count
-    forces, and is identical at the same distance on every device.
-
-    If the sheet fails to load the sides fall back to the flat ground
-    colour, which is what they were drawn on before. A roadside is not
-    worth a black screen.
+    The sea is the exception, and the only thing that swaps sides. It
+    is cut from the east verge, so putting the coast on the west means
+    mirroring it, which is the difference between water on one side of
+    the road and water on the other.
   */
-  /*
-    The roadside.
-
-    One strip per side, drawn down the screen and mirrored end over
-    end so the joins never show. The strips are cut from the verges of
-    Jason's art, whole, which is why nothing is clipped that was not
-    clipped when it was drawn.
-
-    The left side is the same strip flipped across, so the shoulder
-    faces the road on both sides and the two verges never read as
-    copies of each other.
-
-    Which pass shows the sea is decided per side, so a stretch of
-    coast can be on the left, the right, both, or neither.
-  */
-  function stripFor(theme, pass, side) {
-    const sea = SCENERY_SEA[theme];
-    if (sea && hash32(pass * 2 + side + 7331) % SCENERY_SEA_IN === 0) {
-      const wet = sceneryStrip(sea);
-      if (wet) return wet;
-    }
-    return sceneryStrip(theme);
+  function seaTheme(theme) {
+    return SCENERY_SEA_THEMES.indexOf(theme) >= 0;
   }
 
   function drawScenery(distancePx, tier) {
@@ -158,27 +133,29 @@ export function createRenderer(canvas) {
     bctx.fillStyle = t.c.offroad;
     bctx.fillRect(0, 0, w, H);
     bctx.fillRect(W - w, 0, w, H);
-    if (!sceneryStrip(t.key)) return;
     const sh = SCENERY_STRIP_H;
     const offset = Math.floor(distancePx) % sh;
     const base = Math.floor(distancePx / sh);
     for (let k = -1; k <= Math.ceil(H / sh) + 1; k += 1) {
-      const y = k * sh - offset;
+      const y = k * sh + offset;
       if (y > H || y + sh < 0) continue;
       const pass = base - k;
       for (let side = 0; side < 2; side += 1) {
-        const strip = stripFor(t.key, pass, side);
+        const wet = seaTheme(t.key)
+          && hash32(pass * 2 + side + 7331) % SCENERY_SEA_IN === 0;
+        const strip = sceneryStrip(wet ? 'sea' : t.key + (side === 0 ? '_left' : '_right'));
         if (!strip) continue;
-        /* Every other pass is upside down, which is what makes the
-           repeat seamless: the last row of one is the last row of the
-           next. */
-        const flipY = ((pass % 2) + 2) % 2 === 1;
-        const flipX = side === 0;
-        bctx.save();
-        bctx.translate(side === 0 ? w : W - w, y);
-        bctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-        bctx.drawImage(strip, 0, flipY ? -sh : 0, w, sh);
-        bctx.restore();
+        /* The sea is drawn east of the road in the art, so the west
+           coast is that strip mirrored. Nothing else ever is. */
+        if (wet && side === 0) {
+          bctx.save();
+          bctx.translate(w, y);
+          bctx.scale(-1, 1);
+          bctx.drawImage(strip, 0, 0, w, sh);
+          bctx.restore();
+        } else {
+          bctx.drawImage(strip, side === 0 ? 0 : W - w, y, w, sh);
+        }
       }
     }
   }
