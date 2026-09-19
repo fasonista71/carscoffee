@@ -19,7 +19,10 @@ TIER1-M8.md for what changed and how each one was verified. The detail is kept
 below for the record, each item marked DONE.
 
 Tiers 2, 3 and 4 are open: thirteen undesigned states, ten test-quality items
-and fifteen drift hazards.
+and fifteen drift hazards. Two further changes landed from Jason's own device
+testing and are written up at the end of TIER1-M8.md: menu press states with
+confirmation sounds, and stronger pickup presentation. Swipe down to pause
+closes half of 2.2.
 
 ---
 
@@ -217,11 +220,14 @@ undiscoverable, and the `BOOST!` prompt appears over the car without saying what
 to do about it. A one-time legend in the same callout language already built for
 the coffee tip, under `cc.controls.v1`. Every character needed is in the font.
 
-**2.2 No route back to the title and no visible pause on mobile.** `menuLayout`
-has no Menu or Home item in any mode, so once Start is tapped the title screen
-is unreachable without a reload. Mid-run, pause exists only via Escape or P on a
-keyboard, so the Paused menu's Restart is reachable on desktop only. A pause
-glyph fits in the HUD band beside the mute icon.
+**2.2 No route back to the title.** `menuLayout` has no Menu or Home item in
+any mode, so once Start is tapped the title screen is unreachable without a
+reload.
+
+*The pause half of this is DONE.* A swipe down now pauses, alongside the two
+finger gesture, so the paused menu and its Restart button are reachable on a
+phone. There is still no drawn pause control, so the gesture has the same
+discoverability problem as every other one, which is 2.1's problem.
 
 **2.3 The board has no empty state.** `drawBoard` returns immediately when
 empty, so on a fresh install the bottom 90 logical pixels, 28% of the title
