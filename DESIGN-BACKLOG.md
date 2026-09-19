@@ -13,7 +13,7 @@ Filed 19 September 2026 from Jason's device testing notes.
 
 ---
 
-## D1 Tapping a lane takes you all the way to that lane
+## D1 Tapping a lane takes you all the way to that lane · SHIPPED, with one piece left
 
 > Tapping a lane automatically swipes you to that lane one or two places. If
 > it is two places, it makes a little bit of a screech sound and shows your
@@ -55,6 +55,27 @@ wrong. **Before shipping this, teach the oracle the new intent and rerun the
 **Undecided.** Whether the queued input slot still holds a second tap during a
 two lane tween, and whether a three lane road can even produce a two lane tap
 from every start (it can: lane 0 to lane 2).
+
+**Built on 19 September**, commit `e8dd87f`. A tap commits the whole crossing.
+The sweep is `laneSweepMult` 1.75 of the vehicle's own lane tween, so 298ms at
+the default, it costs nothing, and it emits `lane_sweep` for the screech, the
+rumble and the rubber, which now bridges sideways so the marks draw the arc.
+Five tests in `test/tap.test.js` and an end to end check in
+`tools/browser/controls.mjs` that fails against the build before it.
+
+**Still open, and the reason this item is not closed: the oracle does not know
+about the sweep.** It drives the simulation with `{ type: 'lane', dir }` only
+(`test/fairness.test.js:44`), so 100 seeds of proof cover a car that cannot do
+this. The argument for why fairness is unaffected is in the commit message and
+is sound as far as it goes: the move set grew, the fair gap formula is
+untouched, and the sweep is inside the two tween budget the gap already pays
+for. But an argument is not the oracle, and this project's rule is that the
+oracle is the gate. Teach its planner the two lane move, rerun the seeds, and
+then close this.
+
+The two other things to revisit once it is on device: whether 1.75 is the
+right weight, and whether a sweep should be refused while a slick has steering
+locked (it is today, through the same lock as every other input).
 
 ---
 
