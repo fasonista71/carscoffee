@@ -147,11 +147,13 @@ async function waitForWheel(page, ms = 60000) {
   log(opened, 'a qualifying run opens the initials wheel');
 
   if (opened) {
-    /* Up chevron on the middle column, twice, then Save. A to C. */
-    const up = at2(90, 137);
-    await page.touchscreen.tap(up.x, up.y);
+    /* The lower control on the middle column, twice, then Save: it
+       is the one that advances, A to B to C, and it is below the
+       character so a thumb never covers what it is changing. */
+    const next = at2(90, 178);
+    await page.touchscreen.tap(next.x, next.y);
     await page.waitForTimeout(150);
-    await page.touchscreen.tap(up.x, up.y);
+    await page.touchscreen.tap(next.x, next.y);
     await page.waitForTimeout(150);
     const save = at2(90, 215);
     await page.touchscreen.tap(save.x, save.y);

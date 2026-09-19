@@ -521,8 +521,10 @@ function onIntent(intent) {
       keyboardUsed = true;
       if (intent.type === 'lane') initials.moveCursor(intent.dir);
       else {
-        /* menuMove is -1 for up, and up is the next character here,
-           the same as the chevron a finger would press. */
+        /* menuMove is -1 for the up arrow, and on a keyboard up is
+           the next character: the screen's own controls are laid out
+           for a thumb rather than for a cursor, and a keyboard player
+           has no thumb in the way. */
         initials.step(initials.cursor(), -intent.dir);
         uiSound('ui_toggle_on');
       }

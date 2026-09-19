@@ -437,8 +437,17 @@ export const TUNING = {
       wide so a thumb never lands between two of them.
     */
     initials: {
-      plateY: 114, plateH: 74, colPitchPx: 34, letterScale: 3,
-      letterCy: 156, chevronDy: 19, hitHPx: 18
+      /*
+        chevronDy is the distance from the character to each chevron,
+        and it is a thumb measurement rather than a visual one. At 19
+        the top control sat ten pixels from the glyph, which on a
+        phone means the hand reaching up to it lands across the very
+        character it is changing. The character is the only feedback
+        this screen gives, so covering it makes the control useless
+        at the moment it is used.
+      */
+      plateY: 112, plateH: 78, colPitchPx: 34, letterScale: 3,
+      letterCy: 155, chevronDy: 26, hitHPx: 20
     },
     /* The best score is narrower than the distance beside it: five
        digits at double size is 38px, where the distance carries an M

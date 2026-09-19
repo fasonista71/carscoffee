@@ -1635,10 +1635,17 @@ export function createRenderer(canvas) {
     for (let i = 0; i < 3; i += 1) {
       const cx = initialsColX(i);
       if (Math.abs(lx - cx) > k.colPitchPx / 2) continue;
-      /* Up is the next character, A to B, which is the way an arcade
-         wheel has always gone. */
-      if (ly < k.letterCy - k.hitHPx / 2) return { col: i, dir: 1 };
-      if (ly > k.letterCy + k.hitHPx / 2) return { col: i, dir: -1 };
+      /*
+        The lower control advances the character, A to B, and the
+        upper one walks back. That is the wrong way round as a pair of
+        arrows and the right way round as a pair of buttons: a thumb
+        comes from the bottom of a phone, so the control it uses most
+        belongs below the thing it changes, where the hand is not
+        across it. The chevrons point the way the wheel turns, not the
+        way the list scrolls.
+      */
+      if (ly < k.letterCy - k.hitHPx / 2) return { col: i, dir: -1 };
+      if (ly > k.letterCy + k.hitHPx / 2) return { col: i, dir: 1 };
       return { col: i, dir: 0 };
     }
     return null;
@@ -2098,8 +2105,10 @@ export function createRenderer(canvas) {
         bctx.fillRect(cx - 11, k.letterCy - 12, 22, 1);
         bctx.fillRect(cx - 11, k.letterCy + 11, 22, 1);
       }
-      drawChevron(cx, k.letterCy - k.chevronDy, 'up', pal);
-      drawChevron(cx, k.letterCy + k.chevronDy, 'down', pal);
+      /* Pointing at the character, because each one is a button that
+         moves the wheel toward it rather than a scroll direction. */
+      drawChevron(cx, k.letterCy - k.chevronDy, 'down', pal);
+      drawChevron(cx, k.letterCy + k.chevronDy, 'up', pal);
       drawText(bctx, letters[i], cx, k.letterCy - 7, pal.text, { scale: k.letterScale, align: 'center' });
     }
     drawMenu(view, pal, 'initials');
