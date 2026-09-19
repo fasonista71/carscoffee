@@ -31,7 +31,7 @@ back to this file. Re-read against the code on 19 September:
 | 2.5 the hidden car preview | Done. Cycling a car puts it on a plate, and the chosen car parks on the title screen. |
 | 2.6 the 44pt claim | Done. `hitPadFor` sizes the pad in CSS pixels, so the target holds at any scale. |
 | 2.7 the tier banner's colours | **Open, ASK.** |
-| 2.8 the initials modal as a second design system | **Open**, and superseded by D5 in `DESIGN-BACKLOG.md`: drawing the picker in the canvas removes the modal rather than restyling it. |
+| 2.8 the initials modal as a second design system | Done, by D5: the modal is gone, replaced by a wheel drawn in the canvas. |
 | 2.9 invisible to assistive technology | Done as far as it honestly can be. Role, label and fallback text. No attempt at announcing the road, and the label says so. |
 | 2.10 no reduced motion path | **Open, ASK.** The one item here with real accessibility weight. |
 | 2.11 the unreadable build tag | Done. Plated, in the text colour. |
@@ -39,7 +39,8 @@ back to this file. Re-read against the code on 19 September:
 | 2.13 `textWidth('')` | Done. Returns 0. |
 
 So Tier 2 is three items, two of which are Jason's call: a route back to the
-title, the tier banner, and reduced motion.
+title, the tier banner, and reduced motion. 2.8 closed on 19 September when
+the initials modal was replaced rather than restyled.
 
 Tiers 3 and 4 have also moved: the determinism test runs its full 10,000
 frames (3.1), nitro has its own suite (3.3), and `tools/browser/upgrade.mjs`

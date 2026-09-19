@@ -139,7 +139,7 @@ is before building either.
 
 ---
 
-## D5 Arcade initials entry, inline with the end screen
+## D5 Arcade initials entry, inline with the end screen · DONE
 
 > Use a more traditional scrolling up scrolling down like old video games for
 > the three letter initials. Also that screen should appear in line to the end
@@ -169,9 +169,19 @@ will need rewriting against the canvas, and the harness can only see the
 canvas through pixels, so those assertions get weaker. Say so rather than
 pretending otherwise.
 
-**Undecided.** Whether the picker is tap targets on the chevrons, a vertical
-swipe per column, or both; and whether keyboard up and down drive it on
-desktop, which they should.
+**Built on 19 September.** Tap targets on the chevrons, and the arrow keys on
+a desktop: up and down turn the wheel, left and right change column, Enter
+saves. A vertical swipe per column was left out, because the touch adapter's
+swipe intent does not carry an x coordinate and the chevrons already cover the
+gesture; worth revisiting if it feels stiff on device.
+
+It closed 1.11 and 2.8 with it, as predicted: no text field means none of the
+three iOS failure modes can recur, and a screen drawn in the game's own font
+on the game's own plates is not a second design system.
+
+Still open here: the wheel is A to Z and 0 to 9 with no way to blank a
+character, so a two letter name is padded rather than entered, and there is no
+haptic on a turn.
 
 ---
 
