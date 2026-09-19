@@ -192,8 +192,53 @@ identifiers with no manufacturer trademarks. Using a manufacturer's colours as
 a **reference** is fine; naming a tuning key `porsche_gulf_blue` carries a
 trademark into the source. File them by the colour, not by the marque.
 
-**ASK Jason** for the specific list, since "traditional Land Rover" and "PTS"
-are both large sets and the pick is his eye, not mine.
+**The palettes, from Jason, 19 September.** These are the source lists. Names
+are here so the intent survives; the tuning keys take the colour, never the
+marque, per the caution above.
+
+Land Rover, heritage:
+
+| Name | Hex | Character |
+|---|---|---|
+| Coniston Green | `#3F6048` | The definitive classic Defender green |
+| Arles Blue | `#6694AC` | Muted, slightly grey heritage blue |
+| Alpine White | `#E7E4D8` | Warm utilitarian white |
+| AA Yellow | `#F2BD18` | Bold Camel Trophy adjacent yellow |
+| Portofino Red | `#9E2929` | Traditional solid red |
+| Beluga Black | `#151616` | Deep neutral black |
+| Willow Green | `#899B75` | Soft agricultural green |
+| British Racing Green | `#183E2E` | Dark, sophisticated green |
+
+Porsche, PTS and period colours:
+
+| Name | Hex | Character |
+|---|---|---|
+| Guards Red | `#D01820` | The quintessential red 911 |
+| Grand Prix White | `#F0EFE8` | Warm racing white |
+| Black | `#111214` | Classic solid black |
+| Polar Silver Metallic | `#B9BEC2` | Signature early 1990s silver |
+| Midnight Blue Metallic | `#18283E` | Very dark navy |
+| Speed Yellow | `#F3C300` | Iconic bright 993 yellow |
+| Maritime Blue | `#245AA5` | Saturated early 1990s blue |
+| Riviera Blue | `#169BC4` | Bright turquoise blue |
+| Rubystone Red | `#D12F67` | Famous pink magenta 964 colour |
+| Arena Red Metallic | `#7D2930` | Deep metallic burgundy, strongly 993 |
+| Amazon Green Metallic | `#176661` | Dark blue green |
+| Mint Green | `#79C6A3` | Rare but unmistakably 1990s |
+
+**Two things to work out before applying them.** The game is an 8 bit
+cityscape with a deliberately small, high contrast palette, and several of
+these are subtle, low chroma colours chosen for sheet metal in daylight:
+Willow Green and Polar Silver against grey tarmac at 27 pixels wide may read
+as the road rather than as a car. Expect to need a contrast pass against
+`pal.road` (`#5a5a6e`) and the offroad greens, and expect a few of them to
+work only as the rarer cars rather than as common traffic.
+
+The second is which vehicles are even repaintable. `TRAFFIC_VARIANTS` notes
+that nothing whose colour is information is ever repainted: no blue taxis, no
+green fire trucks. So the candidate set is the ordinary cars, and the first
+job is a survey of which sprites are tinted at draw time versus baked into the
+sheet. That survey has not been done.
 
 ---
 
