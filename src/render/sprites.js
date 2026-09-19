@@ -35,11 +35,12 @@ const shortName = (url) => String(url).split('/').pop();
 const ATLAS_URL = asset('cars.atlas');
 const IMAGE_URL = asset('cars.png');
 
-import { TUNING, TRAFFIC_VARIANTS } from '../game/tuning.js';
+import { TUNING, TRAFFIC_VARIANTS, REPAINTS, PLAYER_REPAINTS } from '../game/tuning.js';
 /* The frame names and the parser live in atlas.js, which is the half
    of this file that touches no pixels, so the node tests can hold the
    same list rather than a copy of it. */
 import { ALIASES, neededFrames, parseAtlas } from './atlas.js';
+import { paintMask, hueMask, repaint } from './paint.js';
 
 const registry = new Map();
 
@@ -92,8 +93,66 @@ export function loadSprites() {
       ctx.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
       registry.set(name, c);
     }
+    applyRepaints();
     buildProcedural();
   });
+}
+
+/*
+  Repaint, after the frames are sliced and before anything is drawn.
+
+  Every sprite this touches keeps its name and its size, so the
+  simulation, the hitboxes, the atlas contract and the tests are all
+  untouched: only the pixels registered under a name change. The
+  artwork on disk is never modified.
+
+  A failure here is cosmetic, so it is caught and dropped rather than
+  taking the boot card down: the game runs in the artist's colours.
+*/
+function pixels(surface) {
+  const ctx = surface.getContext('2d');
+  return ctx.getImageData(0, 0, surface.width, surface.height);
+}
+
+function surfaceFrom(img, data) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.putImageData(data, 0, 0);
+  return c;
+}
+
+function applyRepaints() {
+  try {
+    for (const job of REPAINTS) {
+      const from = registry.get(job.from);
+      const other = registry.get(job.mask);
+      if (!from || !other) continue;
+      const src = pixels(from);
+      const mask = paintMask(src.data, pixels(other).data);
+      paintJobs(from, src, mask, job.jobs);
+    }
+    for (const job of PLAYER_REPAINTS) {
+      const from = registry.get(job.from);
+      if (!from) continue;
+      const src = pixels(from);
+      paintJobs(from, src, hueMask(src.data), job.jobs);
+    }
+  } catch (e) {
+    /* Paint is not worth a black screen. */
+    console.warn('repaint skipped', e);
+  }
+}
+
+function paintJobs(from, src, mask, jobs) {
+  for (const [name, hex] of jobs) {
+    const out = new ImageData(
+      new Uint8ClampedArray(repaint(src.data, mask, hex)), src.width, src.height
+    );
+    registry.set(name, surfaceFrom(from, out));
+  }
 }
 
 /*

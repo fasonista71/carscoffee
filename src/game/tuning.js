@@ -672,6 +672,134 @@ export const OBSTACLE_SPRITES = [
 
 export const PLAYER_SPRITES = ['fourbyfour', 'sport_coupe', 'classic'];
 
+/*
+  Paint.
+
+  The sheet's nine civilian bodies each carry four colours, baked in
+  by the artist. These repaint them in Jason's reference lists: the
+  Porsche colours on the traffic, the Land Rover colours reserved for
+  the 4x4, which is the car he drives.
+
+  How it works is in src/render/paint.js. What matters here: `from` is
+  the frame the paint is taken off, `mask` is a second frame of the
+  same body, and the difference between the two is exactly the paint
+  and nothing else. `jobs` then says which sprite name gets which
+  colour. Those names are the artist's and are now only slots, so
+  sport_white_rose being silver is not a mistake; the colour is the
+  hex beside it, and nothing outside this table and the renderer knows
+  or cares.
+
+  Deleting this table puts the original artwork back, unchanged.
+
+  Names are kept for the record and never travel into a key: the port
+  brief requires neutral vehicle identifiers, and a colour reference
+  is not a trademark while a tuning key named after a marque would be.
+
+  Two colours from the lists are deliberately absent from traffic.
+  Black (#111214) disappears against the road at twenty seven pixels:
+  not a look, a car you cannot see, and this game asks you to see
+  cars. Midnight Blue (#18283E) is nearly as dark and survives only on
+  the pickup, whose pale bed carries it. Judged from a render of all
+  nine bodies in all their colours against the road grey, which is
+  what "exact hex, then judge" earns you.
+*/
+export const REPAINTS = [
+  {
+    from: 'sport_white', mask: 'sport_white_blue',
+    jobs: [
+      ['sport_white', '#D01820'],        /* Guards Red */
+      ['sport_white_blue', '#F0EFE8'],   /* Grand Prix White */
+      ['sport_white_rose', '#245AA5'],   /* Maritime Blue */
+      ['sport_white_green', '#B9BEC2']   /* Polar Silver Metallic */
+    ]
+  },
+  {
+    from: 'muscle', mask: 'muscle_red',
+    jobs: [
+      ['muscle', '#D01820'],             /* Guards Red */
+      ['muscle_red', '#F3C300'],         /* Speed Yellow */
+      ['muscle_blue', '#169BC4'],        /* Riviera Blue */
+      ['muscle_lime', '#7D2930']         /* Arena Red Metallic */
+    ]
+  },
+  {
+    from: 'super_car', mask: 'super_car_green',
+    jobs: [
+      ['super_car', '#169BC4'],          /* Riviera Blue */
+      ['super_car_green', '#F3C300'],    /* Speed Yellow */
+      ['super_car_cyan', '#D01820'],     /* Guards Red */
+      ['super_car_plum', '#F0EFE8']      /* Grand Prix White */
+    ]
+  },
+  {
+    from: 'hot_hatch', mask: 'hot_hatch_amber',
+    jobs: [
+      ['hot_hatch', '#D12F67'],          /* Rubystone Red */
+      ['hot_hatch_amber', '#79C6A3'],    /* Mint Green */
+      ['hot_hatch_teal', '#245AA5'],     /* Maritime Blue */
+      ['hot_hatch_indigo', '#F3C300']    /* Speed Yellow */
+    ]
+  },
+  {
+    from: 'pickup', mask: 'pickup_green',
+    jobs: [
+      ['pickup', '#7D2930'],             /* Arena Red Metallic */
+      ['pickup_green', '#18283E'],       /* Midnight Blue Metallic */
+      ['pickup_blue', '#F0EFE8'],        /* Grand Prix White */
+      ['pickup_amber', '#176661']        /* Amazon Green Metallic */
+    ]
+  },
+  {
+    from: 'van', mask: 'van_blue',
+    jobs: [
+      ['van', '#F0EFE8'],                /* Grand Prix White */
+      ['van_blue', '#B9BEC2'],           /* Polar Silver Metallic */
+      ['van_amber', '#245AA5'],          /* Maritime Blue */
+      ['van_teal', '#79C6A3']            /* Mint Green */
+    ]
+  },
+  {
+    from: 'wagon', mask: 'wagon_cyan',
+    jobs: [
+      ['wagon', '#176661'],              /* Amazon Green Metallic */
+      ['wagon_cyan', '#B9BEC2'],         /* Polar Silver Metallic */
+      ['wagon_orange', '#D01820'],       /* Guards Red */
+      ['wagon_green', '#79C6A3']         /* Mint Green */
+    ]
+  },
+  {
+    from: 'camper', mask: 'camper_blue',
+    jobs: [
+      ['camper', '#F0EFE8'],             /* Grand Prix White */
+      ['camper_blue', '#79C6A3'],        /* Mint Green */
+      ['camper_green', '#F3C300'],       /* Speed Yellow */
+      ['camper_red', '#B9BEC2']          /* Polar Silver Metallic */
+    ]
+  },
+  {
+    from: 'suv', mask: 'suv_blue',
+    jobs: [
+      ['suv', '#B9BEC2'],                /* Polar Silver Metallic */
+      ['suv_blue', '#245AA5'],           /* Maritime Blue */
+      ['suv_green', '#176661'],          /* Amazon Green Metallic */
+      ['suv_amber', '#7D2930']           /* Arena Red Metallic */
+    ]
+  }
+];
+
+/*
+  The player's 4x4, in Coniston Green, the definitive Defender colour.
+
+  It has no second variant, so there is no pair to diff and no free
+  mask. Its paint is a distinct olive against dark trim and black
+  glass, so a narrow hue band finds it cleanly, which is not true of
+  the white or near black cars, and is why this route is used here and
+  nowhere else. Checked against a render before it shipped.
+*/
+export const PLAYER_REPAINTS = [
+  { from: 'fourbyfour', hueMask: true, jobs: [['fourbyfour', '#3F6048']] }
+];
+
 export const TRAFFIC_VARIANTS = [
   /*
     Civilian traffic. pickVariant only ever deals inside this run.
