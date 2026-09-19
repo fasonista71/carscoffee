@@ -1385,6 +1385,9 @@ export function createRenderer(canvas) {
         bctx.fillRect(item.x + item.w + 2, item.y + down - 2, 1, item.h + 4);
       }
       if (item.id === 'soundtip') {
+        /* The hint hangs off the board, and the board is not there
+           while the car is. */
+        if (view.carPreview) continue;
         drawText(bctx, 'NO SOUND. CHECK THE SIDE SWITCH', W / 2, item.y, pal.edgeLine,
           { scale: 1, align: 'center' });
         drawText(bctx, 'TAP HERE TO HIDE', W / 2, item.y + 8, pal.text,
@@ -1450,12 +1453,17 @@ export function createRenderer(canvas) {
     Rumble row closes, and pulled back up when a full board would run
     off the bottom.
   */
-  function boardTopY(mode, rows, hapticsSupported) {
+  function menuBottomY(mode, hapticsSupported) {
     let bottom = 0;
     for (const item of menuLayout(mode, false, hapticsSupported)) {
       if (item.id === 'soundtip') continue;
       bottom = Math.max(bottom, item.y + item.h);
     }
+    return bottom;
+  }
+
+  function boardTopY(mode, rows, hapticsSupported) {
+    const bottom = menuBottomY(mode, hapticsSupported);
     const bandH = 13 + Math.max(1, rows) * 7;
     const latest = H - TUNING.render.boardBottomMarginPx - bandH + 5;
     return Math.min(bottom + TUNING.render.boardGapPx, latest);
@@ -1498,31 +1506,27 @@ export function createRenderer(canvas) {
   }
 
   /*
-    The car you are choosing, held up where you can see it.
+    The car you are choosing, shown where a car belongs: on the road,
+    in the lower third, under everything else on the screen.
 
     The live car sits at playerYPx, which on this screen is behind the
-    option rows and the board: about five pixels of roof were visible,
-    and the only real feedback for cycling was an eleven character name
-    in a 3x5 font.
+    option rows and the board, so about five pixels of roof were
+    visible and the only feedback for cycling was an eleven character
+    name in a 3x5 font. There is no spare room here for a permanent
+    preview: the badge owns the top 130 pixels, the menu the next 120,
+    and the board the rest. So for the length of a cycle the board
+    steps aside, the car comes down to the bottom of the screen where
+    nothing is in its way, and the row you just tapped keeps its own
+    name and value visible above it.
 
-    There is no spare room on this screen for a permanent preview. The
-    badge owns the top 130 pixels, the menu the next 120, and the board
-    the rest, and a 46 pixel car does not fit in any gap between them
-    on both layouts. So cycling puts the car on a card for a beat, and
-    the card goes over the badge, which is the one area that is
-    decoration rather than a control: nothing is covered that anybody
-    could be reaching for.
+    Bottom aligned rather than centred in the gap, because the gap is
+    30 pixels taller on the layout without a Rumble row and the car
+    should not jump between the two.
   */
-  function drawCarPreview(view, pal) {
+  function drawCarPreview(view, pal, bandTopY) {
     const spr = getSprite(view.playerSpriteKey || 'player_coupe');
-    const name = (view.vehicleName || '').toUpperCase();
-    const h = spr.height + 16;
-    const w = Math.max(spr.width + 20, textWidth(name, 1) + 14);
-    const x = Math.round((W - w) / 2);
-    const y = 44;
-    drawPlate(x, y, w, h, pal, pal.outline);
-    bctx.drawImage(spr, Math.round((W - spr.width) / 2), y + 5);
-    drawText(bctx, name, W / 2, y + h - 9, pal.edgeLine, { scale: 1, align: 'center' });
+    const y = Math.max(bandTopY, H - 2 - spr.height);
+    bctx.drawImage(spr, Math.round((W - spr.width) / 2), Math.round(y));
   }
 
   /*
@@ -1585,8 +1589,11 @@ export function createRenderer(canvas) {
     bctx.drawImage(badge, Math.round((W - badge.width) / 2), 16);
     drawMenu(view, pal, 'title');
     const rows = (view.board || []).length;
-    drawBoard(view, pal, boardTopY('title', rows, view.hapticsSupported));
-    if (view.carPreview) drawCarPreview(view, pal);
+    /* One or the other: the board's band is the only clear space on
+       the screen, so the preview borrows it rather than sitting on
+       top of it. */
+    if (view.carPreview) drawCarPreview(view, pal, menuBottomY('title', view.hapticsSupported) + 2);
+    else drawBoard(view, pal, boardTopY('title', rows, view.hapticsSupported));
     /* The build tag is the only version signal this game has, with no
        telemetry behind it, and it was drawn at 1.08:1 on the dimmed
        shoulder: recessive to the point of being unreadable, which is
@@ -1696,7 +1703,9 @@ export function createRenderer(canvas) {
     drawOvertakers(view, pal);
     drawTraffic(view);
     drawOvertakerWarnings(view, pal);
-    drawPlayer(view);
+    /* Two cars on one road would read as traffic. While the preview is
+       up, the car on the road IS the preview. */
+    if (!(view.mode === 'title' && view.carPreview)) drawPlayer(view);
     drawParticles();
     boostTipDrawn = false;
     view.coffeeTipDrawn = drawCoffeeTip(view, pal);
