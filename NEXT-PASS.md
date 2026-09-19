@@ -6,7 +6,7 @@
 |---|---|
 | Uploaded to itch | 19 September 2026, evening |
 | Bundle | `cars-and-coffee-web-M9.zip`, from `_dist/build-M9-20260919-204644/` |
-| Versioned directory | `v46549b7ffe` |
+| Versioned directory | `v0e6727a079` |
 | Commit | `2776527` |
 
 The M8 build it replaced is kept at `_dist/build-M8-20260919-061227/`
@@ -20,16 +20,17 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `1f38110` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-222522/` |
+| Built | 19 September 2026 from commit `a26aa70` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-231258/` |
 | Versioned directory | `ve0d20227ff` |
 
-Two changes sit between the live build and this one. The initials wheel's
+Three changes sit between the live build and this one. The initials wheel's
 controls swapped, so the lower chevron advances the character and a thumb is
-no longer across what it is changing. And the cars are repainted: the nine
-traffic bodies in Porsche colours, the 4x4 in Coniston Green, done as a
-recolour at load rather than as new art, so the sheet is untouched and the
-table in `tuning.js` is the only thing to change or delete.
+no longer across what it is changing. The cars are repainted, the nine traffic
+bodies in Porsche colours and the 4x4 in Coniston Green, as a recolour at load
+rather than new art. And the roadside is Jason's tile art instead of fifteen
+drawing functions: nine places, eight tiles each, water running in stretches,
+and the barn as a double height tile.
 
 So the first thing to check on device is whether the lower control advancing
 reads right; it is a judgement call and it flips in one line.
