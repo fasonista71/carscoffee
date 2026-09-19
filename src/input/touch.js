@@ -81,7 +81,7 @@ export function attachTouch(emit, target) {
 
   function onOverlay(e) {
     return Boolean(e.target && e.target.closest
-      && e.target.closest('#dev-overlay, #initials-entry'));
+      && e.target.closest('#dev-overlay'));
   }
 
   function onTouchStart(e) {

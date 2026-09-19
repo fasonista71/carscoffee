@@ -1,7 +1,14 @@
 /*
   Tier 1 fixes that only exist on the live page, so the node tests
-  cannot reach them: the sound hint's gating, and the initials modal's
-  iOS changes.
+  cannot reach them: the sound hint's gating, and initials entry.
+
+  The initials checks used to read the DOM panel: its user-select, its
+  anchoring, its buttons, the value in its field. There is no panel
+  any more. The picker is three characters drawn in the canvas with a
+  chevron above and below each one, which is what closed 1.11 for
+  good rather than patching around a text field, so these are
+  behavioural now: a qualifying run shows the wheel, the wheel moves,
+  and what it says is what lands on the board.
 */
 import { chromium } from 'playwright';
 import { chromiumOpts } from './launch.mjs';
@@ -57,6 +64,42 @@ async function tapHint(page) {
   return page.evaluate(() => localStorage.getItem('cc.soundtip.v1'));
 }
 
+/*
+  Wait for the initials screen.
+
+  Looking for "some accent coloured pixels" does not work: the road's
+  own edge lines are the same yellow and run the full height of every
+  screen, so that test passes during a live run and the taps that
+  follow go into the road instead. The Save button is 108 logical
+  pixels of solid accent on one row, which nothing else in the game
+  is, so the length of the run is the signal rather than its colour.
+*/
+async function waitForWheel(page, ms = 60000) {
+  try {
+    await page.waitForFunction(() => {
+      const c = document.getElementById('game');
+      const g = c.getContext('2d');
+      const ux = c.width / 180;
+      const uy = c.height / 320;
+      const d = g.getImageData(0, Math.floor(215 * uy), c.width, 1).data;
+      let run = 0;
+      for (let lx = 0; lx < 180; lx += 1) {
+        const i = Math.floor((lx + 0.5) * ux) * 4;
+        if (d[i] > 245 && d[i + 1] > 200 && d[i + 2] < 90) run += 1;
+      }
+      return run > 60;
+    }, null, { timeout: ms });
+    /* Every menu screen ignores input for a beat after it opens, so a
+       frantic last tap cannot press a button the player never saw.
+       The wheel is behind the same gate, and a test that taps on the
+       frame the screen appears is testing the gate. */
+    await page.waitForTimeout(700);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 /* --- control: on a fresh install the hint is live and dismissable --- */
 {
   const { ctx, page } = await boot();
@@ -90,74 +133,51 @@ async function tapHint(page) {
   await ctx.close();
 }
 
-/* --- 1.11 the initials modal --- */
-{
-  const { ctx, page } = await boot();
-  const m = await page.evaluate(() => {
-    const panel = document.getElementById('initials-entry');
-    if (!panel) return { missing: true };
-    const input = panel.querySelector('input');
-    const btns = [...panel.querySelectorAll('button')].map((x) => x.textContent);
-    const ps = getComputedStyle(panel);
-    const is = getComputedStyle(input);
-    return {
-      align: ps.alignItems,
-      overflow: ps.overflowY,
-      userSelect: is.userSelect || is.webkitUserSelect,
-      buttons: btns,
-      ariaLabel: input.getAttribute('aria-label')
-    };
-  });
-  log(m.userSelect === 'text',
-    'the initials field overrides the user-select: none it inherits from body',
-    'user-select=' + m.userSelect);
-  log(m.align === 'flex-start' && m.overflow === 'auto',
-    'the card is top anchored and scrollable, so the keyboard cannot bury Save',
-    JSON.stringify({ align: m.align, overflow: m.overflow }));
-  log(m.buttons.length === 2 && m.buttons.includes('Skip'),
-    'there is a way out besides Save', JSON.stringify(m.buttons));
-
-  log(m.ariaLabel !== null, 'the field is labelled', String(m.ariaLabel));
-  await ctx.close();
-}
-
-/*
-  End to end, through a real qualifying run. The board starts empty so
-  any distance makes the top five, and an idle player crashes in about
-  ten seconds.
-*/
+/* --- 1.11 initials entry, with no keyboard anywhere near it --- */
 {
   const { ctx, page } = await boot();
   const box = await page.locator('#game').boundingBox();
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + (163 / 320) * box.height);
-  let opened = false;
-  try {
-    await page.waitForFunction(() => {
-      const p = document.getElementById('initials-entry');
-      return p && p.style.display === 'flex';
-    }, null, { timeout: 60000 });
-    opened = true;
-  } catch (e) { /* never died */ }
-  log(opened, 'a qualifying run opens the initials panel');
+  const at2 = (lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly / 320) * box.height });
+
+  log(await page.evaluate(() => !document.getElementById('initials-entry')),
+    'there is no DOM panel left to raise a keyboard over the game');
+
+  await page.touchscreen.tap(at2(90, 163).x, at2(90, 163).y);
+  const opened = await waitForWheel(page);
+  log(opened, 'a qualifying run opens the initials wheel');
 
   if (opened) {
-    const prefill = await page.evaluate(() => document.querySelector('#initials-entry input').value);
-    log(prefill === 'AAA',
-      'the field opens pre-filled, so the default is visible rather than substituted in silence',
-      'value=' + JSON.stringify(prefill));
-
-    /* A tap on the scrim, away from the card, is a way out. */
-    await page.mouse.click(8, 8);
-    await page.waitForTimeout(300);
-    const after = await page.evaluate(() => ({
-      display: document.getElementById('initials-entry').style.display,
-      board: localStorage.getItem('cc.board.v1')
-    }));
-    log(after.display === 'none', 'a tap on the scrim closes it', after.display);
-    log(!!after.board && after.board.indexOf('AAA') !== -1,
-      'and the score is kept under the initials that were on screen',
-      String(after.board).slice(0, 80));
+    /* Up chevron on the middle column, twice, then Save. A to C. */
+    const up = at2(90, 137);
+    await page.touchscreen.tap(up.x, up.y);
+    await page.waitForTimeout(150);
+    await page.touchscreen.tap(up.x, up.y);
+    await page.waitForTimeout(150);
+    const save = at2(90, 215);
+    await page.touchscreen.tap(save.x, save.y);
+    await page.waitForTimeout(500);
+    const board = await page.evaluate(() => localStorage.getItem('cc.board.v1'));
+    log(!!board && board.indexOf('"ACA"') !== -1,
+      'the wheel moves, and what it says is what lands on the board',
+      String(board).slice(0, 60));
   }
+  await ctx.close();
+}
+
+/* --- there is still a way out that is not Save --- */
+{
+  const { ctx, page } = await boot();
+  const box = await page.locator('#game').boundingBox();
+  const at2 = (lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly / 320) * box.height });
+  await page.touchscreen.tap(at2(90, 163).x, at2(90, 163).y);
+  await waitForWheel(page);
+  /* Skip, under Save. The run is already scored, so skipping keeps
+     the entry under the letters shown rather than throwing it away. */
+  await page.touchscreen.tap(at2(90, 247).x, at2(90, 247).y);
+  await page.waitForTimeout(600);
+  const board = await page.evaluate(() => localStorage.getItem('cc.board.v1'));
+  log(!!board && board.indexOf('AAA') !== -1,
+    'Skip is a way out and keeps the run on the board', String(board).slice(0, 60));
   await ctx.close();
 }
 

@@ -1546,6 +1546,19 @@ export function createRenderer(canvas) {
     if (mode === 'howto') {
       return [{ id: 'primary', label: 'Back', x: Math.round((W - m.primary.wPx) / 2), y: 210, w: m.primary.wPx, h: m.primary.hPx }];
     }
+    /*
+      Initials entry: Save, and a way out that is not Save. The way
+      out is not decoration. The run is already scored and any new
+      personal best already saved by the time this screen opens, so
+      Skip costs the player nothing and means a wheel that will not
+      cooperate can never trap them on this screen.
+    */
+    if (mode === 'initials') {
+      return [
+        { id: 'primary', label: 'Save', x: Math.round((W - m.primary.wPx) / 2), y: 202, w: m.primary.wPx, h: m.primary.hPx },
+        { id: 'skip', label: 'Skip', x: Math.round((W - m.option.wPx) / 2), y: 236, w: m.option.wPx, h: m.option.hPx }
+      ];
+    }
     let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 114);
     const primaryLabel = mode === 'title' ? 'Start' : (mode === 'paused' ? 'Resume' : 'Go again');
     items.push({ id: 'primary', label: primaryLabel, x: Math.round((W - m.primary.wPx) / 2), y, w: m.primary.wPx, h: m.primary.hPx });
@@ -1608,8 +1621,32 @@ export function createRenderer(canvas) {
     return Math.max(min, Math.ceil(needed));
   }
 
+  /*
+    Which part of the wheel a tap landed on: a column, and whether it
+    was the chevron above, the chevron below, or the character itself.
+    The boxes are a full column pitch wide and reach well past the
+    chevrons, because these are the smallest targets on any screen in
+    the game and a thumb is not a mouse.
+  */
+  function hitTestInitials(lx, ly) {
+    if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
+    const k = TUNING.render.initials;
+    if (ly < k.plateY || ly > k.plateY + k.plateH) return null;
+    for (let i = 0; i < 3; i += 1) {
+      const cx = initialsColX(i);
+      if (Math.abs(lx - cx) > k.colPitchPx / 2) continue;
+      /* Up is the next character, A to B, which is the way an arcade
+         wheel has always gone. */
+      if (ly < k.letterCy - k.hitHPx / 2) return { col: i, dir: 1 };
+      if (ly > k.letterCy + k.hitHPx / 2) return { col: i, dir: -1 };
+      return { col: i, dir: 0 };
+    }
+    return null;
+  }
+
   function hitTestMenu(mode, lx, ly, showSoundTip, hapticsSupported = true) {
-    if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver' && mode !== 'howto') return null;
+    if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver'
+      && mode !== 'howto' && mode !== 'initials') return null;
     if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
     let bestId = null;
     let bestD = Infinity;
@@ -1671,9 +1708,15 @@ export function createRenderer(canvas) {
           bctx.fillRect(item.x + 1, iy + 1, item.w - 2, 1);
         }
         drawText(bctx, item.label, item.x + item.w / 2, iy + Math.round(item.h / 2) - 5, pal.outline, { scale: 2, align: 'center' });
-      } else if (item.id === 'restart') {
-        /* Destructive, so it does not wear the toggle's clothes. */
-        drawPlate(item.x, item.y + down, item.w, item.h, pal, down ? pal.outline : pal.carDark);
+      } else if (item.id === 'restart' || item.id === 'skip') {
+        /* Restart is destructive and wears the warning border for it.
+           Skip is not: it keeps the run on the board under whatever
+           the wheel says, so it gets the ordinary plate and only the
+           centred label in common. */
+        const border = item.id === 'restart'
+          ? (down ? pal.outline : pal.carDark)
+          : (down ? pal.outline : undefined);
+        drawPlate(item.x, item.y + down, item.w, item.h, pal, border);
         drawText(bctx, item.label, item.x + item.w / 2, item.y + down + Math.round(item.h / 2) - 2, pal.text, { scale: 1, align: 'center' });
       } else {
         drawPlate(item.x, item.y + down, item.w, item.h, pal, down ? pal.outline : undefined);
@@ -1849,12 +1892,14 @@ export function createRenderer(canvas) {
     for (let k = -4; k <= 4; k += 1) {
       const d = Math.abs(k) - 4;
       if (dir === 'up') bctx.fillRect(cx + k, cy + d, 1, 5);
+      else if (dir === 'down') bctx.fillRect(cx + k, cy - d - 5, 1, 5);
       else bctx.fillRect(cx - d * (dir === 'left' ? -1 : 1) - 2, cy + k, 5, 1);
     }
     bctx.fillStyle = pal.edgeLine;
     for (let k = -3; k <= 3; k += 1) {
       const d = Math.abs(k) - 3;
       if (dir === 'up') bctx.fillRect(cx + k, cy + d + 1, 1, 3);
+      else if (dir === 'down') bctx.fillRect(cx + k, cy - d - 4, 1, 3);
       else bctx.fillRect(cx - d * (dir === 'left' ? -1 : 1) - 1, cy + k, 3, 1);
     }
   }
@@ -2002,6 +2047,64 @@ export function createRenderer(canvas) {
     }
   }
 
+  /*
+    What happened and how far, on an opaque framed plate. Shared by
+    the game over screen and the initials screen, because they are
+    two steps of the same moment and the second one reading as a
+    different screen was the old modal's whole problem.
+  */
+  function drawResultBlock(view, pal) {
+    drawPlate(14, 34, W - 28, 72, pal, pal.outline);
+    /* one highlight row, the same bevel the plates carry */
+    bctx.fillStyle = pal.road;
+    bctx.fillRect(15, 35, W - 30, 1);
+    const cause = view.deathCause === 'fuel' ? 'Out of coffee' : 'Crashed';
+    drawText(bctx, cause, W / 2, 42, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m', W / 2, 70, pal.text, { scale: 2, align: 'center' });
+    if (view.newBest) {
+      drawText(bctx, 'New best!', W / 2, 96, pal.edgeLine, { scale: 1, align: 'center' });
+    } else {
+      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 96, pal.text, { scale: 1, align: 'center' });
+    }
+  }
+
+  /* Column centres for the initials wheel, left to right. */
+  function initialsColX(i) {
+    return Math.round(W / 2 + (i - 1) * TUNING.render.initials.colPitchPx);
+  }
+
+  /*
+    Three characters, each with a chevron above and below it. The
+    column the keyboard is on gets the same bracket the menu rows use,
+    so a desktop player can see what the arrows are pointing at; on a
+    phone nothing is highlighted until something is touched, because
+    on a phone the finger is the cursor.
+  */
+  function drawInitials(view, pal) {
+    const k = TUNING.render.initials;
+    bctx.fillStyle = pal.dim;
+    bctx.fillRect(0, 0, W, H);
+    drawResultBlock(view, pal);
+    drawPlate(14, k.plateY, W - 28, k.plateH, pal, pal.outline);
+    bctx.fillStyle = pal.road;
+    bctx.fillRect(15, k.plateY + 1, W - 30, 1);
+    drawText(bctx, 'Top five. Your initials', W / 2, k.plateY + 6, pal.edgeLine, { scale: 1, align: 'center' });
+    const letters = (view.initials && view.initials.letters) || ['A', 'A', 'A'];
+    for (let i = 0; i < letters.length; i += 1) {
+      const cx = initialsColX(i);
+      const on = view.initials && view.initials.col === i && view.keyboardUsed;
+      if (on) {
+        bctx.fillStyle = pal.edgeLine;
+        bctx.fillRect(cx - 11, k.letterCy - 12, 22, 1);
+        bctx.fillRect(cx - 11, k.letterCy + 11, 22, 1);
+      }
+      drawChevron(cx, k.letterCy - k.chevronDy, 'up', pal);
+      drawChevron(cx, k.letterCy + k.chevronDy, 'down', pal);
+      drawText(bctx, letters[i], cx, k.letterCy - 7, pal.text, { scale: k.letterScale, align: 'center' });
+    }
+    drawMenu(view, pal, 'initials');
+  }
+
   function drawGameOver(pal, view) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
@@ -2021,18 +2124,7 @@ export function createRenderer(canvas) {
       the bottom, which is now the same size as this block rather than
       a footnote under it. Nothing here got smaller.
     */
-    drawPlate(14, 34, W - 28, 72, pal, pal.outline);
-    /* one highlight row, the same bevel the plates carry */
-    bctx.fillStyle = pal.road;
-    bctx.fillRect(15, 35, W - 30, 1);
-    const cause = view.deathCause === 'fuel' ? 'Out of coffee' : 'Crashed';
-    drawText(bctx, cause, W / 2, 42, pal.carBody, { scale: 2, align: 'center' });
-    drawText(bctx, view.meters + ' m', W / 2, 70, pal.text, { scale: 2, align: 'center' });
-    if (view.newBest) {
-      drawText(bctx, 'New best!', W / 2, 96, pal.edgeLine, { scale: 1, align: 'center' });
-    } else {
-      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 96, pal.text, { scale: 1, align: 'center' });
-    }
+    drawResultBlock(view, pal);
     drawMenu(view, pal, 'gameOver');
     /*
       The board hangs off the last menu row rather than sitting at a
@@ -2102,6 +2194,7 @@ export function createRenderer(canvas) {
     }
     view.boostTipDrawn = boostTipDrawn;
     if (view.mode === 'title') drawTitle(view, pal);
+    if (view.mode === 'initials') drawInitials(view, pal);
     if (view.mode === 'howto') drawHowTo(view, pal);
     if (view.mode === 'paused') drawPaused(view, pal);
     if (view.mode === 'gameOver') drawGameOver(pal, view);
@@ -2117,5 +2210,5 @@ export function createRenderer(canvas) {
       .map((item) => item.id);
   }
 
-  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, hitTestHelp, menuIds, addPuff, addPickupPop };
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, hitTestHelp, hitTestInitials, menuIds, addPuff, addPickupPop };
 }

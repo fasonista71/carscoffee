@@ -151,19 +151,17 @@ export async function running(page, ms = 2000) {
   Put the page back into a live run whatever it is showing, so a script
   testing a gesture is not also testing whether the pilot survived long
   enough to make it. Enter works the primary button in all three menu
-  modes, and a qualifying run parks an initials panel over the canvas
-  first, so that gets skipped out of the way.
+  modes, including Save on the initials screen that a qualifying run
+  shows before the game over screen.
 */
 export async function ensureRunning(page) {
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     if (await mode(page) === 'playing') return true;
-    /* The panel is built once and hidden, so it is always in the
-       document; only a visible one is in the way. */
-    const skip = page.locator('#initials-entry button', { hasText: 'Skip' }).first();
-    if (await skip.isVisible()) {
-      await skip.click({ timeout: 2000 });
-      await page.waitForTimeout(200);
-    }
+    /* Enter works the primary button in every menu mode, including
+       Save on the initials screen, which a qualifying run puts up
+       before the game over screen. It used to take a click on a DOM
+       panel; that panel is gone and the screen is drawn in the canvas
+       now, so there is nothing to find and nothing to click. */
     await page.keyboard.press('Enter');
     await page.waitForTimeout(400);
   }

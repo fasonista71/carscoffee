@@ -430,6 +430,16 @@ export const TUNING = {
        resolves to a lane by its x alone, and a player steering by
        tapping the right hand lane must not pause instead. */
     pauseBtn: { wPx: 18, hPx: 17, hitWPx: 26 },
+    /*
+      The initials wheel. Three columns of one character, changed with
+      the chevron above and below each one. colPitchPx is the distance
+      between column centres, and the hit boxes are the full pitch
+      wide so a thumb never lands between two of them.
+    */
+    initials: {
+      plateY: 114, plateH: 74, colPitchPx: 34, letterScale: 3,
+      letterCy: 156, chevronDy: 19, hitHPx: 18
+    },
     /* The best score is narrower than the distance beside it: five
        digits at double size is 38px, where the distance carries an M
        as well and needs 46. Giving it its own width is what lets both

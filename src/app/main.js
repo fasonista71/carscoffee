@@ -19,7 +19,7 @@ import { attachPointer } from '../input/pointer.js';
 import { createAudio } from '../audio/audio.js';
 import { createLoop } from './loop.js';
 import { createLeaderboard, localStore, cleanName, BOARD_SIZE } from './leaderboard.js';
-import { createInitialsEntry } from './initials.js';
+import { createInitialsPicker } from './initials.js';
 import { createHaptics } from './haptics.js';
 
 const canvas = document.getElementById('game');
@@ -40,14 +40,26 @@ let newBest = false;
 const board = createLeaderboard(localStore('cc.board.v1'));
 let pendingMeters = 0;
 let newEntryIndex = -1;
-const initials = createInitialsEntry((typed) => {
+const initials = createInitialsPicker();
+
+/*
+  Leaving the initials screen, by Save or by Skip, is the same act:
+  the letters on screen are the entry. Skip exists so a wheel that
+  will not cooperate can never trap a player on this screen, not so
+  that skipping throws the run away.
+*/
+function commitInitials() {
+  if (!initials.isOpen()) return;
   const meters = pendingMeters;
-  const name = cleanName(typed);
+  const name = cleanName(initials.name());
   pendingMeters = 0;
+  initials.close();
+  mode = 'gameOver';
+  menuEnteredAt = performance.now();
   board.submit(name, meters, world ? world.vehicleId : vehicleId).then((list) => {
     newEntryIndex = list.findIndex((e) => e.name === name && e.meters === meters);
   });
-});
+}
 
 /* Persisted settings and per vehicle high scores. */
 const UNLOCKED = Object.values(VEHICLES).filter((v) => !v.locked).map((v) => v.id);
@@ -311,8 +323,8 @@ function uiSound(name) {
 }
 
 function menuIdAt(clientX, clientY) {
-  if (initials.isOpen()) return null;
-  if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver' && mode !== 'howto') return null;
+  if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver'
+    && mode !== 'howto' && mode !== 'initials') return null;
   const p = renderer.screenToLogical(clientX, clientY);
   return renderer.hitTestMenu(mode, p.x, p.y, soundTipVisible() && mode === 'title', haptics.supported);
 }
@@ -323,7 +335,6 @@ function menuIdAt(clientX, clientY) {
   screens, where the band is given over to their own content.
 */
 function helpAt(clientX, clientY) {
-  if (initials.isOpen()) return false;
   if (mode !== 'title' && mode !== 'playing') return false;
   const p = renderer.screenToLogical(clientX, clientY);
   return renderer.hitTestHelp(p.x, p.y);
@@ -349,12 +360,15 @@ function handleMenuPress(clientX, clientY) {
   never have to guess which row Enter is about to press.
 */
 let selectedMenuId = null;
+/* A keyboard player gets a cursor; a phone player never sees one. */
+let keyboardUsed = false;
 
 function menuRowIds() {
   return renderer.menuIds(mode, haptics.supported);
 }
 
 function moveMenuSelection(dir) {
+  keyboardUsed = true;
   const ids = menuRowIds();
   if (ids.length === 0) return;
   const at = ids.indexOf(selectedMenuId);
@@ -391,7 +405,6 @@ function closeHowTo() {
 }
 
 function handleMenuTap(clientX, clientY) {
-  if (initials.isOpen()) return;
   if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
   if (helpAt(clientX, clientY)) {
     uiSound('ui_confirm');
@@ -399,6 +412,16 @@ function handleMenuTap(clientX, clientY) {
     return;
   }
   const p = renderer.screenToLogical(clientX, clientY);
+  /* The wheel owns its own band of the initials screen. Save and Skip
+     are below it and go through the ordinary menu path. */
+  if (mode === 'initials') {
+    const spot = renderer.hitTestInitials(p.x, p.y);
+    if (spot) {
+      if (spot.dir === 0) { initials.select(spot.col); uiSound('ui_press'); }
+      else { initials.step(spot.col, spot.dir); uiSound('ui_toggle_on'); }
+      return;
+    }
+  }
   const id = renderer.hitTestMenu(mode, p.x, p.y, soundTipVisible() && mode === 'title', haptics.supported);
   if (!id) return;
   if (id === 'soundtip') {
@@ -412,9 +435,13 @@ function handleMenuTap(clientX, clientY) {
 /* What a row does, whether it was tapped or confirmed from the
    keyboard. */
 function runMenuAction(id) {
-  if (id === 'primary') {
+  if (id === 'skip') {
     uiSound('ui_confirm');
-    if (mode === 'howto') { closeHowTo(); }
+    commitInitials();
+  } else if (id === 'primary') {
+    uiSound('ui_confirm');
+    if (mode === 'initials') { commitInitials(); }
+    else if (mode === 'howto') { closeHowTo(); }
     else if (mode === 'paused') resumeRun();
     else startRun();
   } else if (id === 'restart') {
@@ -483,6 +510,24 @@ function onIntent(intent) {
     /* The keyboard's way in. Enter and Space press the primary
        button, R restarts, and both respect the same cooldown that
        stops a frantic last tap launching a run. */
+    /*
+      On the initials screen the arrows drive the wheel rather than a
+      menu cursor: up and down change the character, left and right
+      change the column. That is the arcade convention and it is what
+      the chevrons on screen are already telling the player.
+    */
+    if (mode === 'initials' && (intent.type === 'menuMove' || intent.type === 'lane')) {
+      if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+      keyboardUsed = true;
+      if (intent.type === 'lane') initials.moveCursor(intent.dir);
+      else {
+        /* menuMove is -1 for up, and up is the next character here,
+           the same as the chevron a finger would press. */
+        initials.step(initials.cursor(), -intent.dir);
+        uiSound('ui_toggle_on');
+      }
+      return;
+    }
     if (intent.type === 'menuMove') {
       if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
       moveMenuSelection(intent.dir);
@@ -498,6 +543,7 @@ function onIntent(intent) {
     }
     if (intent.type === 'confirm' || intent.type === 'restart') {
       if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+      if (mode === 'initials') { uiSound('ui_confirm'); commitInitials(); return; }
       if (intent.type === 'restart' && mode !== 'title') { uiSound('ui_confirm'); startRun(); return; }
       if (selectedMenuId) { activateSelected(); return; }
       uiSound('ui_confirm');
@@ -632,6 +678,10 @@ const loop = createLoop({
       if (board.qualifies(meters)) {
         pendingMeters = meters;
         initials.show(meters);
+        /* A step in the same flow, not a panel over it: the end
+           screen arrives after the initials are in. */
+        mode = 'initials';
+        menuEnteredAt = performance.now();
       }
     }
   },
@@ -705,6 +755,8 @@ const loop = createLoop({
     view.pressedMenuId = pressedMenuId;
     view.selectedMenuId = selectedMenuId && menuRowIds().includes(selectedMenuId)
       ? selectedMenuId : null;
+    view.initials = mode === 'initials' ? initials.state() : null;
+    view.keyboardUsed = keyboardUsed;
     renderer.drawFrame(view);
 
     /* drawFrame sets coffeeTipDrawn. Only time the player could
