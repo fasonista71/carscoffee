@@ -10,9 +10,10 @@
   when their time comes.
 
   The assertion is twofold: the planner must never see zero
-  surviving lanes on the exact budget, and the oracle must never die
-  in the real simulation. 100 seeds at six speed multipliers, spanning
-  the current base speed through what future tiers will reach.
+  surviving lanes on the exact budget, and the oracle must never be
+  hit at all in the real simulation, not merely survive: hearts have to
+  come home untouched. 100 seeds, each climbing through every tier in
+  TUNING.tiers, so the speed regimes are covered by all of them.
 
   Each test file runs in its own process under the node test runner,
   so muting fuel here cannot leak into other files. The oracle tests
@@ -30,8 +31,8 @@ TUNING.hazards.rubble.fuelCost = 0; /* the oracle tests dodging, not fuel */
 const SEED_COUNT = 100;
 /* Tiers arrive every 2000 meters now, so proving every tier means a
    long haul: about 500 seconds of escalating driving per run. Every
-   run climbs through all six tiers, so each tier's regime is covered
-   by all 100 seeds, including the transitions between them. */
+   run climbs through all of TUNING.tiers, so each tier's regime is
+   covered by all 100 seeds, including the transitions between them. */
 const FRAMES = 30000;
 const LOOKAHEAD_SEC = 3.5;
 const PREDICT_DT = 1 / 30;
@@ -234,8 +235,19 @@ test('an oracle player survives the real simulation through every tier for every
       }
       step(world, intents);
       topTier = Math.max(topTier, world.tier);
-      assert.equal(world.status, 'running',
-        `oracle died (${world.deathCause}): seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
+      /*
+        Hearts, not just a pulse. lethalHit only ends a run on the last
+        one, so asserting "still running" would have let the oracle take
+        two unavoidable hits per seed and still call the road fair.
+        Measured across all 100 seeds the real number is zero, so this
+        costs nothing today and catches the first regression that starts
+        spending the oracle's hearts. One branch rather than two asserts
+        because this runs three million times.
+      */
+      if (world.status !== 'running' || world.hearts !== TUNING.lives.start) {
+        assert.fail(`oracle hit (${world.status}, ${world.deathCause}, ${world.hearts} hearts): `
+          + `seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
+      }
     }
     assert.equal(topTier, TUNING.tiers.length - 1,
       `run never reached the top tier: seed ${seed}`);
