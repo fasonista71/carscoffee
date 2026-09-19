@@ -6,8 +6,12 @@ running server, so it would sit there launching browsers forever.
 
 The node tests in `test/` cover the simulation. Nothing covered the
 seams where every real defect in the M8 preflight actually sat:
-storage, touch, the boot path and the audio handshake. These four
-scripts drive the **built bundle** in a real browser and cover them.
+storage, touch, the boot path and the audio handshake. These scripts
+drive the **built bundle** in a real browser and cover them.
+
+`launch.mjs` and `probe.mjs` are not scripts. The first says where
+chromium is, the second answers "what screen am I on" and "is the run
+live" for all of them in one place.
 
 ## Running
 
@@ -23,7 +27,14 @@ node tools/browser/tier1.mjs
 node tools/browser/menu.mjs
 node tools/browser/controls.mjs
 node tools/browser/boot.mjs              # starts its own servers on 8110-8114
+node tools/browser/upgrade.mjs           # builds its own fixtures, serves them on 8451
+SCHEME=legacy node tools/browser/upgrade.mjs   # the control: this one must fail
 ```
+
+`upgrade.mjs` needs neither `BUNDLE` nor the server above. It builds
+its own bundles out of the working tree, and in `legacy` mode out of
+the tree at `de940ff~1`, which is the last commit before the content
+hash.
 
 Needs `npm i playwright` and `npx playwright install chromium webkit`.
 The scripts launch whatever browsers playwright installed, so nothing
@@ -42,6 +53,7 @@ originally written and is why it would not run anywhere else.
 | `touch2.mjs` | a cancelled gesture must not poison the next tap (blocker 3); three fingers no longer opens anything; a forced 250Hz frame rate plays clean (item 9) |
 | `controls.mjs` | the control scheme against genre convention: the HUD pause button pauses while a tap at the same x on the road still steers, a swipe down is reserved rather than pausing, a swipe up still boosts, a deliberate two finger hold is still the backup, and Enter, Space and R can work the menus. Real touch through CDP |
 | `menu.mjs` | the menu press states and the confirmation sounds: holding a button presses it, the press makes a sound on the way down, dragging off releases it without activating, and a toggle is audible. Watches canvas pixels for the press and the Web Audio graph for the sound, because neither leaves a DOM trace. Five of its eight assertions fail against the build before press states |
+| `upgrade.mjs` | the in place update, which is the only way this game ever ships and the one case every other script here cannot see: build A is served, played, and swapped for build B under the same browser profile. Two cases, one changing only source and one changing only an asset. It asserts the updated page boots, plays, is running the new build's code and holding the new build's art, and that nothing the update changed came out of the browser's cache. `SCHEME=legacy` runs both cases against the pre hash layout, where four of them fail, which is the evidence that the passing run means something |
 | `tier1.mjs` | the Tier 1 fixes that only exist on the live page: the sound hint's board and mute gating (1.3, 1.12), the initials modal's iOS changes and pre-fill (1.11, 1.13), the menu overlap band resolving to the nearer row (1.7), and the coffee lesson still retiring (1.2). Nine of its thirteen assertions fail against the pre-Tier-1 build, so it is real cover rather than a description |
 
 ## What it cannot cover
