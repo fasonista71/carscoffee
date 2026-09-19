@@ -573,7 +573,13 @@ export const TUNING = {
     bodyBottomFrac: { default: 1, tow_truck: 0.87 },
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
-    scenery: { farFactor: 0.55, periodPx: 56 }
+    /*
+      The roadside is tiled art now, one square per side per slot.
+      tilePx has to equal road.roadLeftPx, because the strip is
+      exactly the ground between the screen edge and the tarmac, and
+      the sheet in assets/scenery.png is cut to that size.
+    */
+    scenery: { tilePx: 30 }
   },
 
   /*
@@ -669,6 +675,45 @@ export const OBSTACLE_SPRITES = [
   'obs_drum', 'obs_pallet', 'obs_roadwork', 'obs_spikes', 'obs_log',
   'obs_crate'
 ];
+
+/*
+  The roadside tile sheet, assets/scenery.png: one row per place in
+  this order, eight tiles across, thirty pixels square. The order is
+  the sheet's, so changing it here without recutting the sheet puts
+  cactus in the snow.
+*/
+export const SCENERY_TILE_THEMES = [
+  'mountain', 'farmland', 'desert', 'volcanic', 'snow',
+  'forest', 'beach', 'cliffs', 'city'
+];
+
+export const SCENERY_TILES_PER_THEME = 8;
+
+/*
+  Which tiles in a row are water. Water has to run in stretches rather
+  than be dealt slot by slot, or the coast turns into a chequerboard,
+  and each side of the road decides for itself, so a run can have sea
+  on one side, both, or neither. Only the beach has any.
+*/
+export const SCENERY_WATER = { beach: [4, 5, 6, 7] };
+
+/* How many slots a stretch of coast or inland holds before the roll
+   is taken again, and how often the roll says water. */
+export const SCENERY_RUN_SLOTS = 7;
+export const SCENERY_WATER_IN = 3;
+
+/*
+  Tiles two slots tall, in the band under the main grid, one column
+  each. A barn does not fit in thirty pixels: the sheet's own barn is
+  cut off by the width of its lane, so it is re-cut whole from the
+  strip art and given the room it needs. Keyed by place, with the
+  column it sits in.
+*/
+export const SCENERY_TALL = { farmland: 0 };
+
+/* Roughly one slot in this many carries a tall tile, where a place
+   has one. Low enough that a barn is an event rather than a fence. */
+export const SCENERY_TALL_EVERY = 9;
 
 export const PLAYER_SPRITES = ['fourbyfour', 'sport_coupe', 'classic'];
 

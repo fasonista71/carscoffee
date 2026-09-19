@@ -35,7 +35,10 @@ const shortName = (url) => String(url).split('/').pop();
 const ATLAS_URL = asset('cars.atlas');
 const IMAGE_URL = asset('cars.png');
 
-import { TUNING, TRAFFIC_VARIANTS, REPAINTS, PLAYER_REPAINTS } from '../game/tuning.js';
+import {
+  TUNING, TRAFFIC_VARIANTS, REPAINTS, PLAYER_REPAINTS,
+  SCENERY_TILE_THEMES, SCENERY_TILES_PER_THEME, SCENERY_TALL
+} from '../game/tuning.js';
 /* The frame names and the parser live in atlas.js, which is the half
    of this file that touches no pixels, so the node tests can hold the
    same list rather than a copy of it. */
@@ -46,6 +49,7 @@ const registry = new Map();
 
 const COFFEE_URL = asset('coffee.png');
 const BADGE_URL = asset('badge.png');
+const SCENERY_URL = asset('scenery.png');
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -73,6 +77,15 @@ export function loadSprites() {
   });
   const badgeReady = loadImage(BADGE_URL).then((img) => {
     registry.set('ui_badge', toSurface(img));
+  });
+  /*
+    The roadside. Deliberately not in the Promise.all below: the game
+    is entirely playable with flat green verges, so a missing or
+    corrupt scenery sheet costs the scenery and nothing else, where
+    joining the boot gate would cost the whole game.
+  */
+  loadImage(SCENERY_URL).then(sliceScenery).catch((e) => {
+    console.warn('roadside tiles unavailable', e);
   });
   const atlasReady = fetch(ATLAS_URL).then((r) => {
     if (!r.ok) throw new Error('Could not load ' + shortName(ATLAS_URL));
@@ -153,6 +166,53 @@ function paintJobs(from, src, mask, jobs) {
     );
     registry.set(name, surfaceFrom(from, out));
   }
+}
+
+/*
+  The roadside sheet: one row per place, eight tiles across, each one
+  the width of the verge. Sliced into its own map rather than the
+  sprite registry, because nothing asks for a tile by name; the
+  renderer asks for a place and gets its set.
+*/
+const sceneryByTheme = new Map();
+const sceneryTallByTheme = new Map();
+
+function cutTile(img, sx, sy, w, h) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+  return c;
+}
+
+function sliceScenery(img) {
+  const px = TUNING.render.scenery.tilePx;
+  for (let row = 0; row < SCENERY_TILE_THEMES.length; row += 1) {
+    const set = [];
+    for (let col = 0; col < SCENERY_TILES_PER_THEME; col += 1) {
+      set.push(cutTile(img, col * px, row * px, px, px));
+    }
+    sceneryByTheme.set(SCENERY_TILE_THEMES[row], set);
+  }
+  /* The tall band sits under the grid, one column per place that has
+     something too big for a single slot. */
+  const tallY = SCENERY_TILE_THEMES.length * px;
+  for (const theme of Object.keys(SCENERY_TALL)) {
+    const col = SCENERY_TALL[theme];
+    sceneryTallByTheme.set(theme, cutTile(img, col * px, tallY, px, px * 2));
+  }
+}
+
+/* Empty until the sheet lands, and empty forever if it never does,
+   which the renderer treats as "draw the flat verge". */
+export function sceneryTiles(theme) {
+  return sceneryByTheme.get(theme) || [];
+}
+
+export function sceneryTallTile(theme) {
+  return sceneryTallByTheme.get(theme) || null;
 }
 
 /*

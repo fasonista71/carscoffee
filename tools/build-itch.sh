@@ -55,7 +55,7 @@ OUT="$BUILD/cars-and-coffee-web"
 # The cache key: a hash of exactly what goes into the bundle, in a
 # stable order, so the same input always yields the same name.
 HASH="$( { find src -name '*.js' ! -path 'src/app/devOverlay.js' -print0 | sort -z | xargs -0 cat
-           for f in cars.atlas cars.png coffee.png badge.png; do cat "assets/$f"; done
+           for f in cars.atlas cars.png coffee.png badge.png scenery.png; do cat "assets/$f"; done
            cat index.html; } | (md5sum 2>/dev/null || md5) | cut -c1-10 )"
 VERDIR="v$HASH"
 ZIP="$BUILD/cars-and-coffee-web-$TAG.zip"
@@ -75,7 +75,7 @@ done < <(cd src && find . -name '*.js' | sort)
 
 # Assets the loader actually asks for, named explicitly so a stray
 # file in assets/ never rides along.
-for f in cars.atlas cars.png coffee.png badge.png CARS_CREDITS.txt; do
+for f in cars.atlas cars.png coffee.png badge.png scenery.png CARS_CREDITS.txt; do
   cp "assets/$f" "$OUT/$VERDIR/assets/$f"
 done
 

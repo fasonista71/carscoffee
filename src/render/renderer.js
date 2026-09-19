@@ -9,9 +9,12 @@
   canvas upscaling has gaps. The CSS property stays on as a backstop.
 */
 
-import { TUNING, BUILD_TAG, TRAFFIC_VARIANTS, OBSTACLE_SPRITES } from '../game/tuning.js';
+import {
+  TUNING, BUILD_TAG, TRAFFIC_VARIANTS, OBSTACLE_SPRITES,
+  SCENERY_WATER, SCENERY_RUN_SLOTS, SCENERY_WATER_IN, SCENERY_TALL, SCENERY_TALL_EVERY
+} from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
-import { getSprite, getTrafficSprite } from './sprites.js';
+import { getSprite, getTrafficSprite, sceneryTiles, sceneryTallTile } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 
 export function createRenderer(canvas) {
@@ -102,407 +105,90 @@ export function createRenderer(canvas) {
     each item is nudged off its slot line. Both come from the item's own
     hash, so a given stretch of road always looks the same on replay.
   */
-  function bandItems(x0, bandW, factor, salt, distancePx, itemFn, density) {
-    const period = TUNING.render.scenery.periodPx;
-    const scroll = distancePx * factor;
-    const offset = scroll % period;
-    const base = Math.floor(scroll / period);
-    const fill = density === undefined ? 100 : density;
-    /* two slots of margin, because jitter can pull an item on screen
-       from a slot that would otherwise be past the edge */
-    for (let k = -2; k <= Math.ceil(H / period) + 2; k += 1) {
-      const h = hash32(base - k + salt * 7919);
-      if (h % 100 >= fill) continue;
-      const jitter = Math.round((((h >>> 9) % period) - period / 2) * 0.45);
-      itemFn(x0, bandW, Math.round(k * period + offset - period + jitter), h);
+  /*
+    The roadside.
+
+    It used to be drawn by code: fifteen small functions stacking
+    rectangles into peaks, pines, cows and parasols, in two strips
+    scrolling at different speeds to fake depth. That is replaced by
+    Jason's tile set, which is drawn from above like the cars are:
+    thirty pixel squares, eight per place, tiled down both sides.
+
+    One strip per side now rather than two. The tiles are continuous
+    ground rather than props on a background, so a near strip moving
+    faster than a far one would tear the ground in half rather than
+    read as depth. The depth is in the art instead.
+
+    Which tile lands in which slot comes off the same hash the old
+    props used, keyed to the slot's absolute position, so the roadside
+    is stable as it scrolls, repeats no more often than the tile count
+    forces, and is identical at the same distance on every device.
+
+    If the sheet fails to load the sides fall back to the flat ground
+    colour, which is what they were drawn on before. A roadside is not
+    worth a black screen.
+  */
+  /*
+    Which tiles a slot may use. Water runs in stretches rather than
+    being dealt slot by slot, because a coast that alternates with the
+    inland every thirty pixels is not a coast. Each side of the road
+    rolls for itself, so a stretch can have sea on the left, on the
+    right, on both, or on neither, and the road can run along a beach
+    with a field on the other side.
+  */
+  function sceneryChoices(theme, tiles, slot, side) {
+    const water = SCENERY_WATER[theme];
+    if (!water || water.length === 0) return null;
+    const run = Math.floor(slot / SCENERY_RUN_SLOTS);
+    const roll = hash32(run * 2 + side + 7331);
+    const wet = roll % SCENERY_WATER_IN === 0;
+    const out = [];
+    for (let i = 0; i < tiles.length; i += 1) {
+      if (water.indexOf(i) >= 0 === wet) out.push(i);
     }
+    return out.length === 0 ? null : out;
   }
 
-  function itemPeak(c) {
-    return (x0, bw, y, h) => {
-      const ph = 22 + (h % 16);
-      const cx = x0 + Math.floor(bw / 2);
-      for (let r = 0; r < ph; r += 1) {
-        const half = Math.max(1, Math.round((r / ph) * (bw - 2) / 2));
-        bctx.fillStyle = (h & 2) ? c.far : c.farDark;
-        bctx.fillRect(cx - half, y + r, half * 2, 1);
-        if (r < 5) {
-          bctx.fillStyle = c.farAccent;
-          bctx.fillRect(cx - Math.max(1, half - 1), y + r, Math.max(1, half), 1);
-        }
-      }
-    };
+  /* A tall tile hangs down over the slot below it, so that slot draws
+     nothing of its own. */
+  function tallAnchor(theme, slot, side) {
+    /* The column index can be zero, which is a perfectly good column
+       and a falsy value, so this asks whether the place has an entry
+       rather than whether its entry is truthy. */
+    if (SCENERY_TALL[theme] === undefined) return false;
+    const water = SCENERY_WATER[theme];
+    if (water && water.length > 0) return false;
+    return hash32(slot * 2 + side + 20011) % SCENERY_TALL_EVERY === 0;
   }
-
-  function itemMesa(c) {
-    return (x0, bw, y, h) => {
-      const mh = 16 + (h % 14);
-      const mw = bw - 3;
-      bctx.fillStyle = c.farDark;
-      bctx.fillRect(x0 + 1, y, mw, mh);
-      bctx.fillStyle = c.far;
-      bctx.fillRect(x0 + 1, y, mw, 4);
-      bctx.fillStyle = c.farAccent;
-      bctx.fillRect(x0 + 1, y, mw, 1);
-    };
-  }
-
-  /*
-    Ordinary city blocks: a rectangle, a dark outline and a regular
-    grid of windows, with height, width and position off the item hash
-    so no two in a row match. Roughly every ninth one is a tower, which
-    is taller, narrower and carries an antenna with a red beacon.
-  */
-  function itemBuilding(c) {
-    const ink = TUNING.palette.city.outline;
-    const lit = TUNING.palette.city.edgeLine;
-    return (x0, bw, y, h) => {
-      const tower = (h >>> 19) % 9 === 0;
-      const bwid = tower ? 6 + ((h >>> 4) % 3) : 8 + ((h >>> 4) % Math.max(1, bw - 9));
-      const bh = tower ? 46 + (h % 16) : 16 + (h % 20);
-      const bx = x0 + 1 + ((h >>> 11) % Math.max(1, bw - bwid - 1));
-
-      const pale = (h & 4) !== 0;
-      bctx.fillStyle = ink;
-      bctx.fillRect(bx - 1, y - 1, bwid + 2, bh + 2);
-      bctx.fillStyle = pale ? c.far : c.farDark;
-      bctx.fillRect(bx, y, bwid, bh);
-
-      /* windows take whichever value the wall is not, or a pale block
-         comes out looking blank at this size */
-      const glass = pale ? ink : c.farAccent;
-      for (let ry = y + 2; ry <= y + bh - 4; ry += 4) {
-        for (let rx = bx + 2; rx <= bx + bwid - 4; rx += 3) {
-          const wh = hash32(rx * 31 + ry * 17 + h);
-          bctx.fillStyle = (wh % 6 === 0) ? lit : glass;
-          bctx.fillRect(rx, ry, 2, 2);
-        }
-      }
-
-      if (tower) {
-        const mx = bx + Math.floor(bwid / 2);
-        bctx.fillStyle = ink;
-        bctx.fillRect(mx, y - 6, 1, 6);
-        bctx.fillStyle = TUNING.palette.city.carBody;
-        bctx.fillRect(mx, y - 7, 1, 1);
-      }
-    };
-  }
-
-  function itemPine(c) {
-    return (x0, bw, y, h) => {
-      const ph = 11 + (h % 4);
-      const cx = x0 + 2 + ((h >>> 5) % Math.max(1, bw - 10)) + 4;
-      for (let r = 0; r < ph; r += 1) {
-        const half = Math.max(1, Math.round((r / ph) * 4));
-        bctx.fillStyle = (r % 3 === 0) ? c.nearDark : c.near;
-        bctx.fillRect(cx - half, y + r, half * 2, 1);
-      }
-      bctx.fillStyle = c.trunk;
-      bctx.fillRect(cx - 1, y + ph, 2, 2);
-    };
-  }
-
-  function itemCactus(c) {
-    return (x0, bw, y, h) => {
-      const cx = x0 + 3 + ((h >>> 5) % Math.max(1, bw - 8));
-      const ch = 10 + (h % 5);
-      bctx.fillStyle = c.near;
-      bctx.fillRect(cx, y, 3, ch);
-      bctx.fillRect(cx - 3, y + 3, 3, 2);
-      bctx.fillRect(cx - 3, y + 1, 2, 4);
-      bctx.fillRect(cx + 3, y + 5, 3, 2);
-      bctx.fillRect(cx + 4, y + 2, 2, 5);
-      bctx.fillStyle = c.nearDark;
-      bctx.fillRect(cx + 1, y, 1, ch);
-    };
-  }
-
-  function itemPalm(c) {
-    return (x0, bw, y, h) => {
-      const cx = x0 + 4 + ((h >>> 5) % Math.max(1, bw - 9));
-      bctx.fillStyle = c.trunk;
-      for (let r = 0; r < 9; r += 1) {
-        bctx.fillRect(cx + Math.round(r / 4), y + 5 + r, 2, 1);
-      }
-      bctx.fillStyle = c.near;
-      bctx.fillRect(cx - 4, y + 3, 4, 2);
-      bctx.fillRect(cx + 2, y + 3, 4, 2);
-      bctx.fillRect(cx - 3, y + 1, 3, 2);
-      bctx.fillRect(cx + 1, y + 1, 3, 2);
-      bctx.fillStyle = c.nearDark;
-      bctx.fillRect(cx - 1, y + 2, 3, 2);
-    };
-  }
-
-  function itemTreeBlob(c) {
-    return (x0, bw, y, h) => {
-      const r = 4 + (h % 3);
-      const cx = x0 + 3 + ((h >>> 5) % Math.max(1, bw - 2 * r - 4)) + r;
-      const cy = y + r;
-      bctx.fillStyle = c.nearDark;
-      bctx.fillRect(cx - r, cy - r + 1, 2 * r, 2 * r - 2);
-      bctx.fillRect(cx - r + 1, cy - r, 2 * r - 2, 2 * r);
-      bctx.fillStyle = c.near;
-      bctx.fillRect(cx - r + 1, cy - r + 2, 2 * r - 2, 2 * r - 4);
-      bctx.fillRect(cx - r + 2, cy - r + 1, 2 * r - 4, 2 * r - 2);
-    };
-  }
-
-  /*
-    Props for the added scenes. Same contract as the originals: take the
-    theme, return a draw function, vary the shape off the per item hash
-    so a band never looks like a repeating stamp.
-  */
-  function itemBarn(c) {
-    return (x0, bw, y, h) => {
-      const kind = h % 3;
-      const scale = kind === 2 ? 0.6 : 1;
-      const w = Math.max(4, Math.round((bw - 7) * scale));
-      const bh = Math.max(5, Math.round((9 + (h % 8)) * scale));
-      const bx = x0 + 1 + ((h >>> 7) % Math.max(1, bw - w - 4));
-      const by = y + 5;
-      bctx.fillStyle = c.far;
-      bctx.fillRect(bx, by, w, bh);
-      bctx.fillStyle = c.farDark;
-      bctx.fillRect(bx - 1, by - 3, w + 2, 3);
-      bctx.fillStyle = c.farAccent;
-      const door = Math.floor(bh / 3);
-      bctx.fillRect(bx + Math.floor(w / 2) - 1, by + door, 2, bh - door);
-      if (kind === 0 && bx + w + 4 < x0 + bw) {
-        bctx.fillStyle = c.trunk;
-        bctx.fillRect(bx + w + 1, by - 2, 3, bh + 2);
-        bctx.fillStyle = c.farAccent;
-        bctx.fillRect(bx + w + 1, by - 3, 3, 1);
-      }
-    };
-  }
-  function itemCow(c) {
-    return (x0, bw, y, h) => {
-      const one = (cx, cy, flip) => {
-        bctx.fillStyle = c.farAccent;
-        bctx.fillRect(cx, cy, 7, 4);
-        bctx.fillRect(flip ? cx - 2 : cx + 7, cy - 1, 2, 3);
-        bctx.fillStyle = c.nearDark;
-        bctx.fillRect(cx + 1, cy, 2, 2);
-        bctx.fillRect(cx + 4, cy + 1, 2, 2);
-        bctx.fillRect(cx + 1, cy + 4, 1, 2);
-        bctx.fillRect(cx + 5, cy + 4, 1, 2);
-      };
-      const cx = x0 + 1 + ((h >>> 5) % Math.max(1, bw - 11));
-      one(cx, y + 3 + (h % 9), (h & 8) !== 0);
-      /* now and then a second one, grazing a little apart */
-      if (h % 5 === 0) one(cx + 1 + (h % 3), y + 17 + (h % 6), (h & 16) !== 0);
-    };
-  }
-  function itemVolcano(c) {
-    return (x0, bw, y, h) => {
-      const ph = 12 + (h % 23);
-      const spread = (bw - 2) * (0.55 + ((h >>> 3) % 6) / 10);
-      const cx = x0 + 2 + ((h >>> 6) % Math.max(1, bw - 4));
-      for (let r = 0; r < ph; r += 1) {
-        const half = Math.max(1, Math.round((r / ph) * spread / 2));
-        bctx.fillStyle = (h & 2) ? c.far : c.farDark;
-        bctx.fillRect(cx - half, y + r, half * 2, 1);
-      }
-      bctx.fillStyle = c.farAccent;
-      bctx.fillRect(cx - 1, y, 3, 2);
-      if (h & 4) bctx.fillRect(cx, y + 2, 1, 2 + (h % 4));
-    };
-  }
-  function itemLavaRock(c) {
-    return (x0, bw, y, h) => {
-      const rx = x0 + 2 + ((h >>> 4) % Math.max(1, bw - 9));
-      const ry = y + 4 + (h % 7);
-      const rw = 4 + (h % 3);
-      bctx.fillStyle = c.near;
-      bctx.fillRect(rx, ry, rw, 3);
-      bctx.fillStyle = c.nearDark;
-      bctx.fillRect(rx, ry + 3, rw, 1);
-      if (h & 4) {
-        bctx.fillStyle = c.trunk;
-        bctx.fillRect(rx + 1, ry + 1, 1, 1);
-      }
-    };
-  }
-  function itemScrub(c) {
-    return (x0, bw, y, h) => {
-      const sx = x0 + 2 + ((h >>> 3) % Math.max(1, bw - 8));
-      const sy = y + 6 + (h % 7);
-      bctx.fillStyle = c.near;
-      bctx.fillRect(sx, sy, 5, 2);
-      bctx.fillRect(sx + 1, sy - 1, 3, 1);
-      bctx.fillStyle = c.nearDark;
-      bctx.fillRect(sx, sy + 2, 5, 1);
-    };
-  }
-
-  /*
-    Some bands want a mix rather than one prop. These wrappers pick per
-    item off the hash and delegate, so the beach gets palms and beach
-    furniture and the snow gets a lift tower now and then without a
-    second density dial.
-  */
-  /*
-    Seen from above, which is the only view this game has, a parasol is
-    a disc in alternating wedges with the pole as one dark pixel in the
-    middle. Drawn as a row table so the silhouette stays round at 9px.
-  */
-  function itemUmbrella(c) {
-    const shades = [TUNING.palette.city.carBody, TUNING.palette.city.carWindow, TUNING.palette.city.edgeLine];
-    const rows = [3, 7, 9, 9, 9, 9, 9, 7, 3];
-    return (x0, bw, y, h) => {
-      const cx = x0 + 2 + ((h >>> 5) % Math.max(1, bw - 10));
-      const cy = y + 2;
-      const canopy = shades[(h >>> 9) % shades.length];
-      for (let r = 0; r < rows.length; r += 1) {
-        const w = rows[r];
-        const rx = cx + Math.floor((9 - w) / 2);
-        /* two quadrants coloured, two white, split on the disc centre */
-        for (let i = 0; i < w; i += 1) {
-          const left = rx + i < cx + 4;
-          const top = r < 4;
-          bctx.fillStyle = (left === top) ? canopy : c.farAccent;
-          bctx.fillRect(rx + i, cy + r, 1, 1);
-        }
-      }
-      bctx.fillStyle = c.trunk;
-      bctx.fillRect(cx + 4, cy + 4, 1, 1);
-    };
-  }
-
-  function itemBeachChair(c) {
-    return (x0, bw, y, h) => {
-      /* a lounger from above: fabric panel, white slats, raised headrest */
-      const draw = (cx, cy, fabric) => {
-        bctx.fillStyle = TUNING.palette.city.outline;
-        bctx.fillRect(cx, cy, 5, 9);
-        bctx.fillStyle = fabric;
-        bctx.fillRect(cx, cy + 1, 5, 7);
-        bctx.fillStyle = c.farAccent;
-        bctx.fillRect(cx + 1, cy + 2, 3, 1);
-        bctx.fillRect(cx + 1, cy + 5, 3, 1);
-        bctx.fillRect(cx + 1, cy, 3, 1);
-      };
-      const cx = x0 + 2 + ((h >>> 6) % Math.max(1, bw - 7));
-      const cy = y + 2;
-      const fabric = (h & 8) ? TUNING.palette.city.carWindow : TUNING.palette.city.carBody;
-      draw(cx, cy, fabric);
-      if (h % 3 === 0) draw(cx + ((h & 16) ? 1 : -1), cy + 12, fabric);
-    };
-  }
-
-  function itemBeachFront(c) {
-    const palm = itemPalm(c);
-    const umbrella = itemUmbrella(c);
-    const chair = itemBeachChair(c);
-    return (x0, bw, y, h) => {
-      const kind = (h >>> 3) % 8;
-      if (kind < 3) palm(x0, bw, y, h);
-      else if (kind < 6) { umbrella(x0, bw, y, h); chair(x0, bw, y + 11, h); }
-      else chair(x0, bw, y, h);
-    };
-  }
-
-  function itemSkiLift(c) {
-    const ink = TUNING.palette.city.outline;
-    return (x0, bw, y, h) => {
-      /* the line runs with the road, so from above the cable is vertical
-         and the tower is the crossbar; chairs ride the cable */
-      /* the cable is a property of the band, not of the slot: fixing cx
-         to the band centre means two lift slots in a row draw one
-         unbroken line instead of two offset stubs */
-      const cx = x0 + Math.floor(bw / 2);
-      const span = TUNING.render.scenery.periodPx;
-      bctx.fillStyle = ink;
-      bctx.fillRect(cx, y - span, 1, span * 2);
-      /* pylon */
-      bctx.fillRect(cx - 4, y + 4, 9, 2);
-      bctx.fillRect(cx - 1, y, 3, 6);
-      for (let i = 0; i < 3; i += 1) {
-        const chy = y - 22 + i * 22 + (h % 7);
-        bctx.fillStyle = ink;
-        bctx.fillRect(cx - 2, chy, 5, 1);
-        bctx.fillStyle = (h >>> i & 1) ? TUNING.palette.city.carBody : TUNING.palette.city.carWindow;
-        bctx.fillRect(cx - 2, chy + 1, 5, 3);
-      }
-    };
-  }
-
-  function itemSnowFront(c) {
-    const pine = itemPine(c);
-    const lift = itemSkiLift(c);
-    return (x0, bw, y, h) => {
-      if (h % 11 === 0) lift(x0, bw, y, h);
-      else pine(x0, bw, y, h);
-    };
-  }
-
-  function itemHelicopter(c) {
-    const ink = TUNING.palette.city.outline;
-    return (x0, bw, y, h) => {
-      const cx = x0 + 2 + ((h >>> 8) % Math.max(1, bw - 11));
-      const cy = y + 6;
-      /* rotor alternates between two spans so it reads as spinning */
-      const spin = Math.floor(worldNow() / 70) % 2;
-      bctx.fillStyle = ink;
-      bctx.fillRect(cx + 1, cy, 6, 3);
-      bctx.fillRect(cx + 6, cy + 1, 3, 1);
-      bctx.fillRect(cx + 8, cy, 1, 3);
-      bctx.fillRect(cx + 3, cy - 2, 1, 2);
-      bctx.fillRect(cx + 2, cy + 3, 1, 1);
-      bctx.fillRect(cx + 5, cy + 3, 1, 1);
-      bctx.fillStyle = TUNING.palette.city.carWindow;
-      bctx.fillRect(cx + 1, cy + 1, 2, 1);
-      bctx.fillStyle = ink;
-      if (spin === 0) bctx.fillRect(cx - 1, cy - 2, 9, 1);
-      else bctx.fillRect(cx + 2, cy - 2, 3, 1);
-      bctx.fillStyle = TUNING.palette.city.carBody;
-      bctx.fillRect(cx + 4, cy + 1, 1, 1);
-    };
-  }
-
-  function itemSnowPeak(c) {
-    const peak = itemPeak(c);
-    const heli = itemHelicopter(c);
-    return (x0, bw, y, h) => {
-      peak(x0, bw, y, h);
-      /* above the apex, so it flies over the range instead of perching */
-      if (h % 9 === 0) heli(x0, bw, y - 12, h);
-    };
-  }
-
-  /* Themes name their props; adding a scene is a data row plus, at
-     most, one new function above. */
-  const FAR_ITEMS = { peak: itemPeak, mesa: itemMesa, building: itemBuilding, barn: itemBarn, volcano: itemVolcano, snowpeak: itemSnowPeak };
-  const NEAR_ITEMS = { pine: itemPine, cactus: itemCactus, palm: itemPalm, treeblob: itemTreeBlob, cow: itemCow, lavarock: itemLavaRock, scrub: itemScrub, beachfront: itemBeachFront, snowfront: itemSnowFront };
 
   function drawScenery(distancePx, tier) {
-    const { key, c } = themeFor(tier);
-    const sc = TUNING.render.scenery;
-    if (c.farItem === 'water') {
-      /* the far band is open water with drifting foam */
-      bctx.fillStyle = c.far;
-      bctx.fillRect(0, 0, 15, H);
-      bctx.fillRect(W - 15, 0, 15, H);
-      bctx.fillStyle = c.farDark;
-      bctx.fillRect(13, 0, 2, H);
-      bctx.fillRect(W - 15, 0, 2, H);
-      const foam = (x0, bw, y, h) => {
-        bctx.fillStyle = c.farAccent;
-        bctx.fillRect(x0 + 2 + (h % 7), y, 4, 1);
-        bctx.fillRect(x0 + 1 + ((h >>> 4) % 7), y + 22, 5, 1);
-      };
-      bandItems(0, 15, sc.farFactor, 1, distancePx, foam);
-      bandItems(W - 15, 15, sc.farFactor, 2, distancePx, foam);
-    } else {
-      const farItem = (FAR_ITEMS[c.farItem] || itemPeak)(c);
-      bandItems(0, 15, sc.farFactor, 1, distancePx, farItem, c.farDensity);
-      bandItems(W - 15, 15, sc.farFactor, 2, distancePx, farItem, c.farDensity);
+    const t = themeFor(tier);
+    const px = TUNING.render.scenery.tilePx;
+    bctx.fillStyle = t.c.offroad;
+    bctx.fillRect(0, 0, px, H);
+    bctx.fillRect(W - px, 0, px, H);
+    const tiles = sceneryTiles(t.key);
+    if (tiles.length === 0) return;
+    const tall = sceneryTallTile(t.key);
+    const offset = Math.floor(distancePx) % px;
+    const base = Math.floor(distancePx / px);
+    for (let k = -2; k <= Math.ceil(H / px) + 1; k += 1) {
+      const y = k * px - offset;
+      const slot = base - k;
+      for (let side = 0; side < 2; side += 1) {
+        const x = side === 0 ? 0 : W - px;
+        if (tall && tallAnchor(t.key, slot, side)) {
+          bctx.drawImage(tall, x, y);
+          continue;
+        }
+        /* Covered by the tall tile in the slot above this one. */
+        if (tall && tallAnchor(t.key, slot + 1, side)) continue;
+        const choices = sceneryChoices(t.key, tiles, slot, side);
+        const h = hash32(slot * 2 + side + 104729);
+        const i = choices ? choices[h % choices.length] : h % tiles.length;
+        bctx.drawImage(tiles[i], x, y);
+      }
     }
-    const nearItem = (NEAR_ITEMS[c.nearItem] || itemPine)(c);
-    bandItems(16, 13, 1, 3, distancePx, nearItem, c.nearDensity);
-    bandItems(W - 29, 13, 1, 4, distancePx, nearItem, c.nearDensity);
   }
 
   /*
