@@ -12,6 +12,24 @@
 `bash tools/build-itch.sh` from a clean tree reproduces that directory name
 exactly, which is how you check the repo and the live build still agree.
 
+## What is built and not yet uploaded
+
+| | |
+|---|---|
+| Built | 19 September 2026 from commit `f084b59` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-190123/` |
+| Versioned directory | `v38d1c77293` |
+
+Two commits sit between the live build and this one: the four device testing
+fixes (corner buttons, the legend, the full board, the sound note) and this
+file plus `DESIGN-BACKLOG.md`. Until Jason uploads it, the table above this one
+is still what a player gets. Move the row up when he does, do not add a third
+table.
+
+The zip's own md5 is not a useful identity. Two builds of the same tree produce
+the same versioned directory name and different zip checksums, because the
+archive carries timestamps. Compare the directory name.
+
 Note on what this upload does and does not prove. It is the transition off the
 old scheme, where every build shipped at `src-M8/` and `assets/`, so a
 returning browser holding those files gets a page pointing at a directory it
