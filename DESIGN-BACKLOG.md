@@ -98,7 +98,7 @@ after at 1x, not zoomed.
 
 ---
 
-## D3 Overhaul of the scenery
+## D3 Overhaul of the scenery · ART IN, TILED
 
 > Overhaul of all of the scenery settings, updated graphics from GPT.
 
@@ -113,7 +113,22 @@ mean new atlas frames and a new drawing path, and `test/atlas.test.js` asserts
 the sheet holds nothing the game does not draw, so new frames must join the
 needed set in `src/render/atlas.js` in the same change.
 
-**Ask Jason** what form the art will arrive in before planning this.
+**Done on 19 September**, commit `657085d`. Jason supplied a top down tile
+sheet, nine places by eight tiles. The verges are tiled with it now, one strip
+per side rather than the old two speed parallax, because tiles are continuous
+ground and two speeds would tear it.
+
+What is still open here:
+
+- The sheet's tile squares only cover ground props. Anything bigger than a
+  thirty pixel square has to be re-cut from the strip art the way the barn
+  was, and given a tall tile. The silo pair, the windmill and the city shop
+  fronts are the obvious candidates.
+- Only the beach has water. If any other place wants it, add the tile indices
+  to `SCENERY_WATER`.
+- The old scenery palette in `TUNING.sceneryThemes` is still the fallback
+  colour under the tiles and the source of the ground colour, so it cannot be
+  deleted, but most of its per item fields are now unused.
 
 ---
 
@@ -327,7 +342,7 @@ Updated 19 September, after the evening's work.
 | D6 vehicle colours | Done. Nine traffic bodies in Porsche colours, the 4x4 in Coniston Green, by runtime recolour rather than new art. | |
 | D7 pulled over runner | Not started. | shoulder or lane, which is a different size of job either way |
 | D8 part two, the mixer drum | Not started. Needs frames and an atlas contract that understands a sequence. | art |
-| D3 scenery overhaul | Not started. | art |
+| D3 scenery overhaul | Art arrived and is in: nine places, eight tiles each, tiled down both verges. Water runs in stretches, the barn is a double height tile. | the tiles the sheet does not cover |
 | D4 online board | Not started. The seam in `leaderboard.js` is a morning; the product is not. | a product decision, and whether it waits for Game Center |
 
 The honest order from here: the oracle pass on D1, because it is the one thing
