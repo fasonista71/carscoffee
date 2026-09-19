@@ -662,34 +662,28 @@ export function createRenderer(canvas) {
     board, so about five pixels of roof were visible.
 
     It wants to be titleCarBottomPx off the bottom edge and below the
-    last row. On the layout with a Rumble row those two cannot both
-    happen, there are 51 pixels under that row and a framed car needs
-    54, so staying on screen wins and the frame tucks a few pixels
-    under the row.
+    last row. On the layout with a Rumble row there is not that much
+    space, so there it sits as high as the row above allows.
   */
   function menuCarY(view) {
     const spr = getSprite(view.playerSpriteKey || 'player_coupe');
-    const half = spr.height / 2 + TUNING.render.titleCarPadPx;
+    const half = spr.height / 2;
     const lowest = H - 2 - half;
-    const wanted = H - TUNING.render.titleCarBottomPx - spr.height / 2;
+    const wanted = H - TUNING.render.titleCarBottomPx - half;
     const under = menuBottomY('title', view.hapticsSupported) + 2 + half;
     return Math.min(Math.max(under, wanted), lowest);
   }
 
   /*
-    The car, parked and lit. Drawn from the title screen rather than
-    with the world, so it sits on top of the dim layer those screens
-    lay over everything: the point of it is the paintwork, and a car
-    behind a 60 percent scrim is a silhouette.
+    The car, parked. No plate behind it: it is a car on a road, not an
+    item in a case. Drawn from the title screen rather than with the
+    world, so it sits on top of the dim layer those screens lay over
+    everything and keeps its paint, which is the whole point of it.
   */
-  function drawParkedCar(view, pal) {
+  function drawParkedCar(view) {
     const spr = getSprite(view.playerSpriteKey || 'player_coupe');
-    const pad = TUNING.render.titleCarPadPx;
     const cy = menuCarY(view);
     lastPlayerY = cy;
-    const w = spr.width + pad * 2;
-    const h = spr.height + pad * 2;
-    drawPlate(Math.round((W - w) / 2), Math.round(cy - h / 2), w, h, pal, pal.outline);
     bctx.drawImage(spr, Math.round((W - spr.width) / 2), Math.round(cy - spr.height / 2));
   }
 
@@ -1611,7 +1605,7 @@ export function createRenderer(canvas) {
       y += 27;
     }
     drawMenu(view, pal, 'howto');
-    drawParkedCar(view, pal);
+    drawParkedCar(view);
   }
 
   function drawTitle(view, pal) {
@@ -1635,7 +1629,7 @@ export function createRenderer(canvas) {
        telemetry behind it, and it was drawn at 1.08:1 on the dimmed
        shoulder: recessive to the point of being unreadable, which is
        no use to a player being asked which build they are on. */
-    drawParkedCar(view, pal);
+    drawParkedCar(view);
     drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.building, { scale: 1, align: 'right' });
     drawHelpButton(view, pal);
   }

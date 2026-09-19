@@ -439,9 +439,6 @@ export const TUNING = {
        the frame tucks under the row rather than running off the
        bottom. */
     titleCarBottomPx: 22,
-    /* The frame around it: the same plate every other thing on these
-       screens wears. */
-    titleCarPadPx: 4,
     /* And the drive up when a run starts, from wherever the car was
        last drawn to the driving position. Short enough that it is a
        start rather than a cutscene, and it happens before the first
