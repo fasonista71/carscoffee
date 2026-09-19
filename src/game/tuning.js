@@ -445,7 +445,16 @@ export const TUNING = {
       the way wheelspin actually goes. trackPx is the distance from the
       car's centre line to each wheel.
     */
-    skid: { trackPx: 7, wPx: 2, lenPx: 2, fadeMs: 800, maxAlpha: 0.85 },
+    /*
+      lenPx is a floor, not the length. A mark is stamped once per
+      rendered frame, and the road moves 3 pixels per frame at the
+      opening speed and nearly 7 under boost in the late tiers, so a
+      fixed 2 pixel stamp drew a dotted line with more gap than rubber
+      in it and got fainter the faster you went, which is backwards.
+      Each mark now spans the ground covered since the last one, up to
+      maxLenPx so a stall or a tab switch cannot lay a long bar.
+    */
+    skid: { trackPx: 7, wPx: 3, lenPx: 3, maxLenPx: 14, fadeMs: 1400, maxAlpha: 1, minStrength: 0.35 },
     /* Where the car waits on the title screen: on the road below the
        last menu row, framed, this far off the bottom edge. It does not
        move while it is there, so choosing a car never makes it jump.
@@ -534,7 +543,7 @@ export const TUNING = {
       hudBand: 'rgba(26, 28, 44, 0.55)',
       /* Rubber on tarmac: darker than the road, lighter than the
          outline, so a mark reads as a mark rather than as a hole. */
-      skidMark: '#33334a',
+      skidMark: '#2a2b40',
       building: '#9aa7c4',
       buildingDark: '#7c88a6',
       tree: '#4e9e3f',

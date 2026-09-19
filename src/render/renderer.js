@@ -652,19 +652,33 @@ export function createRenderer(canvas) {
     fill up with history.
   */
   const skids = [];
+  /* Where the last pair went down, so the next pair can bridge the
+     ground between them rather than leaving a hole in the line. Null
+     means this is the first frame of a burst. */
+  let lastRubberPx = null;
 
   function layRubber(view, cx, rearY) {
     const k = TUNING.render.skid;
-    const strength = Math.max(0.25, Math.min(1, view.boostFrac || 0));
+    const strength = Math.max(k.minStrength, Math.min(1, view.boostFrac || 0));
+    const gap = lastRubberPx === null ? 0 : view.distancePx - lastRubberPx;
+    const len = Math.max(k.lenPx, Math.min(k.maxLenPx, Math.ceil(gap) + 1));
+    lastRubberPx = view.distancePx;
     for (const side of [-1, 1]) {
       skids.push({
         x: Math.round(cx + side * k.trackPx - k.wPx / 2),
         y: Math.round(rearY),
+        len,
         laidAtPx: view.distancePx,
         bornMs: performance.now(),
         strength
       });
     }
+  }
+
+  /* A burst that ended must not bridge to the next one, which could be
+     half a screen later. */
+  function endRubber() {
+    lastRubberPx = null;
   }
 
   function drawSkids(view, pal) {
@@ -681,7 +695,9 @@ export function createRenderer(canvas) {
         continue;
       }
       bctx.globalAlpha = k.maxAlpha * s.strength * (1 - age / k.fadeMs);
-      bctx.fillRect(s.x, Math.round(y), k.wPx, k.lenPx);
+      /* The bar runs from the wheel back down the screen, because the
+         ground it bridges is the ground already passed. */
+      bctx.fillRect(s.x, Math.round(y), k.wPx, s.len);
     }
     bctx.globalAlpha = 1;
   }
@@ -689,6 +705,7 @@ export function createRenderer(canvas) {
   /* A run that ended takes its rubber with it. */
   function clearSkids() {
     skids.length = 0;
+    lastRubberPx = null;
   }
 
   /*
@@ -790,6 +807,7 @@ export function createRenderer(canvas) {
        marks are drawn with the road rather than here, so traffic and
        the car pass over them rather than under. */
     if (view.boosting) layRubber(view, cx, cy + spr.height / 2 - 4);
+    else endRubber();
     /* blinking BOOST! callout when an overtaker is bearing down on
        this lane and a boost is banked, so the escape move is obvious */
     if (view.boostHint && !view.boosting
