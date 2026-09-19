@@ -644,11 +644,67 @@ export function createRenderer(canvas) {
     8 bit read of a spinout. Blink: invulnerability alternates player
     visibility every few frames, the classic forgiveness signal.
   */
+  /* The bottom of the last row on a menu, which is what the car parks
+     under. */
+  function menuBottomY(mode, hapticsSupported) {
+    let bottom = 0;
+    for (const item of menuLayout(mode, false, hapticsSupported)) {
+      if (item.id === 'soundtip') continue;
+      bottom = Math.max(bottom, item.y + item.h);
+    }
+    return bottom;
+  }
+
+  /*
+    Where the car sits on a menu screen: on the road in the lower
+    third, below the last row, clear of everything. It used to sit at
+    the driving position, which on this screen is behind the option
+    rows and the board, so about five pixels of roof were visible.
+  */
+  function menuCarY(view) {
+    const spr = getSprite(view.playerSpriteKey || 'player_coupe');
+    const floor = H - TUNING.render.titleCarBottomPx - spr.height / 2;
+    const under = menuBottomY('title', view.hapticsSupported) + 2 + spr.height / 2;
+    return Math.max(under, floor);
+  }
+
+  /*
+    The drive up. The car waits at the bottom of the title screen and
+    takes the driving position when a run starts, rather than being
+    somewhere else the frame after Start is pressed. It runs from
+    wherever the car was last drawn, so coming back from the paused
+    menu, where it never moved, costs nothing.
+  */
+  let lastPlayerY = TUNING.render.playerYPx;
+  let introFromY = null;
+  let introStartMs = 0;
+
+  function startRunIntro() {
+    introFromY = lastPlayerY;
+    introStartMs = performance.now();
+  }
+
+  function playerY(view) {
+    if (view.mode === 'title' || view.mode === 'howto') return menuCarY(view);
+    if (introFromY !== null) {
+      const t = (performance.now() - introStartMs) / TUNING.render.runIntroMs;
+      if (t >= 1) {
+        introFromY = null;
+      } else {
+        /* ease out, so it arrives rather than stops */
+        const e = 1 - (1 - t) * (1 - t);
+        return introFromY + (TUNING.render.playerYPx - introFromY) * e;
+      }
+    }
+    return TUNING.render.playerYPx;
+  }
+
   function drawPlayer(view) {
     if (view.invulnFrames > 0 && Math.floor(view.invulnFrames / 4) % 2 === 1) return;
     const spr = getSprite(view.playerSpriteKey || 'player_coupe');
     const cx = laneCenterXPx(view.laneFloat);
-    const cy = TUNING.render.playerYPx;
+    const cy = playerY(view);
+    lastPlayerY = cy;
     if (view.spinFrames > 0) {
       const quarter = Math.floor(view.spinFrames / 4) % 4;
       bctx.save();
@@ -985,7 +1041,11 @@ export function createRenderer(canvas) {
     const w = Math.max(textWidth(l1, 1), textWidth(l2, 1)) + 10;
     const h = 15;
     const x = Math.round((W - w) / 2);
-    const y = TUNING.render.playerYPx - 42;
+    /* Hung off where the car actually is, not where it will be: at the
+       start of a run it is still driving up from the title screen, and
+       a callout waiting for it at the driving position reads as a sign
+       rather than as something attached to the car. */
+    const y = Math.round(lastPlayerY) - 42;
     drawPlate(x, y, w, h, pal);
     drawText(bctx, l1, W / 2, y + 2, pal.edgeLine, { scale: 1, align: 'center' });
     drawText(bctx, l2, W / 2, y + 9, pal.text, { scale: 1, align: 'center' });
@@ -1305,14 +1365,10 @@ export function createRenderer(canvas) {
     /* The phone's own ring switch mutes the game and no browser can
        read it, so this is a hint rather than a readout. It sits last
        so its padded hit box can never steal a tap from a real row, and
-       it hangs off the bottom of the board band rather than sitting at
-       a constant y, which is what used to bury it under the board.
-
-       The hint is only ever shown on an empty board, so the band it
-       hangs off is the empty state's. boardTopY asks for the layout
-       with the hint turned off, so this does not recur. */
+       it hangs off the last row rather than sitting at a constant y,
+       which is what used to bury it under the board. */
     if (mode === 'title' && showSoundTip) {
-      items.push({ id: 'soundtip', x: 8, y: boardBottomY(mode, 0, hapticsSupported) + 6, w: W - 16, h: 13 });
+      items.push({ id: 'soundtip', x: 12, y: y + 2, w: W - 24, h: 15 });
     }
     return items;
   }
@@ -1385,12 +1441,13 @@ export function createRenderer(canvas) {
         bctx.fillRect(item.x + item.w + 2, item.y + down - 2, 1, item.h + 4);
       }
       if (item.id === 'soundtip') {
-        /* The hint hangs off the board, and the board is not there
-           while the car is. */
-        if (view.carPreview) continue;
-        drawText(bctx, 'NO SOUND. CHECK THE SIDE SWITCH', W / 2, item.y, pal.edgeLine,
+        /* On a plate, because on a layout with a Rumble row this lands
+           over the parked car's nose and red on a red roof is the
+           least readable thing we have shipped before. */
+        drawPlate(item.x, item.y, item.w, item.h, pal);
+        drawText(bctx, 'NO SOUND. CHECK THE SIDE SWITCH', W / 2, item.y + 1, pal.edgeLine,
           { scale: 1, align: 'center' });
-        drawText(bctx, 'TAP HERE TO HIDE', W / 2, item.y + 8, pal.text,
+        drawText(bctx, 'TAP HERE TO HIDE', W / 2, item.y + 9, pal.text,
           { scale: 1, align: 'center' });
       } else if (item.id === 'primary') {
         const iy = item.y + down;
@@ -1447,33 +1504,6 @@ export function createRenderer(canvas) {
     rather than drawing nothing, and the ring switch hint hangs off
     the bottom of whichever of the two is on screen.
   */
-  /*
-    Where the bottom band starts: under the last menu row rather than
-    at a constant y, so the void under Sound on a layout with no
-    Rumble row closes, and pulled back up when a full board would run
-    off the bottom.
-  */
-  function menuBottomY(mode, hapticsSupported) {
-    let bottom = 0;
-    for (const item of menuLayout(mode, false, hapticsSupported)) {
-      if (item.id === 'soundtip') continue;
-      bottom = Math.max(bottom, item.y + item.h);
-    }
-    return bottom;
-  }
-
-  function boardTopY(mode, rows, hapticsSupported) {
-    const bottom = menuBottomY(mode, hapticsSupported);
-    const bandH = 13 + Math.max(1, rows) * 7;
-    const latest = H - TUNING.render.boardBottomMarginPx - bandH + 5;
-    return Math.min(bottom + TUNING.render.boardGapPx, latest);
-  }
-
-  /* The band's last pixel, so anything below it can be hung off it. */
-  function boardBottomY(mode, rows, hapticsSupported) {
-    return boardTopY(mode, rows, hapticsSupported) - 5 + 13 + Math.max(1, rows) * 7;
-  }
-
   function drawBoard(view, pal, topY) {
     const rows = view.board || [];
     /*
@@ -1503,30 +1533,6 @@ export function createRenderer(canvas) {
       drawText(bctx, (i + 1) + ' ' + rows[i].name, 42, y, color, { scale: 1, align: 'left' });
       drawText(bctx, rows[i].meters + 'M', W - 42, y, color, { scale: 1, align: 'right' });
     }
-  }
-
-  /*
-    The car you are choosing, shown where a car belongs: on the road,
-    in the lower third, under everything else on the screen.
-
-    The live car sits at playerYPx, which on this screen is behind the
-    option rows and the board, so about five pixels of roof were
-    visible and the only feedback for cycling was an eleven character
-    name in a 3x5 font. There is no spare room here for a permanent
-    preview: the badge owns the top 130 pixels, the menu the next 120,
-    and the board the rest. So for the length of a cycle the board
-    steps aside, the car comes down to the bottom of the screen where
-    nothing is in its way, and the row you just tapped keeps its own
-    name and value visible above it.
-
-    Bottom aligned rather than centred in the gap, because the gap is
-    30 pixels taller on the layout without a Rumble row and the car
-    should not jump between the two.
-  */
-  function drawCarPreview(view, pal, bandTopY) {
-    const spr = getSprite(view.playerSpriteKey || 'player_coupe');
-    const y = Math.max(bandTopY, H - 2 - spr.height);
-    bctx.drawImage(spr, Math.round((W - spr.width) / 2), Math.round(y));
   }
 
   /*
@@ -1588,12 +1594,17 @@ export function createRenderer(canvas) {
     const badge = getSprite('ui_badge');
     bctx.drawImage(badge, Math.round((W - badge.width) / 2), 16);
     drawMenu(view, pal, 'title');
-    const rows = (view.board || []).length;
-    /* One or the other: the board's band is the only clear space on
-       the screen, so the preview borrows it rather than sitting on
-       top of it. */
-    if (view.carPreview) drawCarPreview(view, pal, menuBottomY('title', view.hapticsSupported) + 2);
-    else drawBoard(view, pal, boardTopY('title', rows, view.hapticsSupported));
+    /*
+      No board here any more.
+
+      The car parks at the bottom of this screen and does not move,
+      which is what stops choosing one making it jump, and the board's
+      band was the space it parks in. One of the two had to give, and
+      the board is the one that already has somewhere else to be: the
+      game over screen, where a score has just been earned and the top
+      five is the thing being asked about. On the title it was a list
+      of other people's runs in front of the car you were choosing.
+    */
     /* The build tag is the only version signal this game has, with no
        telemetry behind it, and it was drawn at 1.08:1 on the dimmed
        shoulder: recessive to the point of being unreadable, which is
@@ -1689,7 +1700,14 @@ export function createRenderer(canvas) {
     view: { mode, distancePx, laneFloat }
     distancePx and laneFloat are already interpolated by the caller.
   */
+  let prevMode = null;
+
   function drawFrame(view) {
+    if (view.mode !== prevMode) {
+      /* Resuming is not starting: the car did not go anywhere. */
+      if (view.mode === 'playing' && prevMode !== 'paused') startRunIntro();
+      prevMode = view.mode;
+    }
     units = frameUnits();
     const pal = TUNING.palette.city;
     const sx = view.shakeX | 0;
@@ -1703,9 +1721,7 @@ export function createRenderer(canvas) {
     drawOvertakers(view, pal);
     drawTraffic(view);
     drawOvertakerWarnings(view, pal);
-    /* Two cars on one road would read as traffic. While the preview is
-       up, the car on the road IS the preview. */
-    if (!(view.mode === 'title' && view.carPreview)) drawPlayer(view);
+    drawPlayer(view);
     drawParticles();
     boostTipDrawn = false;
     view.coffeeTipDrawn = drawCoffeeTip(view, pal);

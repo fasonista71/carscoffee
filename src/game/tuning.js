@@ -432,6 +432,16 @@ export const TUNING = {
        board, so about five pixels of it were visible. Cycling the car
        now puts it on a plate in the board's place for a beat. */
     carPreviewMs: 1400,
+    /* Where the car waits on the title screen: on the road, below the
+       last menu row, a couple of pixels off the bottom edge. It does
+       not move while it is there, so choosing a car never makes it
+       jump; the board is the thing that steps aside. */
+    titleCarBottomPx: 2,
+    /* And the drive up when a run starts, from wherever the car was
+       last drawn to the driving position. Short enough that it is a
+       start rather than a cutscene, and it happens before the first
+       row can be anywhere near the player. */
+    runIntroMs: 420,
     menu: {
       /* Sized so buttons meet the 44 point minimum touch target on a
          phone at 2x logical scale, plus padded hit testing. */

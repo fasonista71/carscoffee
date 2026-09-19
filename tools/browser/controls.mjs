@@ -154,9 +154,9 @@ const at = (box, lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly
     const unit = c.height / 320;
     /* Centre columns only: the road's own edge lines are the same
        amber, and they run the whole height of the screen. */
-    const y0 = Math.floor(200 * unit);
+    const y0 = Math.floor(195 * unit);
     const x0 = Math.floor(50 * unit);
-    const d = g.getImageData(x0, y0, Math.ceil(80 * unit), Math.ceil(30 * unit)).data;
+    const d = g.getImageData(x0, y0, Math.ceil(80 * unit), Math.ceil(45 * unit)).data;
     let amber = 0;
     for (let i = 0; i < d.length; i += 4) {
       if (d[i] > 245 && d[i + 1] > 200 && d[i + 1] < 235 && d[i + 2] < 90) amber += 1;
@@ -166,6 +166,9 @@ const at = (box, lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly
   const before = await page.evaluate(() => localStorage.getItem('cc.steertip.v1'));
   await page.keyboard.press('Enter');
   await running(page);
+  /* The car drives up from the title screen when a run starts and the
+     callout is hung off the car, so let it arrive before looking. */
+  await page.waitForTimeout(600);
   const shown = await calloutPixels();
   /* Steering is learned by steering: the lesson retires the moment the
      player does it, read or not. */
