@@ -150,11 +150,47 @@ export function createAudio() {
     src.start(t0);
   }
 
+  /*
+    Noise with a pitch in it. Raw white noise is static, and a tyre
+    screech is the resonance of rubber letting go, so this runs the
+    same noise through a narrow bandpass that slides from f0 to f1. A
+    bandpass throws most of the energy away, which is why the level
+    here is several times the one a plain burst needs.
+  */
+  function noiseSqueal(dur, vol, f0, f1, delay = 0) {
+    const t0 = ctx.currentTime + delay;
+    const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i += 1) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 9;
+    band.frequency.setValueAtTime(f0, t0);
+    band.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, t0);
+    /* A chirp, not a fade in: rubber breaks loose in a few
+       milliseconds and then howls down. */
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    src.connect(band).connect(gain).connect(ctx.destination);
+    src.start(t0);
+  }
+
   const SYNTH = {
     coffee_pickup() { blip(660, 0.06, 'square', 0.18); blip(990, 0.09, 'square', 0.18, 0.05); },
     heart_pickup() { blip(523, 0.07, 'square', 0.16); blip(659, 0.07, 'square', 0.16, 0.06); blip(1047, 0.12, 'square', 0.16, 0.12); },
     nitro_pickup() { blip(392, 0.06, 'sawtooth', 0.16); blip(587, 0.06, 'sawtooth', 0.16, 0.05); blip(784, 0.16, 'sawtooth', 0.18, 0.1); },
-    boost_start() { blip(220, 0.25, 'square', 0.16, 0, 880); },
+    /* Tyres rather than thrusters. The squeal is the launch, sliding
+       down as the rubber finds grip; the square underneath is the car
+       actually going, and it is the quieter half now. */
+    boost_start() {
+      noiseSqueal(0.26, 0.85, 2400, 900);
+      blip(220, 0.25, 'square', 0.1, 0.02, 880);
+    },
     boost_end() { blip(660, 0.18, 'square', 0.1, 0, 220); },
     crash() { noiseBurst(0.35, 0.35); blip(110, 0.3, 'square', 0.2, 0, 40); },
     stumble() { blip(440, 0.1, 'square', 0.16, 0, 220); blip(330, 0.1, 'square', 0.16, 0.09, 165); noiseBurst(0.15, 0.15); },

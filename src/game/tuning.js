@@ -432,6 +432,15 @@ export const TUNING = {
        board, so about five pixels of it were visible. Cycling the car
        now puts it on a plate in the board's place for a beat. */
     carPreviewMs: 1400,
+    /*
+      Boost used to grow a pair of flames out of the back of the car,
+      which is a rocket, not a car. It leaves rubber instead: two marks
+      laid under the rear wheels and left on the road behind, darkest
+      at the moment of the launch and thinning as the boost settles,
+      the way wheelspin actually goes. trackPx is the distance from the
+      car's centre line to each wheel.
+    */
+    skid: { trackPx: 7, wPx: 2, lenPx: 2, fadeMs: 800, maxAlpha: 0.85 },
     /* Where the car waits on the title screen: on the road below the
        last menu row, framed, this far off the bottom edge. It does not
        move while it is there, so choosing a car never makes it jump.
@@ -518,6 +527,9 @@ export const TUNING = {
       text: '#f4f4f4',
       dim: 'rgba(26, 28, 44, 0.6)',
       hudBand: 'rgba(26, 28, 44, 0.55)',
+      /* Rubber on tarmac: darker than the road, lighter than the
+         outline, so a mark reads as a mark rather than as a hole. */
+      skidMark: '#33334a',
       building: '#9aa7c4',
       buildingDark: '#7c88a6',
       tree: '#4e9e3f',
@@ -526,9 +538,6 @@ export const TUNING = {
       slickSheen: '#43306b',
       slickArrow: '#c2b1ff',
       hazardLight: '#ffb937',
-      flameOuter: '#ff6b35',
-      flameInner: '#ffb937',
-      flameCore: '#fff3c4',
       wigWagRed: '#ff2a2a',
       wigWagRedDim: '#701414',
       wigWagBlue: '#2a6aff',

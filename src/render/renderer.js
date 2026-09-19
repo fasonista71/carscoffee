@@ -597,8 +597,9 @@ export function createRenderer(canvas) {
     bctx.globalAlpha = 1;
   }
 
-  /* Boost has to feel like boost: dense streaks down the whole road
-     plus flames off the back of the car (drawn in drawPlayer). */
+  /* Boost has to feel like boost: dense streaks down the whole road,
+     plus the rubber the rear wheels leave (laid in drawPlayer, drawn
+     with the road). */
   function drawSpeedLines(view, pal) {
     if (!view.boosting) return;
     bctx.fillStyle = pal.dash;
@@ -637,6 +638,57 @@ export function createRenderer(canvas) {
         bctx.fillRect(x, Math.round(y + offset), TUNING.render.dashWidthPx, TUNING.render.dashLengthPx);
       }
     }
+  }
+
+  /*
+    Skid marks.
+
+    Boost used to grow flames out of the exhaust, which reads as a
+    rocket. This is a car: it lays rubber. Two marks go down under the
+    rear wheels every frame the boost is on, at the world distance the
+    car was at when they were laid, and they scroll away with the road
+    behind it. Darkest at the moment of the launch, because that is
+    where the wheelspin is, and gone within fadeMs so the road does not
+    fill up with history.
+  */
+  const skids = [];
+
+  function layRubber(view, cx, rearY) {
+    const k = TUNING.render.skid;
+    const strength = Math.max(0.25, Math.min(1, view.boostFrac || 0));
+    for (const side of [-1, 1]) {
+      skids.push({
+        x: Math.round(cx + side * k.trackPx - k.wPx / 2),
+        y: Math.round(rearY),
+        laidAtPx: view.distancePx,
+        bornMs: performance.now(),
+        strength
+      });
+    }
+  }
+
+  function drawSkids(view, pal) {
+    if (skids.length === 0) return;
+    const k = TUNING.render.skid;
+    const now = performance.now();
+    bctx.fillStyle = pal.skidMark;
+    for (let i = skids.length - 1; i >= 0; i -= 1) {
+      const s = skids[i];
+      const age = now - s.bornMs;
+      const y = s.y + (view.distancePx - s.laidAtPx);
+      if (age >= k.fadeMs || y > H) {
+        skids.splice(i, 1);
+        continue;
+      }
+      bctx.globalAlpha = k.maxAlpha * s.strength * (1 - age / k.fadeMs);
+      bctx.fillRect(s.x, Math.round(y), k.wPx, k.lenPx);
+    }
+    bctx.globalAlpha = 1;
+  }
+
+  /* A run that ended takes its rubber with it. */
+  function clearSkids() {
+    skids.length = 0;
   }
 
   /*
@@ -734,22 +786,10 @@ export function createRenderer(canvas) {
       return;
     }
     bctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
-    /* exhaust flames while boosting, flickering every few frames */
-    if (view.boosting) {
-      const pal = TUNING.palette.city;
-      const fl = Math.floor(performance.now() / 60) % 2;
-      const bx = Math.round(cx);
-      const by = Math.round(cy + spr.height / 2);
-      bctx.fillStyle = fl ? pal.flameInner : pal.flameOuter;
-      bctx.fillRect(bx - 4, by, 3, 5 + fl);
-      bctx.fillRect(bx + 1, by, 3, 6 - fl);
-      bctx.fillStyle = fl ? pal.flameOuter : pal.flameInner;
-      bctx.fillRect(bx - 3, by + 4, 1, 3);
-      bctx.fillRect(bx + 2, by + 4, 1, 3);
-      bctx.fillStyle = pal.flameCore;
-      bctx.fillRect(bx - 3, by, 1, 2);
-      bctx.fillRect(bx + 2, by, 1, 2);
-    }
+    /* Rubber, laid under the rear wheels while the boost is on. The
+       marks are drawn with the road rather than here, so traffic and
+       the car pass over them rather than under. */
+    if (view.boosting) layRubber(view, cx, cy + spr.height / 2 - 4);
     /* blinking BOOST! callout when an overtaker is bearing down on
        this lane and a boost is banked, so the escape move is obvious */
     if (view.boostHint && !view.boosting
@@ -1204,7 +1244,8 @@ export function createRenderer(canvas) {
     /* No ring around the coffee gauge while boosting. It read as
        measurement scaffolding rather than as state, and the boost pill
        two inches to the right already fills white for the whole
-       duration, with exhaust flames on the car saying the same thing. */
+       duration, with the rubber off the back wheels saying the same
+       thing. */
 
     /* labeled boost meter on the right third of the row */
     const bp = TUNING.render.boostPill;
@@ -1726,7 +1767,10 @@ export function createRenderer(canvas) {
   function drawFrame(view) {
     if (view.mode !== prevMode) {
       /* Resuming is not starting: the car did not go anywhere. */
-      if (view.mode === 'playing' && prevMode !== 'paused') startRunIntro();
+      if (view.mode === 'playing' && prevMode !== 'paused') {
+        startRunIntro();
+        clearSkids();
+      }
       prevMode = view.mode;
     }
     units = frameUnits();
@@ -1737,6 +1781,7 @@ export function createRenderer(canvas) {
     bctx.translate(sx, sy);
     drawRoad(view.distancePx, pal, view.tier);
     drawSpeedLines(view, pal);
+    drawSkids(view, pal);
     drawHazards(view);
     drawPickups(view);
     drawOvertakers(view, pal);
