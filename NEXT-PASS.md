@@ -4,10 +4,14 @@
 
 | | |
 |---|---|
-| Uploaded to itch | 19 September 2026 |
-| Bundle | `cars-and-coffee-web-M8.zip`, md5 `25a6f6522a85cfcc74470531480addad` |
-| Versioned directory | `v2c27f6f0f1` |
-| Commit | `05ccede` (`878afa5` adds this file and changes nothing in the bundle) |
+| Uploaded to itch | 19 September 2026, evening |
+| Bundle | `cars-and-coffee-web-M9.zip`, from `_dist/build-M9-20260919-204644/` |
+| Versioned directory | `v46549b7ffe` |
+| Commit | `2776527` |
+
+The M8 build it replaced is kept at `_dist/build-M8-20260919-061227/`
+(`v2c27f6f0f1`, commit `05ccede`) as the rollback, and can be deleted once M9
+has a day behind it.
 
 `bash tools/build-itch.sh` from a clean tree reproduces that directory name
 exactly, which is how you check the repo and the live build still agree.
@@ -16,37 +20,33 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `2776527` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-204644/` |
-| Versioned directory | `v46549b7ffe` |
+| Built | 19 September 2026 from commit `d6df699` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-220316/` |
+| Versioned directory | `v2fbbf287d7` |
 
-Thirteen commits sit between the live build and this one. The ones a player
-will notice: both corner buttons in the HUD, a legible How to play, a full
-five row board, an honest sound note, boost rubber that is a line rather than
-a dotted one, taxi and tow truck lights, a two lane tap with a screech, a
-readable build tag, initials entry on an arcade wheel instead of a text field,
-and fullscreen on itch no longer taking the sound with it.
+One commit sits between the live build and this one: the initials wheel's
+controls swapped, so the lower chevron advances the character and a thumb is
+no longer across what it is changing.
 
-One thing in that list is not finished and should not be forgotten behind a
-green harness: the fairness oracle does not know about the two lane tap. See
-D1 in `DESIGN-BACKLOG.md`. Until Jason uploads it, the table above this one
-is still what a player gets. Move the row up when he does, do not add a third
-table.
+So the first thing to check on device is whether the lower control advancing
+reads right; it is a judgement call and it flips in one line.
+
+One thing in the live build is not finished and should not be forgotten behind
+a green harness: the fairness oracle does not know about the two lane tap. See
+D1 in `DESIGN-BACKLOG.md`.
+
+Until Jason uploads it, the table above this one is what a player gets. Move
+the row up when he does, and do not add a third table.
 
 The zip's own md5 is not a useful identity. Two builds of the same tree produce
 the same versioned directory name and different zip checksums, because the
 archive carries timestamps. Compare the directory name.
 
-Note on what this upload does and does not prove. It is the transition off the
-old scheme, where every build shipped at `src-M8/` and `assets/`, so a
-returning browser holding those files gets a page pointing at a directory it
-has never seen and fetches everything fresh. If a browser somehow serves the
-old `index.html` from cache without revalidating, its request for
-`src-M8/app/main.js` now 404s and the boot card offers a retry, which reloads
-the page and resolves it. Both paths are clean. But the mechanism itself, a
-content hash keeping changed and unchanged files apart across an update, is
-only really exercised on the **next** upload. That is what the upgrade test in
-Phase 1 is for.
+The content hash has now been exercised for real: M8 was the transition off
+the old fixed `src-M8/` scheme, and the M9 upload on top of it is the first
+update where a returning browser had to pair a cached page with a changed
+directory. It did. `tools/browser/upgrade.mjs` covers the same ground
+headlessly.
 
 Everything still open on Cars & Coffee, in the order it should be taken.
 Read this whole file before starting. Read `CLAUDE.md` first if you have not.
