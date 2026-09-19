@@ -42,10 +42,46 @@ So Tier 2 is three items, two of which are Jason's call: a route back to the
 title, the tier banner, and reduced motion. 2.8 closed on 19 September when
 the initials modal was replaced rather than restyled.
 
-Tiers 3 and 4 have also moved: the determinism test runs its full 10,000
-frames (3.1), nitro has its own suite (3.3), and `tools/browser/upgrade.mjs`
-exists. The rest of those two tiers has not been re-checked item by item, so
-treat their text below as the last known state rather than as current.
+**Tiers 3 and 4 were re-checked item by item on 19 September**, against the
+code as it stands. Six of the ten test items and one of the fifteen drift
+items are closed. The item text below is the original wording and is stale
+where this table disagrees with it.
+
+Tier 3, test quality:
+
+| Item | State |
+|---|---|
+| 3.1 determinism died at frame 466 | Done. Drives the oracle pilot for the full 10,000 and asserts it is still running. |
+| 3.2 coverage measured over a third of the source | Open. No coverage tool at all. The browser harness exercises app, input, audio and render at runtime, but nothing measures it. |
+| 3.3 nitro untested | Done. Own suite: bank, cap, spend, the fuel gate override. |
+| 3.4 tests mutate the shared TUNING | Done, and purity.test.js now fails any test file that writes to TUNING. |
+| 3.5 the oracle never sees the real fuel config | Open, and documented in the file. It proves the road is dodgeable, not that a run cannot be starved of coffee. |
+| 3.6 the oracle's assertion was weaker than its result | Done. Hearts must be untouched, not merely the run alive. |
+| 3.7 no atlas contract test | Done. Frames exist, nothing unused ships, every hitbox matches its art. |
+| 3.8 no guard on traffic variety | Open. Hazard variety is guarded; the duplicate vehicle rate is not. |
+| 3.9 purity test had holes | Done. globalThis, process, crypto, fetch, timers, eval and dynamic import all covered, with a self test. |
+| 3.10 an uncaught error mid run is invisible | Open, and the only one here a player can feel: the boot card catches load failures only, and there is no unhandledrejection handler anywhere. |
+
+Tier 4, drift hazards. Only 4.2 is closed; the rest stand as written. The two
+worth taking seriously are both in the fairness geometry:
+
+- **4.7** is real. A chase car spawns up to 590px behind the player and
+  overtaker vetting only looks back 400px, so a 190px band is unvetted. Today
+  it is invisible because only about 68px of road behind the player is on
+  screen. Raise the spawn distance for pacing and it becomes an unfair death
+  with no warning. The invariant is still nowhere stated.
+- **4.8** is the same shape: a yield mutates a row's lanes without updating the
+  mask the squeeze guard reads, so the guard can be looking at the pre-merge
+  set. Safe only by timing that nothing enforces or names.
+
+The rest are dead values and tidiness: 4.1 the civilian count is still a hand
+kept index (correct today at 47), 4.3 and 4.4 dead per vehicle fields nothing
+reads, 4.5 a dead event list that still ships in the zip, 4.6 about a dozen
+gameplay numbers still in world.js, 4.9 wasted rerolls, 4.10 a silent fallback
+that cannot trigger today, 4.11 canvas clipping on a viewport under about 160
+CSS px, 4.12 storage failures with no notice to the player, 4.13 a benign race
+at the network seam, 4.14 an idle timer while muted, 4.15 stale docs in
+README.md, CLAUDE.md and tuning.js comments.
 
 Two further changes landed from Jason's own device testing and are written up
 at the end of TIER1-M8.md: menu press states with confirmation sounds, and
