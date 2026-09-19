@@ -43,11 +43,17 @@ function drawnStrings() {
       while ((m = DRAW_TEXT.exec(text)) !== null) {
         out.push({ file, value: m[2] !== undefined ? m[2] : m[3] });
       }
-      /* The legend's lines are a table rather than call arguments, so
-         they are picked up by name. */
-      const table = text.match(/HOW_TO_LINES\s*=\s*\[[\s\S]*?\];/);
-      if (table) {
+      /*
+        The legend's lines are a table rather than call arguments, so
+        they are picked up by name. Matched on the prefix rather than
+        the exact name: the table was HOW_TO_LINES and became
+        HOW_TO_ROWS when the rows gained icons, and the rename quietly
+        dropped every one of those strings out of this check, which is
+        the failure mode this whole test exists to prevent.
+      */
+      for (const table of text.matchAll(/HOW_TO_[A-Z_]+\s*=\s*\[[\s\S]*?\n  \];/g)) {
         let lit;
+        LITERAL.lastIndex = 0;
         while ((lit = LITERAL.exec(table[0])) !== null) {
           out.push({ file, value: lit[1] !== undefined ? lit[1] : lit[2] });
         }

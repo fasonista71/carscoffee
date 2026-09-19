@@ -29,13 +29,25 @@
 
 const LOGICAL_W = 180;
 
-/* Sampled inside the score plate: drawPlate(2, 3, 50, 17) fills its
-   interior from y=4, and the distance text starts at y=7, so row 5 is
-   plate and nothing else however many digits are on it. */
-const PROBE_PX = [[6, 5], [20, 5], [45, 5]];
+/*
+  Row 5 of the logical buffer, counted rather than sampled.
 
-async function readMode(page, probes) {
-  return page.evaluate(async ({ probes }) => {
+  This used to read three fixed points inside the score plate, which
+  broke the moment the plate moved to make room for the help button:
+  two of the three landed on the help plate and the gap beside it, and
+  every assertion that asked whether a run was live started saying no.
+
+  Counting is indifferent to where the plates are. Every HUD plate
+  fills its interior with pal.road, and row 5 is inside all of them
+  and below none of their text. While playing there are over a hundred
+  such pixels on that row across four plates; the title screen draws
+  only the help button, which is sixteen. Nothing else in between.
+*/
+const PROBE_ROW = 5;
+const PROBE_MIN = 40;
+
+async function readMode(page) {
+  return page.evaluate(async ({ row, min }) => {
     if (!window.__ccProbePal) {
       const src = document.querySelector('script[type=module]').getAttribute('src');
       const mod = await import(src.replace(/app\/main\.js$/, 'game/tuning.js'));
@@ -60,24 +72,31 @@ async function readMode(page, probes) {
     if (!c || !c.width) return 'other';
     const g = c.getContext('2d');
     const unit = c.width / 180;
-    const near = (got, exp) => got.every((v, i) => Math.abs(v - exp[i]) <= 2);
-    const read = ([lx, ly]) => {
-      const d = g.getImageData(Math.floor((lx + 0.5) * unit), Math.floor((ly + 0.5) * unit), 1, 1).data;
-      return [d[0], d[1], d[2]];
-    };
-    const px = probes.map(read);
-    if (px.every((p) => near(p, want.playing))) return 'playing';
-    if (px.every((p) => near(p, want.paused))) return 'paused';
+    const near = (got, exp) => Math.abs(got[0] - exp[0]) <= 2
+      && Math.abs(got[1] - exp[1]) <= 2 && Math.abs(got[2] - exp[2]) <= 2;
+    const d = g.getImageData(0, Math.floor((row + 0.5) * unit), c.width, 1).data;
+    let playing = 0;
+    let paused = 0;
+    /* One sample per logical pixel, not per device pixel, so the
+       counts mean the same thing at any integer scale. */
+    for (let lx = 0; lx < 180; lx += 1) {
+      const i = Math.floor((lx + 0.5) * unit) * 4;
+      const px = [d[i], d[i + 1], d[i + 2]];
+      if (near(px, want.playing)) playing += 1;
+      else if (near(px, want.paused)) paused += 1;
+    }
+    if (playing >= min) return 'playing';
+    if (paused >= min) return 'paused';
     return 'other';
-  }, { probes });
+  }, { row: PROBE_ROW, min: PROBE_MIN });
 }
 
 /* One reading is a single frame, and a tier banner's white wash can
    land on any single frame, so a mode is only a mode once it has held
    still for two of them. */
 export async function mode(page) {
-  const first = await readMode(page, PROBE_PX);
-  const second = await readMode(page, PROBE_PX);
+  const first = await readMode(page);
+  const second = await readMode(page);
   return first === second ? first : 'other';
 }
 

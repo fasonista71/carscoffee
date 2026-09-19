@@ -48,6 +48,10 @@ const GLYPHS = {
      leading blank, while textWidth still counted it, so centred text
      sat 2px left of the pickup it was pointing at. */
   '+': [0b000, 0b010, 0b111, 0b010, 0b000],
+  /* The leaderboard draws unearned ranks as dashes. Without this
+     glyph drawText would have skipped them silently and the empty
+     rows would have been blank. */
+  '-': [0b000, 0b000, 0b111, 0b000, 0b000],
   /* Only reachable from the haptics row's N/A fallback, but a missing
      glyph there would render 'N A'. */
   '/': [0b001, 0b001, 0b010, 0b100, 0b100],

@@ -1314,40 +1314,57 @@ export function createRenderer(canvas) {
     return lx >= W - b.hitWPx && ly >= 0 && ly <= TUNING.render.hudBandHPx;
   }
 
+  /* Two bars, the pause glyph, drawn wherever it is asked for. */
+  function drawPauseGlyph(x, y, pal) {
+    bctx.fillStyle = pal.text;
+    bctx.fillRect(x + 6, y + 5, 2, 7);
+    bctx.fillRect(x + 10, y + 5, 2, 7);
+  }
+
+  /*
+    Row one, left to right: help, distance, lives, best, pause. Five
+    things in 180 pixels, which only works because the hearts were
+    being measured wrong.
+
+    The heart spacing was taken from item_heart, the 15 by 13 pickup
+    sprite, while the row actually draws ui_heart_full, which is 9 by
+    8. Three hearts were reserving 49 pixels to draw 31 and sitting
+    loosely spaced because of it. Measuring the sprite that is drawn
+    is both correct and what pays for the two corner buttons.
+
+    What did not fit, even so, is the muted speaker glyph. Sound state
+    is on the title screen in two places now, the Sound row and a
+    plain note under it, and on the paused menu; a glyph in the run
+    band was the third and the least of them. Six things do not fit in
+    this row and this is the one whose absence costs least.
+  */
   function drawScore(view, pal) {
     const p = TUNING.render.hudPlate;
+    const hp = TUNING.render.hudHighPlate;
     const pb = pauseRect();
-    drawPlate(p.marginPx, p.yPx, p.wPx, p.hPx, pal);
-    drawText(bctx, view.meters + 'M', p.marginPx + p.wPx / 2, p.yPx + 4, pal.text,
-      { scale: 2, align: 'center' });
-    /* High score sits left of the pause control rather than at the
-       edge, so the corner belongs to the button. */
-    const hiX = pb.x - 2 - p.wPx;
-    drawPlate(hiX, p.yPx, p.wPx, p.hPx, pal);
-    drawText(bctx, String(view.high), hiX + p.wPx / 2, p.yPx + 4, pal.edgeLine,
+    const hb = helpRect();
+
+    drawHelpButton(view, pal);
+
+    const scoreX = hb.x + hb.w + 3;
+    drawPlate(scoreX, p.yPx, p.wPx, p.hPx, pal);
+    drawText(bctx, view.meters + 'M', scoreX + p.wPx / 2, p.yPx + 4, pal.text,
       { scale: 2, align: 'center' });
 
-    /* The pause button: two bars on the same capsule as everything
-       else, pressed the same way the menu rows are. */
+    const hiX = pb.x - 2 - hp.wPx;
+    drawPlate(hiX, p.yPx, hp.wPx, p.hPx, pal);
+    drawText(bctx, String(view.high), hiX + hp.wPx / 2, p.yPx + 4, pal.edgeLine,
+      { scale: 2, align: 'center' });
+
     const down = view.pressedMenuId === 'hudPause' ? 1 : 0;
     drawPlate(pb.x, pb.y + down, pb.w, pb.h, pal, down ? pal.outline : undefined);
-    bctx.fillStyle = pal.text;
-    const barY = pb.y + down + 5;
-    bctx.fillRect(pb.x + 6, barY, 2, 7);
-    bctx.fillRect(pb.x + 10, barY, 2, 7);
+    drawPauseGlyph(pb.x, pb.y + down, pal);
 
-    /* the three hearts sit between the score plate and the high plate */
-    const heartSpr = getSprite('item_heart');
+    /* the hearts centre in the gap the two plates leave */
+    const heartSpr = getSprite('ui_heart_full');
     const heartsW = TUNING.lives.max * (heartSpr.width + 2) - 2;
-    let hx = Math.round((p.marginPx + p.wPx + hiX) / 2 - heartsW / 2);
+    let hx = Math.round((scoreX + p.wPx + hiX) / 2 - heartsW / 2);
     const hy = p.yPx + Math.round(p.hPx / 2 - heartSpr.height / 2);
-    /* Sound off is a state the player chose and then forgets, so say
-       so for the whole run rather than only on the menu. It sits in
-       the gap between the score plate and the hearts. */
-    if (view.soundOn === false) {
-      const mute = getSprite('ui_mute');
-      bctx.drawImage(mute, hx - mute.width - 4, hy);
-    }
     for (let i = 0; i < TUNING.lives.max; i += 1) {
       const spr = getSprite(i < view.hearts ? 'ui_heart_full' : 'ui_heart_empty');
       bctx.drawImage(spr, hx, hy);
@@ -1398,7 +1415,7 @@ export function createRenderer(canvas) {
     /* The legend screen is a single button: everything above it is
        reading. */
     if (mode === 'howto') {
-      return [{ id: 'primary', label: 'Back', x: Math.round((W - m.primary.wPx) / 2), y: 170, w: m.primary.wPx, h: m.primary.hPx }];
+      return [{ id: 'primary', label: 'Back', x: Math.round((W - m.primary.wPx) / 2), y: 210, w: m.primary.wPx, h: m.primary.hPx }];
     }
     let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 122);
     const primaryLabel = mode === 'title' ? 'Start' : (mode === 'paused' ? 'Resume' : 'Go again');
@@ -1428,7 +1445,7 @@ export function createRenderer(canvas) {
        it hangs off the last row rather than sitting at a constant y,
        which is what used to bury it under the board. */
     if (mode === 'title' && showSoundTip) {
-      items.push({ id: 'soundtip', x: 12, y: y + 2, w: W - 24, h: 15 });
+      items.push({ id: 'soundtip', x: 10, y: y + 6, w: W - 20, h: 24 });
     }
     return items;
   }
@@ -1501,14 +1518,12 @@ export function createRenderer(canvas) {
         bctx.fillRect(item.x + item.w + 2, item.y + down - 2, 1, item.h + 4);
       }
       if (item.id === 'soundtip') {
-        /* On a plate, because on a layout with a Rumble row this lands
-           over the parked car's nose and red on a red roof is the
-           least readable thing we have shipped before. */
-        drawPlate(item.x, item.y, item.w, item.h, pal);
-        drawText(bctx, 'NO SOUND. CHECK THE SIDE SWITCH', W / 2, item.y + 1, pal.edgeLine,
-          { scale: 1, align: 'center' });
-        drawText(bctx, 'TAP HERE TO HIDE', W / 2, item.y + 9, pal.text,
-          { scale: 1, align: 'center' });
+        /* Drawn by drawSoundNote, after the parked car. The car is
+           painted over this screen last so it keeps its colour
+           against the dim layer, and it used to land straight on top
+           of this text. The menu item stays, because it is the hit
+           box that dismisses the hint. */
+        continue;
       } else if (item.id === 'primary') {
         const iy = item.y + down;
         bctx.fillStyle = pal.outline;
@@ -1558,6 +1573,35 @@ export function createRenderer(canvas) {
   }
 
   /*
+    The silence note. Two states, one message each, drawn last so the
+    parked car cannot land on it, on a plate so it does not depend on
+    what is behind it, and with its first line at double size because
+    at five pixels it was the least readable thing on the screen.
+
+    Short copy on purpose: NO SOUND? at scale 2 is 70 pixels wide in a
+    180 pixel buffer, and the sentence it replaced would have been
+    246.
+  */
+  function drawSoundNote(view, pal) {
+    const note = view.soundNote;
+    if (!note) return;
+    const y = menuBottomY('title', view.hapticsSupported) + 6;
+    const h = 24;
+    drawPlate(10, y, W - 20, h, pal, pal.outline);
+    if (note === 'off') {
+      drawText(bctx, 'Sound is off', W / 2, y + 3, pal.hazardLight,
+        { scale: 2, align: 'center' });
+      drawText(bctx, 'TAP SOUND TO TURN IT ON', W / 2, y + 16, pal.text,
+        { scale: 1, align: 'center' });
+      return;
+    }
+    drawText(bctx, 'No sound?', W / 2, y + 3, pal.hazardLight,
+      { scale: 2, align: 'center' });
+    drawText(bctx, 'CHECK THE SIDE SWITCH. TAP TO HIDE', W / 2, y + 16, pal.text,
+      { scale: 1, align: 'center' });
+  }
+
+  /*
     The top five. Rank and initials read left, distance reads right,
     and the row just earned is picked out in the accent so a player
     can find themselves without counting. An empty board says so
@@ -1566,32 +1610,36 @@ export function createRenderer(canvas) {
   */
   function drawBoard(view, pal, topY) {
     const rows = view.board || [];
+    const slots = view.boardSlots || rows.length;
     /*
-      The empty state. drawBoard used to return here, leaving the
-      bottom 90 pixels of a fresh install as blank dimmed road with
-      nothing to say a board existed at all, so the first thing the
-      game asks you to compete for was invisible until you had already
-      competed.
+      Always five rows, whether they are earned or not. Drawing only
+      what exists meant the board changed height as it filled and, on
+      a first run, showed a single line where the thing being competed
+      for is a top five. The empty ranks are dashes and a zero, in the
+      recessive colour, so the shape of the goal is visible from the
+      first game over and a filled row reads as progress against it.
     */
-    if (rows.length === 0) {
-      bctx.fillStyle = pal.hudBand;
-      bctx.fillRect(28, topY - 5, W - 56, 20);
-      drawText(bctx, 'Top five', W / 2, topY, pal.edgeLine, { scale: 1, align: 'center' });
-      drawText(bctx, 'No runs yet', W / 2, topY + 8, pal.text, { scale: 1, align: 'center' });
-      return;
-    }
-    /* The world keeps moving behind both screens, so the board gets
-       the same shaded band the HUD uses rather than trusting the dim
-       layer to keep a cup or a car off the text. */
-    bctx.fillStyle = pal.hudBand;
-    bctx.fillRect(28, topY - 5, W - 56, 13 + rows.length * 7);
+    /*
+      Opaque, not the translucent HUD band. At one or two rows the
+      world showing through was texture; at a guaranteed five it is a
+      car driving across the text, and the dimmest rows on it are the
+      placeholders. The game over headline above made the same move
+      for the same reason.
+    */
+    drawPlate(27, topY - 5, W - 54, 12 + slots * 7, pal, pal.outline);
     drawText(bctx, 'Top five', W / 2, topY, pal.edgeLine, { scale: 1, align: 'center' });
-    for (let i = 0; i < rows.length; i += 1) {
+    for (let i = 0; i < slots; i += 1) {
       const y = topY + 8 + i * 7;
+      const row = rows[i];
+      if (!row) {
+        drawText(bctx, (i + 1) + ' ---', 42, y, pal.building, { scale: 1, align: 'left' });
+        drawText(bctx, '0M', W - 42, y, pal.building, { scale: 1, align: 'right' });
+        continue;
+      }
       const mine = i === view.newEntryIndex;
       const color = mine ? pal.edgeLine : pal.text;
-      drawText(bctx, (i + 1) + ' ' + rows[i].name, 42, y, color, { scale: 1, align: 'left' });
-      drawText(bctx, rows[i].meters + 'M', W - 42, y, color, { scale: 1, align: 'right' });
+      drawText(bctx, (i + 1) + ' ' + row.name, 42, y, color, { scale: 1, align: 'left' });
+      drawText(bctx, row.meters + 'M', W - 42, y, color, { scale: 1, align: 'right' });
     }
   }
 
@@ -1603,13 +1651,13 @@ export function createRenderer(canvas) {
   */
   function helpRect() {
     const b = TUNING.render.pauseBtn;
-    return { x: W - b.wPx - 3, y: 3, w: b.wPx, h: b.hPx };
+    return { x: TUNING.render.hudPlate.marginPx, y: 3, w: b.wPx, h: b.hPx };
   }
 
   function hitTestHelp(lx, ly) {
     if (!Number.isFinite(lx) || !Number.isFinite(ly)) return false;
     const b = TUNING.render.pauseBtn;
-    return lx >= W - b.hitWPx && ly >= 0 && ly <= TUNING.render.hudBandHPx;
+    return lx <= b.hitWPx && ly >= 0 && ly <= TUNING.render.hudBandHPx;
   }
 
   function drawHelpButton(view, pal) {
@@ -1626,24 +1674,98 @@ export function createRenderer(canvas) {
     it, which is the half of the teaching the one time prompts cannot
     do, because a returning player has already spent those.
   */
-  const HOW_TO_LINES = [
-    ['Tap a lane', 'to move into it'],
-    ['Swipe up to boost', 'or tap the lane you are in'],
-    ['Coffee is fuel', 'Grab every cup'],
-    ['Pause', 'the button top right']
+  /*
+    Every row is a verb at double size with the detail under it, and
+    an icon on the left. It was two lines of five pixel type before,
+    which is the smallest thing in the product, on the one screen
+    whose entire job is to be read.
+
+    The icons are the game's own: the coffee cup is the sprite the
+    player collects, and the pause bars are the button they will
+    press. Lane and boost get drawn arrows in the same chevron
+    language the overtaker warnings use, because there is no sprite
+    that says "tap here" and inventing one would say less than an
+    arrow does.
+
+    No commas anywhere. The font has A to Z, 0 to 9, ampersand, full
+    stop, exclamation, plus and slash, and drawText skips silently
+    past anything else.
+  */
+  const HOW_TO_ROWS = [
+    { icon: 'lanes', title: 'Steer', detail: 'Tap a lane to move into it' },
+    { icon: 'boost', title: 'Boost', detail: 'Swipe up or tap your own lane' },
+    { icon: 'dodge', title: 'Dodge', detail: 'Weave around cones and rubble' },
+    { icon: 'coffee', title: 'Fuel', detail: 'Grab every coffee cup' },
+    { icon: 'heart', title: 'Hearts', detail: 'Your lives. Grab a spare' },
+    { icon: 'nitro', title: 'Nitro', detail: 'A free boost. No coffee used' }
   ];
+
+  /* A chevron, pointing up or left or right, in the accent. */
+  function drawChevron(cx, cy, dir, pal) {
+    bctx.fillStyle = pal.outline;
+    for (let k = -4; k <= 4; k += 1) {
+      const d = Math.abs(k) - 4;
+      if (dir === 'up') bctx.fillRect(cx + k, cy + d, 1, 5);
+      else bctx.fillRect(cx - d * (dir === 'left' ? -1 : 1) - 2, cy + k, 5, 1);
+    }
+    bctx.fillStyle = pal.edgeLine;
+    for (let k = -3; k <= 3; k += 1) {
+      const d = Math.abs(k) - 3;
+      if (dir === 'up') bctx.fillRect(cx + k, cy + d + 1, 1, 3);
+      else bctx.fillRect(cx - d * (dir === 'left' ? -1 : 1) - 1, cy + k, 3, 1);
+    }
+  }
+
+  /*
+    The icon column, centred on cx. Four of the six rows show the thing
+    itself, straight out of the atlas, so what the screen teaches and
+    what the road shows are the same picture. The two gestures have no
+    object to show, so they get chevrons.
+  */
+  const HOW_TO_ICON_SPRITES = {
+    coffee: 'pickup_coffee', dodge: 'obs_cone', heart: 'item_heart', nitro: 'item_nitro'
+  };
+
+  function drawHowToIcon(kind, cx, cy, pal) {
+    const key = HOW_TO_ICON_SPRITES[kind];
+    if (key) {
+      const spr = getSprite(key);
+      bctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
+      return;
+    }
+    if (kind === 'boost') {
+      drawChevron(cx, Math.round(cy) - 5, 'up', pal);
+      drawChevron(cx, Math.round(cy) + 2, 'up', pal);
+      return;
+    }
+    drawChevron(cx - 5, Math.round(cy), 'left', pal);
+    drawChevron(cx + 5, Math.round(cy), 'right', pal);
+  }
+
+  /*
+    Six rows in 180 by 320, with the Back button under them and the
+    parked car under that. The row height is set by the tallest icon:
+    the nitro canister is 24 pixels, so 27 is the smallest row that
+    frames it rather than crowding it. Everything else follows from
+    that, which is why the header is a thin bar rather than the deeper
+    plate the four row version could afford.
+  */
+  const HOW_TO_ROW_H = 27;
+  const HOW_TO_TOP_Y = 32;
 
   function drawHowTo(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
-    drawPlate(10, 16, W - 20, 20, pal);
-    drawText(bctx, 'How to play', W / 2, 22, pal.edgeLine, { scale: 2, align: 'center' });
-    let y = 48;
-    for (const [l1, l2] of HOW_TO_LINES) {
-      drawPlate(10, y, W - 20, 21, pal);
-      drawText(bctx, l1, 17, y + 4, pal.edgeLine, { scale: 1, align: 'left' });
-      drawText(bctx, l2, 17, y + 12, pal.text, { scale: 1, align: 'left' });
-      y += 27;
+    drawPlate(8, 10, W - 16, 18, pal);
+    drawText(bctx, 'How to play', W / 2, 14, pal.edgeLine, { scale: 2, align: 'center' });
+    let y = HOW_TO_TOP_Y;
+    for (const row of HOW_TO_ROWS) {
+      const h = HOW_TO_ROW_H;
+      drawPlate(8, y, W - 16, h, pal);
+      drawHowToIcon(row.icon, 22, y + h / 2, pal);
+      drawText(bctx, row.title, 40, y + 4, pal.edgeLine, { scale: 2, align: 'left' });
+      drawText(bctx, row.detail, 40, y + 17, pal.text, { scale: 1, align: 'left' });
+      y += h + 2;
     }
     drawMenu(view, pal, 'howto');
     drawParkedCar(view);
@@ -1671,6 +1793,7 @@ export function createRenderer(canvas) {
        shoulder: recessive to the point of being unreadable, which is
        no use to a player being asked which build they are on. */
     drawParkedCar(view);
+    drawSoundNote(view, pal);
     drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.building, { scale: 1, align: 'right' });
     drawHelpButton(view, pal);
   }

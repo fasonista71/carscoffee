@@ -41,7 +41,11 @@ async function tapHint(page) {
     for (let y = c.height - 1; y >= Math.floor(240 * unit); y -= 1) {
       for (let x = 0; x < c.width; x += 1) {
         const i = (y * c.width + x) * 4;
-        if (d[i] > 245 && d[i + 1] > 200 && d[i + 1] < 235 && d[i + 2] < 90) { lowest = y; break; }
+        /* Either warm accent: the hint's heading is the amber the
+           game warns in, and the menu's values are the yellow. Both
+           are r>245 b<90, and pinning this to one of them is what
+           broke when the heading changed colour. */
+        if (d[i] > 245 && d[i + 1] > 170 && d[i + 1] < 235 && d[i + 2] < 90) { lowest = y; break; }
       }
       if (lowest >= 0) break;
     }

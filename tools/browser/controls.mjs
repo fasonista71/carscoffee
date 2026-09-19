@@ -120,10 +120,10 @@ const at = (box, lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly
   const box = await page.locator('#game').boundingBox();
   const at2 = (lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly / 320) * box.height });
 
-  /* The way in is the corner button, where a run keeps its pause
-     control, because a menu row would have cost the board its space
-     on the shorter layout. */
-  const help = at2(171, 11);
+  /* Top left. The two corner buttons have one home each now, help on
+     the left and pause on the right, so that a player who learns
+     where one is has not learned a place the other might also be. */
+  const help = at2(11, 11);
   await page.touchscreen.tap(help.x, help.y);
   await page.waitForTimeout(400);
   const start = at2(90, 163);
@@ -132,7 +132,7 @@ const at = (box, lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly
   log(await mode(page) !== 'playing',
     'the help button opens a screen that Start is no longer on');
 
-  const back = at2(90, 183);
+  const back = at2(90, 223);
   await page.touchscreen.tap(back.x, back.y);
   await page.waitForTimeout(500);
   await page.touchscreen.tap(start.x, start.y);

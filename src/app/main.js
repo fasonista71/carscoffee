@@ -18,7 +18,7 @@ import { attachTouch } from '../input/touch.js';
 import { attachPointer } from '../input/pointer.js';
 import { createAudio } from '../audio/audio.js';
 import { createLoop } from './loop.js';
-import { createLeaderboard, localStore, cleanName } from './leaderboard.js';
+import { createLeaderboard, localStore, cleanName, BOARD_SIZE } from './leaderboard.js';
 import { createInitialsEntry } from './initials.js';
 import { createHaptics } from './haptics.js';
 
@@ -267,8 +267,28 @@ let soundTipOn = IS_TOUCH && loadSetting('cc.soundtip.v1', '1') === '1';
   directly above should not then be told to go check a hardware
   switch. The HUD already gets this right and draws a mute glyph.
 */
+/*
+  Two different silences, and the game can only ever know one of them.
+
+  The ring switch on an iPhone mutes Web Audio and no browser can read
+  it, so all the game can do is warn the player that it might be the
+  cause. That warning belongs in the state where sound is meant to be
+  on, because that is when silence is a surprise.
+
+  When the player turned sound off themselves, telling them to check a
+  hardware switch is simply wrong. But saying nothing is what made it
+  look broken, so that state now gets its own line: what is true, and
+  what to do about it. It is a readout rather than a hint, so it is
+  not dismissible and it does not care whether the board is empty.
+*/
+function soundNote() {
+  if (!soundOn) return 'off';
+  if (soundTipOn && board.entries().length === 0) return 'switch';
+  return null;
+}
+
 function soundTipVisible() {
-  return soundTipOn && soundOn && board.entries().length === 0;
+  return soundNote() === 'switch';
 }
 
 function dismissSoundTip() {
@@ -297,8 +317,14 @@ function menuIdAt(clientX, clientY) {
   return renderer.hitTestMenu(mode, p.x, p.y, soundTipVisible() && mode === 'title', haptics.supported);
 }
 
+/*
+  The help button is in the band on the title screen and in the run
+  HUD, always the same corner. It is not on the paused or game over
+  screens, where the band is given over to their own content.
+*/
 function helpAt(clientX, clientY) {
-  if (mode !== 'title' || initials.isOpen()) return false;
+  if (initials.isOpen()) return false;
+  if (mode !== 'title' && mode !== 'playing') return false;
   const p = renderer.screenToLogical(clientX, clientY);
   return renderer.hitTestHelp(p.x, p.y);
 }
@@ -345,8 +371,22 @@ function activateSelected() {
   runMenuAction(id);
 }
 
+/*
+  Where the legend was opened from, so Back goes back rather than
+  always to the title. Asking for help mid run pauses it first: the
+  road does not keep coming at you while you read about it.
+*/
+let howToFrom = 'title';
+
 function openHowTo() {
+  if (mode === 'playing') pauseRun();
+  howToFrom = mode === 'paused' ? 'paused' : 'title';
   mode = 'howto';
+  menuEnteredAt = performance.now();
+}
+
+function closeHowTo() {
+  mode = howToFrom === 'paused' ? 'paused' : 'title';
   menuEnteredAt = performance.now();
 }
 
@@ -374,7 +414,7 @@ function handleMenuTap(clientX, clientY) {
 function runMenuAction(id) {
   if (id === 'primary') {
     uiSound('ui_confirm');
-    if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
+    if (mode === 'howto') { closeHowTo(); }
     else if (mode === 'paused') resumeRun();
     else startRun();
   } else if (id === 'restart') {
@@ -432,7 +472,7 @@ function onIntent(intent) {
   if (intent.type === 'pause') {
     if (mode === 'playing') pauseRun();
     else if (mode === 'paused') resumeRun();
-    else if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
+    else if (mode === 'howto') { closeHowTo(); }
     return;
   }
   if (intent.type === 'pressEnd') {
@@ -461,7 +501,7 @@ function onIntent(intent) {
       if (intent.type === 'restart' && mode !== 'title') { uiSound('ui_confirm'); startRun(); return; }
       if (selectedMenuId) { activateSelected(); return; }
       uiSound('ui_confirm');
-      if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
+      if (mode === 'howto') { closeHowTo(); }
       else if (mode === 'paused') resumeRun();
       else startRun();
       return;
@@ -483,22 +523,30 @@ function onIntent(intent) {
      R restarts. */
   if (intent.type === 'confirm') return;
   if (intent.type === 'restart') { startRun(); return; }
-  /* In play the only thing a press can land on is the pause button. */
+  /* In play a press can land on either corner button and nothing
+     else. Both are bounded in y by the band, so a tap at the same x
+     down on the road still steers. */
   if (intent.type === 'pressAt') {
     const p = renderer.screenToLogical(intent.clientX, intent.clientY);
     if (renderer.hitTestPause(p.x, p.y)) {
       pressedMenuId = 'hudPause';
+      uiSound('ui_press');
+    } else if (renderer.hitTestHelp(p.x, p.y)) {
+      pressedMenuId = 'help';
       uiSound('ui_press');
     }
     return;
   }
   if (intent.type === 'tapAt' || intent.type === 'releaseAt') {
     const p = renderer.screenToLogical(intent.clientX, intent.clientY);
-    if (renderer.hitTestPause(p.x, p.y)) {
+    const onPause = renderer.hitTestPause(p.x, p.y);
+    const onHelp = !onPause && renderer.hitTestHelp(p.x, p.y);
+    if (onPause || onHelp) {
       pressedMenuId = null;
       if (intent.type === 'tapAt') {
         uiSound('ui_confirm');
-        pauseRun();
+        if (onPause) pauseRun();
+        else openHowTo();
       }
       return;
     }
@@ -639,7 +687,13 @@ const loop = createLoop({
     view.vehicleName = VEHICLES[vehicleId].name;
     view.soundOn = soundOn;
     view.soundTip = soundTipVisible() && mode === 'title';
+    view.soundNote = mode === 'title' ? soundNote() : null;
     view.board = board.entries();
+    /* The renderer draws every rank whether it is earned or not, and
+       the count belongs to the leaderboard, so it travels in the view
+       rather than being written down a second time in the render
+       layer. */
+    view.boardSlots = BOARD_SIZE;
     view.carPreview = mode === 'title' && performance.now() < carPreviewUntilMs;
     view.newEntryIndex = newEntryIndex;
     view.hapticsOn = hapticsOn;
