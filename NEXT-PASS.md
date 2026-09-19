@@ -6,7 +6,7 @@
 |---|---|
 | Uploaded to itch | 19 September 2026, evening |
 | Bundle | `cars-and-coffee-web-M9.zip`, from `_dist/build-M9-20260919-204644/` |
-| Versioned directory | `v0e6727a079` |
+| Versioned directory | `vc52a5b00f1` |
 | Commit | `2776527` |
 
 The M8 build it replaced is kept at `_dist/build-M8-20260919-061227/`
@@ -20,17 +20,18 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `a26aa70` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-231258/` |
+| Built | 19 September 2026 from commit `27ef66b` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-232201/` |
 | Versioned directory | `ve0d20227ff` |
 
 Three changes sit between the live build and this one. The initials wheel's
 controls swapped, so the lower chevron advances the character and a thumb is
 no longer across what it is changing. The cars are repainted, the nine traffic
 bodies in Porsche colours and the 4x4 in Coniston Green, as a recolour at load
-rather than new art. And the roadside is Jason's tile art instead of fifteen
-drawing functions: nine places, eight tiles each, water running in stretches,
-and the barn as a double height tile.
+rather than new art. And the roadside is Jason's art instead of fifteen
+drawing functions: one whole verge strip per place, mirrored end over end so
+the repeat is seamless, with the sea as its own strip so a coast can be on
+either side, both, or neither.
 
 So the first thing to check on device is whether the lower control advancing
 reads right; it is a judgement call and it flips in one line.
