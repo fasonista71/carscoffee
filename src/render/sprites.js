@@ -35,41 +35,13 @@ const shortName = (url) => String(url).split('/').pop();
 const ATLAS_URL = asset('cars.atlas');
 const IMAGE_URL = asset('cars.png');
 
-import { TUNING, TRAFFIC_VARIANTS, OBSTACLE_SPRITES } from '../game/tuning.js';
-
-/* Registry keys used by the game map to atlas frame names here. */
-const ALIASES = {
-  player_coupe: 'sport_coupe',
-  player_4x4: 'fourbyfour',
-  player_classic: 'classic'
-};
+import { TUNING, TRAFFIC_VARIANTS } from '../game/tuning.js';
+/* The frame names and the parser live in atlas.js, which is the half
+   of this file that touches no pixels, so the node tests can hold the
+   same list rather than a copy of it. */
+import { ALIASES, neededFrames, parseAtlas } from './atlas.js';
 
 const registry = new Map();
-
-function parseAtlas(text) {
-  const frames = {};
-  let current = null;
-  for (const raw of text.split(/\r?\n/)) {
-    if (!raw.trim()) { current = null; continue; }
-    const indented = raw.startsWith(' ') || raw.startsWith('\t');
-    if (!indented && !raw.includes(':')) {
-      current = raw.trim();
-      frames[current] = {};
-      continue;
-    }
-    if (current && raw.includes(':')) {
-      const idx = raw.indexOf(':');
-      const key = raw.slice(0, idx).trim();
-      const val = raw.slice(idx + 1).trim();
-      if (key === 'xy' || key === 'size') {
-        const [a, b] = val.split(',').map((n) => parseInt(n.trim(), 10));
-        if (key === 'xy') { frames[current].x = a; frames[current].y = b; }
-        else { frames[current].w = a; frames[current].h = b; }
-      }
-    }
-  }
-  return frames;
-}
 
 const COFFEE_URL = asset('coffee.png');
 const BADGE_URL = asset('badge.png');
@@ -107,18 +79,7 @@ export function loadSprites() {
   });
   return Promise.all([atlasReady, imageReady, coffeeReady, badgeReady]).then(([text, img]) => {
     const frames = parseAtlas(text);
-    /* Everything sliced out of the atlas is named here. The set is
-       explicit rather than "slice every frame" so a frame the game
-       does not actually use is a loud missing-name error at build
-       time instead of silent dead weight in memory. */
-    const needed = new Set([
-      ...Object.values(ALIASES),
-      ...TRAFFIC_VARIANTS.map((v) => v.sprite),
-      ...OBSTACLE_SPRITES,
-      'obs_oil_left', 'obs_oil_right',
-      'item_heart', 'item_nitro'
-    ]);
-    for (const name of needed) {
+    for (const name of neededFrames()) {
       const f = frames[name];
       if (!f || f.w == null || f.x == null) {
         throw new Error('Atlas frame missing or incomplete: ' + name);
