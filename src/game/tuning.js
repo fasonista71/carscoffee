@@ -504,6 +504,21 @@ export const TUNING = {
        ambulance at 0.08 and the fire truck at 0.11, so the animated
        wig wag lands on the bar that is already drawn. */
     wigWagRoofFrac: { default: 0.45, swat: 0.30, ambulance: 0.08, fire_truck: 0.11 },
+    /*
+      Working vehicles run their own lights, on their own beat, so a
+      lane of traffic is not all one dead sheet of parked art. Drawn
+      the way the wig wags are, as pixels on the sprite rather than as
+      new frames in the atlas, so this costs no art and no load time.
+      roofFrac is the distance down the sprite to the light, which is
+      the cab on anything with a bed behind it. The taxi sign blinks
+      on and off, the tow truck's beacon sweeps side to side, and both
+      are slow enough at a phone's size to read as a light rather than
+      as a flicker.
+    */
+    workLights: {
+      taxi: { roofFrac: 0.30, kind: 'sign', ms: 560 },
+      tow_truck: { roofFrac: 0.17, kind: 'beacon', ms: 320 }
+    },
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
@@ -552,6 +567,8 @@ export const TUNING = {
       slickSheen: '#43306b',
       slickArrow: '#c2b1ff',
       hazardLight: '#ffb937',
+      /* The same amber with the lamp off: still warm, clearly unlit. */
+      hazardLightDim: '#7a5214',
       wigWagRed: '#ff2a2a',
       wigWagRedDim: '#701414',
       wigWagBlue: '#2a6aff',

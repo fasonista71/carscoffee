@@ -444,7 +444,7 @@ export function createRenderer(canvas) {
       const cx = x0 + 2 + ((h >>> 8) % Math.max(1, bw - 11));
       const cy = y + 6;
       /* rotor alternates between two spans so it reads as spinning */
-      const spin = Math.floor(performance.now() / 70) % 2;
+      const spin = Math.floor(worldNow() / 70) % 2;
       bctx.fillStyle = ink;
       bctx.fillRect(cx + 1, cy, 6, 3);
       bctx.fillRect(cx + 6, cy + 1, 3, 1);
@@ -518,6 +518,35 @@ export function createRenderer(canvas) {
   */
   const REF_HZ = 60;
   let lastFrameMs = 0;
+
+  /*
+    The world's own clock.
+
+    Everything that animates on the road ran off performance.now, which
+    keeps running while the game is paused, so a paused screen still had
+    hazard flashers ticking, cups bobbing and rubber fading out from
+    under a car that was not moving. Pause is supposed to be a freeze
+    frame.
+
+    This clock advances only while the run is live. Menus and press
+    states stay on real time, because those are the interface and the
+    interface is not paused. A backgrounded tab can hand back a gap of
+    minutes, so a single tick is capped at roughly a frame.
+  */
+  let worldMs = 0;
+  let worldClockLast = null;
+
+  function tickWorldClock(mode) {
+    const now = performance.now();
+    if (worldClockLast !== null && mode === 'playing') {
+      worldMs += Math.min(now - worldClockLast, 100);
+    }
+    worldClockLast = now;
+  }
+
+  function worldNow() {
+    return worldMs;
+  }
 
   function frameUnits() {
     const now = performance.now();
@@ -669,7 +698,7 @@ export function createRenderer(canvas) {
         y: Math.round(rearY),
         len,
         laidAtPx: view.distancePx,
-        bornMs: performance.now(),
+        bornMs: worldNow(),
         strength
       });
     }
@@ -684,7 +713,7 @@ export function createRenderer(canvas) {
   function drawSkids(view, pal) {
     if (skids.length === 0) return;
     const k = TUNING.render.skid;
-    const now = performance.now();
+    const now = worldNow();
     bctx.fillStyle = pal.skidMark;
     for (let i = skids.length - 1; i >= 0; i -= 1) {
       const s = skids[i];
@@ -769,13 +798,13 @@ export function createRenderer(canvas) {
 
   function startRunIntro() {
     introFromY = lastPlayerY;
-    introStartMs = performance.now();
+    introStartMs = worldNow();
   }
 
   function playerY(view) {
     if (view.mode === 'title' || view.mode === 'howto') return menuCarY(view);
     if (introFromY !== null) {
-      const t = (performance.now() - introStartMs) / TUNING.render.runIntroMs;
+      const t = (worldNow() - introStartMs) / TUNING.render.runIntroMs;
       if (t >= 1) {
         introFromY = null;
       } else {
@@ -811,7 +840,7 @@ export function createRenderer(canvas) {
     /* blinking BOOST! callout when an overtaker is bearing down on
        this lane and a boost is banked, so the escape move is obvious */
     if (view.boostHint && !view.boosting
-      && Math.floor(performance.now() / TUNING.render.boostHintBlinkMs) % 2 === 0) {
+      && Math.floor(worldNow() / TUNING.render.boostHintBlinkMs) % 2 === 0) {
       const pal = TUNING.palette.city;
       const tx = Math.round(cx);
       const ty = Math.round(cy - spr.height / 2 - 12);
@@ -833,7 +862,7 @@ export function createRenderer(canvas) {
     which lane is about to be hot.
   */
   function drawOvertakers(view, pal) {
-    const t = performance.now() / 1000;
+    const t = worldNow() / 1000;
     for (let i = 0; i < view.overtakers.length; i += 1) {
       const ov = view.overtakers[i];
       const dy = ov.distPx - view.distancePx;
@@ -851,7 +880,7 @@ export function createRenderer(canvas) {
          The bar sits on the vehicle's own roof: per sprite fractions
          put truck lights on the cab, never on carried cargo. */
       if (ov.emergency) {
-        const phase = Math.floor(performance.now() / TUNING.render.wigWagMs) % 2;
+        const phase = Math.floor(worldNow() / TUNING.render.wigWagMs) % 2;
         const fracs = TUNING.render.wigWagRoofFrac;
         const spriteName = TRAFFIC_VARIANTS[ov.variant].sprite;
         const roofFrac = fracs[spriteName] !== undefined ? fracs[spriteName] : fracs.default;
@@ -887,10 +916,49 @@ export function createRenderer(canvas) {
     it draws level with the player, so screen y falls out of the same
     numbers collision uses.
   */
+  /*
+    A working vehicle's own lights. Phase is keyed to the row's world
+    distance, the way the breakdown flashers are, so two taxis in the
+    same row do not blink in lockstep and a given vehicle's beat does
+    not change as it comes up the screen.
+  */
+  function drawWorkLight(variant, x, y, spr, pal, now, distPx) {
+    const spec = TUNING.render.workLights[TRAFFIC_VARIANTS[variant].sprite];
+    if (!spec) return;
+    const phase = Math.floor(now / spec.ms + (distPx % 5) * 0.37) % 2;
+    const ly = y + Math.round(spr.height * spec.roofFrac);
+    const cx = x + Math.round(spr.width / 2);
+    /*
+      Both of these vehicles are yellow, so an amber lamp painted
+      straight onto the bodywork is the one thing that cannot read.
+      Every lamp gets the outline the rest of the game gives its
+      pixels, which is what separates it from the paint underneath and
+      makes the off beat as legible as the on one.
+    */
+    if (spec.kind === 'sign') {
+      /* A roof sign: wider than it is tall, which is the shape that
+         reads as a sign at six pixels across. */
+      bctx.fillStyle = pal.outline;
+      bctx.fillRect(cx - 4, ly - 1, 8, 4);
+      bctx.fillStyle = phase === 0 ? pal.hazardLight : pal.hazardLightDim;
+      bctx.fillRect(cx - 3, ly, 6, 2);
+      return;
+    }
+    /* A beacon sweeping: one side bright, the other banked, trading
+       every beat, which is the cheapest honest read of a rotating
+       lamp. */
+    bctx.fillStyle = pal.outline;
+    bctx.fillRect(cx - 5, ly - 1, 10, 4);
+    bctx.fillStyle = phase === 0 ? pal.hazardLight : pal.hazardLightDim;
+    bctx.fillRect(cx - 4, ly, 3, 2);
+    bctx.fillStyle = phase === 0 ? pal.hazardLightDim : pal.hazardLight;
+    bctx.fillRect(cx + 1, ly, 3, 2);
+  }
+
   function drawTraffic(view) {
     const pal = TUNING.palette.city;
     const blinkMs = TUNING.render.hazardBlinkMs;
-    const now = performance.now();
+    const now = worldNow();
     for (let i = 0; i < view.rows.length; i += 1) {
       const row = view.rows[i];
       const screenY = TUNING.render.playerYPx - (row.distPx - view.distancePx);
@@ -921,6 +989,7 @@ export function createRenderer(canvas) {
           bctx.fillRect(x + 1, y + spr.height - 3, 2, 2);
           bctx.fillRect(x + spr.width - 3, y + spr.height - 3, 2, 2);
         }
+        drawWorkLight(row.variants[lane], x, y, spr, pal, now, row.distPx);
       }
     }
   }
@@ -1040,7 +1109,7 @@ export function createRenderer(canvas) {
       heart: getSprite('item_heart'),
       nitro: getSprite('item_nitro')
     };
-    const t = performance.now() / 1000;
+    const t = worldNow() / 1000;
     const hz = TUNING.render.coffeeJiggleHz;
     for (let i = 0; i < view.pickups.length; i += 1) {
       const item = view.pickups[i];
@@ -1218,7 +1287,7 @@ export function createRenderer(canvas) {
     drawPlate(1, barY - 1, 25, 7, pal, pal.outline);
 
     const blinkLow = low
-      && Math.floor(performance.now() / TUNING.render.lowBlinkMs) % 2 === 0;
+      && Math.floor(worldNow() / TUNING.render.lowBlinkMs) % 2 === 0;
     if (blinkLow) {
       drawText(bctx, 'Low', x0 + textWidth('Coffee', 1) / 2, barY + 1, pal.hazardLight,
         { scale: 1, align: 'center' });
@@ -1269,7 +1338,7 @@ export function createRenderer(canvas) {
     const bp = TUNING.render.boostPill;
     const labelX = barX + fb.wPx + 8;
     const hintOn = view.boostHint && !view.boosting
-      && (Math.floor(performance.now() / TUNING.render.boostHintBlinkMs) % 2 === 0);
+      && (Math.floor(worldNow() / TUNING.render.boostHintBlinkMs) % 2 === 0);
     /* Matching chip, so row two reads as one designed row rather than
        one labelled element and one bare one. */
     drawPlate(labelX - 1, barY - 1, textWidth('Boost', 1) + 3, 7, pal, pal.outline);
@@ -1836,7 +1905,7 @@ export function createRenderer(canvas) {
     read as a warning rather than road furniture.
   */
   function drawOvertakerWarnings(view, pal) {
-    const t = performance.now() / 1000;
+    const t = worldNow() / 1000;
     if (Math.floor(t * 6) % 2 !== 0) return;
     for (let i = 0; i < view.overtakers.length; i += 1) {
       const ov = view.overtakers[i];
@@ -1906,6 +1975,7 @@ export function createRenderer(canvas) {
   let prevMode = null;
 
   function drawFrame(view) {
+    tickWorldClock(view.mode);
     if (view.mode !== prevMode) {
       /* Resuming is not starting: the car did not go anywhere. */
       if (view.mode === 'playing' && prevMode !== 'paused') {
