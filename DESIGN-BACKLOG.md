@@ -314,18 +314,23 @@ leaving the mixer until the frames exist.
 
 ---
 
-## Roughly how these sort
+## Where these stand
 
-Not a commitment, just how they look from here.
+Updated 19 September, after the evening's work.
 
-| | Item | Size | Waiting on |
-|---|---|---|---|
-| 1 | D2 boost tracks | hours | nothing |
-| 2 | D8 part one, blinking lights | hours | nothing |
-| 3 | D1 two lane tap | a day, plus an oracle run | nothing |
-| 4 | D5 arcade initials | a day or two | a shape decision |
-| 5 | D7 pulled over runner | unknown until scoped | shoulder or lane |
-| 6 | D6 vehicle colours | small once picked | Jason's colour list |
-| 7 | D8 part two, mixer frames | small once drawn | art |
-| 8 | D3 scenery overhaul | large | art |
-| 9 | D4 online board | largest | a product decision |
+| Item | State | Waiting on |
+|---|---|---|
+| D2 boost tracks | Done. Marks bridge the ground covered, so the line is a line. | |
+| D8 part one, taxi and tow truck lights | Done, on the right parts of the vehicles. | |
+| D5 arcade initials | Done. Wheel in the canvas, no text field, closes 1.11 and 2.8. | |
+| D1 two lane tap | Shipped, **not closed**: the fairness oracle still drives one lane moves only, so nothing has actually tested the new one. | an oracle pass |
+| D6 vehicle colours | Lists are in hand. Needs the survey of which vehicles are repaintable, then a contrast pass against the road grey. | nothing |
+| D7 pulled over runner | Not started. | shoulder or lane, which is a different size of job either way |
+| D8 part two, the mixer drum | Not started. Needs frames and an atlas contract that understands a sequence. | art |
+| D3 scenery overhaul | Not started. | art |
+| D4 online board | Not started. The seam in `leaderboard.js` is a morning; the product is not. | a product decision, and whether it waits for Game Center |
+
+The honest order from here: the oracle pass on D1 first, because it is the one
+thing shipped without its gate; then D6, which is small and now unblocked;
+then D7 once Jason says shoulder or lane. Everything else waits on art or on a
+decision.
