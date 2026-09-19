@@ -29,31 +29,113 @@
   oracle across 100 seeds at six speeds.
 */
 
-import { TUNING, TRAFFIC_VARIANTS } from './tuning.js';
-import { nextFloat01, nextIntBetween } from './rng.js';
+import { TUNING, TRAFFIC_VARIANTS, TRAFFIC_CIVILIAN_COUNT } from './tuning.js';
+import { nextFloat01 } from './rng.js';
 
-/* How many recent variant picks to avoid repeating. */
-const RECENT_WINDOW = 6;
-const REROLL_TRIES = 4;
+/*
+  Art variants are dealt from a shuffled bag, not rolled.
 
+  Rejection sampling was the old approach: roll, and reroll up to four
+  times if the result was among the last six used. Measured over
+  8,674 sampled screens it left a duplicate sprite visible on 10.3% of
+  them, and it was not even handing out the cars evenly: the roadster
+  turned up on 6.3% of sightings against the garbage truck's 2.3%,
+  nearly three to one, because a bounded reroll gives up and takes a
+  repeat rather than keep trying.
+
+  A bag cannot do either. Every variant is dealt exactly once before
+  any is dealt again, so a repeat is impossible inside a full cycle,
+  and over time every car appears the same number of times. The only
+  seam is the join between one bag and the next, where the last card
+  of one shuffle could match the first of the next, so the refill
+  swaps that case away.
+*/
 export function createGenState(rngState) {
-  return { rngState, recent: [] };
+  return { rngState, bag: [], lastDealt: -1, recentPlaced: [] };
 }
 
 /*
-  Picks an art variant, rerolling a bounded number of times to avoid
-  anything used recently (previous rows or the other lane of this
-  row). Bounded so it stays deterministic and cannot loop; with a 50+
-  variant pool the first roll almost always lands.
+  What is actually on the road, as opposed to what was dealt.
+
+  The bag alone was not enough. Clustering rerolls a whole row spec up
+  to a few times and throws the losing ones away, so a single placed
+  row can burn a dozen cards that never reach the player. The bag then
+  cycles every two or three rows and its no repeat guarantee stops
+  covering the span a car is visible for. Measured: duplicates landed
+  in adjacent rows 548 times against 1 in the same row.
+
+  So world.js reports back what actually got placed, and that is
+  excluded from the next few rows no matter what the bag is doing.
+
+  It remembers MODELS rather than sprites. Most of the pool is
+  repaints, and a red muscle car beside a blue one still reads as the
+  same car twice; only the bodyshell being different reads as two
+  cars. Capped well under the number of models so there is always
+  something left to deal.
+*/
+const PLACED_MEMORY_ROWS = 3;
+
+export function notePlaced(genState, variants) {
+  const used = [];
+  for (let i = 0; i < variants.length; i += 1) {
+    if (variants[i] >= 0) used.push(TRAFFIC_VARIANTS[variants[i]].model);
+  }
+  if (used.length === 0) return;
+  genState.recentPlaced.push(used);
+  while (genState.recentPlaced.length > PLACED_MEMORY_ROWS) genState.recentPlaced.shift();
+}
+
+function refillBag(genState, s) {
+  const bag = [];
+  for (let i = 0; i < TRAFFIC_CIVILIAN_COUNT; i += 1) bag.push(i);
+  /* Fisher Yates on the seeded stream, so the shuffle is part of the
+     deterministic world and a replayed seed deals the same cars. */
+  for (let i = bag.length - 1; i > 0; i -= 1) {
+    let r;
+    [r, s] = nextFloat01(s);
+    const j = Math.floor(r * (i + 1));
+    const t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+  }
+  /* Never let a new bag open with the card the old one closed on. */
+  if (bag.length > 1 && bag[bag.length - 1] === genState.lastDealt) {
+    const t = bag[bag.length - 1]; bag[bag.length - 1] = bag[0]; bag[0] = t;
+  }
+  genState.bag = bag;
+  return s;
+}
+
+/*
+  Deals the next variant. Cards come off the end of the bag; the only
+  reason to reach further in is alsoAvoid, which carries the other
+  lane of this same row, because two identical cars side by side is
+  the one repeat a player cannot miss.
 */
 function pickVariant(genState, s, alsoAvoid) {
-  let v = 0;
-  for (let attempt = 0; attempt < REROLL_TRIES; attempt += 1) {
-    [v, s] = nextIntBetween(s, 0, TRAFFIC_VARIANTS.length);
-    if (!genState.recent.includes(v) && !alsoAvoid.includes(v)) break;
+  if (genState.bag.length === 0) s = refillBag(genState, s);
+  /* alsoAvoid carries variant indices from the other lane of this
+     same row; everything else is compared by model. */
+  const avoidModels = [];
+  for (let i = 0; i < alsoAvoid.length; i += 1) {
+    if (alsoAvoid[i] >= 0) avoidModels.push(TRAFFIC_VARIANTS[alsoAvoid[i]].model);
   }
-  genState.recent.push(v);
-  if (genState.recent.length > RECENT_WINDOW) genState.recent.shift();
+  for (let i = 0; i < genState.recentPlaced.length; i += 1) {
+    for (let j = 0; j < genState.recentPlaced[i].length; j += 1) {
+      avoidModels.push(genState.recentPlaced[i][j]);
+    }
+  }
+  const blocked = (v) => avoidModels.includes(TRAFFIC_VARIANTS[v].model);
+  let idx = genState.bag.length - 1;
+  while (idx >= 0 && blocked(genState.bag[idx])) idx -= 1;
+  /* If the whole remaining bag is spoken for, refill and try once more
+     rather than knowingly dealing a repeat. */
+  if (idx < 0) {
+    s = refillBag(genState, s);
+    idx = genState.bag.length - 1;
+    while (idx >= 0 && blocked(genState.bag[idx])) idx -= 1;
+    if (idx < 0) idx = genState.bag.length - 1;
+  }
+  const v = genState.bag.splice(idx, 1)[0];
+  genState.lastDealt = v;
   return [v, s];
 }
 
@@ -66,7 +148,7 @@ function pickVariant(genState, s, alsoAvoid) {
   Returns { lanes, variants, speedFrac, gapJitter, clusterRoll,
   tightJitter, coffee, hazard }, where coffee is null or
   { kind: 'tension' | 'gap', laneRoll } and hazard is null or
-  { typeRoll, laneRoll }.
+  { typeRoll, laneRoll, cupRoll, artRoll }.
 */
 /* Weighted lane pick from a normalized-enough weight list. */
 function pickWeighted(s, weights) {
@@ -142,17 +224,26 @@ export function nextRowSpec(genState, tierCfg) {
     let typeRoll;
     let laneRoll;
     let cupRoll;
+    let artRoll;
     [typeRoll, s] = nextFloat01(s);
     [laneRoll, s] = nextFloat01(s);
     [cupRoll, s] = nextFloat01(s);
-    hazard = { typeRoll, laneRoll, cupRoll };
+    /* Which of the debris sprites this one wears. Art only: every
+       rubble hazard has the same hitbox and the same cost whatever it
+       is drawn as, so this never changes how a run plays. */
+    [artRoll, s] = nextFloat01(s);
+    hazard = { typeRoll, laneRoll, cupRoll, artRoll };
   }
 
+  let nitroRoll;
+  let nitroLaneRoll;
   let heartRoll;
   let heartLaneRoll;
   let aggroRoll;
   let aggroLaneRoll;
   [heartRoll, s] = nextFloat01(s);
+  [nitroRoll, s] = nextFloat01(s);
+  [nitroLaneRoll, s] = nextFloat01(s);
   [heartLaneRoll, s] = nextFloat01(s);
   [aggroRoll, s] = nextFloat01(s);
   [aggroLaneRoll, s] = nextFloat01(s);
@@ -171,7 +262,8 @@ export function nextRowSpec(genState, tierCfg) {
   genState.rngState = s;
   return {
     lanes, variants, speedFrac, gapJitter, clusterRoll, tightJitter,
-    coffee, hazard, heartRoll, heartLaneRoll, aggroRoll, aggroLaneRoll,
+    coffee, hazard, heartRoll, heartLaneRoll, nitroRoll, nitroLaneRoll,
+    aggroRoll, aggroLaneRoll,
     breakdownRoll, staggerRolls
   };
 }

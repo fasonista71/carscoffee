@@ -7,10 +7,10 @@
   the headless tests directly.
 */
 
-import { TUNING, TRAFFIC_VARIANTS } from './tuning.js';
+import { TUNING, TRAFFIC_VARIANTS, PLAYER_SPRITES, OBSTACLE_SPRITES } from './tuning.js';
 import { seedToState, nextFloat01 } from './rng.js';
 import { createPlayer, laneCenterXPx, playerLaneFloat } from './entities.js';
-import { createGenState, nextRowSpec } from './generator.js';
+import { createGenState, nextRowSpec, notePlaced } from './generator.js';
 
 export function createWorld({ seed, vehicle, environment }) {
   const weights = environment.obstacleWeights;
@@ -28,6 +28,10 @@ export function createWorld({ seed, vehicle, environment }) {
     deathCause: null,
     fuel: TUNING.fuel.max,
     boostFramesLeft: 0,
+    /* Frames of boost that cost no coffee, granted by a nitro. */
+    boostFreeFrames: 0,
+    /* A banked nitro, spent by the ordinary boost gesture. */
+    nitroCharges: 0,
     boostHint: false,
     /* Distance at which the next breakdown car may appear. */
     nextBreakdownAtPx: TUNING.traffic.breakdownEveryMeters * TUNING.speed.pxPerMeter,
@@ -46,8 +50,20 @@ export function createWorld({ seed, vehicle, environment }) {
     /* Event names emitted this frame, drained by the app layer for
        sound and rumble. Plain strings; the simulation stays pure. */
     events: [],
-    /* Fast sports cars passing from behind, past tier 1. */
+    /* Fast sports cars passing from behind. */
     overtakers: [],
+    /* Passes are scheduled by odometer, not rolled per second. The
+       first waits out the opening stretch; every later one is set
+       from the point the previous pass actually launched. */
+    nextPassAtPx: TUNING.overtakers.firstPassAtMeters * TUNING.speed.pxPerMeter,
+    /* Fires once per run, the first time a coffee cup comes into
+       reading distance. The app layer decides whether to actually
+       show the tip; the simulation only reports the moment. */
+    coffeeSeen: false,
+    /* Odometer of the last pursuit, so the next one can be held off.
+       Negative infinity would do; a value one gap in the past means
+       the first chase is never blocked. */
+    lastChaseAtPx: -TUNING.overtakers.emergencyMinGapMeters * TUNING.speed.pxPerMeter,
     /* Traffic rows, ordered by distPx. A row is a lane pattern that
        moves as a unit at its own speed. */
     rows: [],
@@ -87,6 +103,29 @@ function baseSpeedPxPerSec(world) {
   return TUNING.speed.basePxPerSec * world.speedMultiplier * world.speedTierMult;
 }
 
+/*
+  The speed to size a gap against.
+
+  A row's fair gap is computed once, when the row spawns, but the
+  player does not arrive until seconds later. speedTierMult ramps
+  toward the tier's target the whole time, so a gap sized at the speed
+  the player had at spawn is a gap they arrive at faster than it was
+  built for. That is how seed 79 trapped the oracle at tier 9: the row
+  asked for 274px of clearance, and by the time the player reached it
+  the two lane crossing it demanded needed more.
+
+  Sizing against the tier's target instead of the instantaneous value
+  closes it. It only ever raises the number during a ramp, and once
+  the ramp settles the two agree, so settled traffic density is
+  unchanged. Boost is deliberately excluded: choosing to boost into a
+  closing gap is the player's call, not an unfair road.
+*/
+function plannedSpeedPxPerSec(world) {
+  const target = TUNING.tiers[world.tier].speed;
+  const mult = Math.max(world.speedTierMult, target);
+  return TUNING.speed.basePxPerSec * world.speedMultiplier * mult;
+}
+
 export function distanceMeters(world) {
   return world.distancePx / TUNING.speed.pxPerMeter;
 }
@@ -104,7 +143,7 @@ export function distanceMeters(world) {
 */
 export function fairMinGapForPairPx(world, maxHA, maxHB) {
   const o = TUNING.obstacles;
-  const v = currentSpeedPxPerSec(world);
+  const v = plannedSpeedPxPerSec(world);
   const timePx = v * ((2 * world.laneTweenMs + o.reactionBufferMs) / 1000);
   const extentPx = world.player.hitbox.hPx + (maxHA + maxHB) / 2 - 2 * o.hitboxShrinkPx;
   return timePx + extentPx;
@@ -191,6 +230,7 @@ function tickTimers(world) {
     world.boostFramesLeft -= 1;
     if (world.boostFramesLeft === 0) world.events.push('boost_end');
   }
+  if (world.boostFreeFrames > 0) world.boostFreeFrames -= 1;
   if (world.slideLockFrames > 0) world.slideLockFrames -= 1;
   if (world.slowFrames > 0) world.slowFrames -= 1;
   if (world.invulnFrames > 0) world.invulnFrames -= 1;
@@ -245,8 +285,17 @@ function applyIntent(world, intent) {
 
 function tryBoost(world) {
   /* No extension or stacking: presses during an active boost are
-     ignored. Gated only by minimum fuel; no separate cooldown. */
+     ignored. A banked nitro is spent first, and it ignores the fuel
+     floor: being nearly dry is exactly when the escape move matters
+     and exactly when coffee cannot pay for it. */
   if (world.boostFramesLeft > 0) return;
+  if (world.nitroCharges > 0) {
+    world.nitroCharges -= 1;
+    world.boostFramesLeft = msToFrames(TUNING.boost.durationMs);
+    world.boostFreeFrames = world.boostFramesLeft;
+    world.events.push('boost_start');
+    return;
+  }
   if (world.fuel < TUNING.boost.minFuel) return;
   world.boostFramesLeft = msToFrames(TUNING.boost.durationMs);
   world.events.push('boost_start');
@@ -295,6 +344,17 @@ function advanceTraffic(world, dt) {
   const pickups = world.pickups;
   for (let i = 0; i < pickups.length; i += 1) {
     pickups[i].distPx += pickups[i].speedPxPerSec * dt;
+  }
+  if (!world.coffeeSeen) {
+    const lead = TUNING.tips.coffeeLeadPx;
+    for (let i = 0; i < pickups.length; i += 1) {
+      const dy = pickups[i].distPx - world.distancePx;
+      if (pickups[i].kind === 'coffee' && dy > 0 && dy < lead) {
+        world.coffeeSeen = true;
+        world.events.push('coffee_seen');
+        break;
+      }
+    }
   }
 }
 
@@ -526,6 +586,9 @@ function spawn(world) {
     minGapPrevPx
   };
   world.rows.push(row);
+  /* Tell the generator what actually landed, so the next few rows can
+     avoid it regardless of how many specs clustering threw away. */
+  notePlaced(world.gen, row.variants);
   if (tight) {
     world.corridorMask &= openMask;
     world.clusterLen += 1;
@@ -563,15 +626,32 @@ function spawn(world) {
       world.pickups.push({ kind: 'heart', lane, distPx: at, speedPxPerSec: 0 });
     }
   }
+  /* Nitro, same shape as a heart but with no state gate: it is a
+     reward for reading the road, not a rescue the game doles out. */
+  if (!tight && last !== null && !hazardPlaced
+      && spec.nitroRoll < TUNING.nitro.pickupChancePerGap) {
+    const open = [];
+    for (let l = 0; l < TUNING.road.laneCount; l += 1) {
+      if (!row.lanes[l]) open.push(l);
+    }
+    const lane = open[Math.min(open.length - 1, Math.floor(spec.nitroLaneRoll * open.length))];
+    const at = row.distPx - gapPx * 0.55;
+    if (at > last.distPx + 50) {
+      world.pickups.push({ kind: 'nitro', lane, distPx: at, speedPxPerSec: 0 });
+    }
+  }
   world.pendingSpec = null;
 }
 
 /* Room a forced slide needs before the next row: slide lock plus two
-   lane changes plus reaction time at current speed, plus body
-   extents. */
+   lane changes plus reaction time at the tier's settled speed,
+   plus body extents. */
 function slickRecoveryPx(world, rowMaxH) {
   const hz = TUNING.hazards;
-  const v = currentSpeedPxPerSec(world);
+  /* Spawn time sizing, so the same ramp argument as
+     fairMinGapForPairPx applies: the player arrives faster than they
+     were travelling when the puddle was placed. */
+  const v = plannedSpeedPxPerSec(world);
   return v * ((hz.slick.slideLockMs + 2 * world.laneTweenMs + TUNING.obstacles.reactionBufferMs) / 1000)
     + world.player.hitbox.hPx + rowMaxH / 2;
 }
@@ -602,7 +682,9 @@ function addHazard(world, spec, row, gapPx, last) {
     const lane = open[Math.min(open.length - 1, Math.floor(spec.hazard.laneRoll * open.length))];
     const at = row.distPx - gapPx * 0.5;
     if (at < last.distPx + 60) return false;
-    world.hazards.push({ type, lane, distPx: at });
+    const art = Math.min(OBSTACLE_SPRITES.length - 1,
+      Math.floor(spec.hazard.artRoll * OBSTACLE_SPRITES.length));
+    world.hazards.push({ type, lane, distPx: at, art });
     return true;
   }
   const pairs = [];
@@ -682,7 +764,7 @@ function drainFuel(world, dt) {
   /* Passive drain scales with the tier's speed, per the brief. */
   const before = world.fuel;
   const rate = TUNING.fuel.passiveDrainPerSec * world.speedTierMult
-    + (isBoosting(world) ? TUNING.fuel.boostDrainPerSec : 0);
+    + ((isBoosting(world) && world.boostFreeFrames === 0) ? TUNING.fuel.boostDrainPerSec : 0);
   world.fuel -= rate * dt;
   if (world.fuel <= 0) {
     world.fuel = 0;
@@ -702,7 +784,8 @@ function collectCoffee(world) {
   const px = laneCenterXPx(playerLaneFloat(p));
   for (let i = world.pickups.length - 1; i >= 0; i -= 1) {
     const item = world.pickups[i];
-    const box = item.kind === 'heart' ? TUNING.lives.hitbox : c.hitbox;
+    const box = item.kind === 'heart' ? TUNING.lives.hitbox
+      : (item.kind === 'nitro' ? TUNING.nitro.hitbox : c.hitbox);
     const halfW = (p.hitbox.wPx + box.wPx) / 2 + c.pickupSlopPx;
     const halfH = (p.hitbox.hPx + box.hPx) / 2 + c.pickupSlopPx;
     const dy = item.distPx - world.distancePx;
@@ -712,6 +795,23 @@ function collectCoffee(world) {
       if (item.kind === 'heart') {
         world.hearts = Math.min(TUNING.lives.max, world.hearts + 1);
         world.events.push('heart_pickup');
+      } else if (item.kind === 'nitro') {
+        /*
+          Banks a charge rather than firing one.
+
+          It used to fire on pickup, and that broke the fairness
+          invariant outright: every gap on the road is sized against
+          the speed the player will be doing, and the whole model
+          assumes boosting is a choice. A pickup that accelerates you
+          to 1.65x without asking throws you into gaps built for 1.0x.
+          The oracle proved it, doomed on seed 3 at tier 7 while in a
+          nitro boost it never requested.
+
+          Banked, it is still a free full boost that works below the
+          fuel floor. It is just spent when the player decides.
+        */
+        world.nitroCharges = Math.min(TUNING.nitro.maxCharges, world.nitroCharges + 1);
+        world.events.push('nitro_pickup');
       } else {
         world.fuel = Math.min(TUNING.fuel.max, world.fuel + TUNING.fuel.coffeeRefill);
         world.events.push('coffee_pickup');
@@ -804,10 +904,25 @@ function checkHazards(world) {
       startSlide(world, h);
     } else {
       world.hazards.splice(i, 1);
+      const fuelBefore = world.fuel;
       world.fuel -= hz.rubble.fuelCost;
       world.slowFrames = Math.max(world.slowFrames, msToFrames(hz.rubble.slowMs));
       world.boostFramesLeft = 0;
+      /* The free stretch belongs to the boost that just ended. Leave
+         it running and the next boost, a paid one, drains nothing for
+         the remainder, and the coffee economy lies about its cost. */
+      world.boostFreeFrames = 0;
       world.events.push('rubble_hit');
+      /* drainFuel owns the rising edge, but it is not the only thing
+         that subtracts fuel. Rubble taking the player from 30 to 18
+         used to cross the low threshold in silence, and the warning
+         then stayed off for the rest of the run because the edge had
+         already been passed. */
+      if (fuelBefore > TUNING.fuel.lowThreshold
+          && world.fuel <= TUNING.fuel.lowThreshold
+          && world.fuel > 0) {
+        world.events.push('fuel_low');
+      }
       if (world.fuel <= 0) {
         world.fuel = 0;
         world.status = 'dead';
@@ -860,6 +975,7 @@ function lethalHit(world) {
     world.spinFrames = msToFrames(TUNING.stumble.spinMs);
     world.slowFrames = Math.max(world.slowFrames, msToFrames(TUNING.stumble.slowMs));
     world.boostFramesLeft = 0;
+    world.boostFreeFrames = 0;
     world.slideLockFrames = 0;
     world.events.push('stumble');
   } else {
@@ -873,17 +989,27 @@ function lethalHit(world) {
 /* Sports cars from behind: spectacle with teeth. Lethal on contact
    like any traffic, telegraphed by the warning chevrons the renderer
    draws while they approach. */
-const OVERTAKER_VARIANT_IDS = ['lambo', 'lambo2', 'camaro', 'camaro2',
-  'mustang2', 'mustang3', 'challenger2', 'challenger3']
+const OVERTAKER_VARIANT_IDS = ['muscle', 'super_car', 'rally',
+  'hot_hatch', 'sport_white']
+  /* Never a car the player might be driving. The player's three cars
+     are not in TRAFFIC_VARIANTS at all, so this cannot bite today; it
+     stays as the guard for whoever adds a fourth. */
+  .filter((name) => !PLAYER_SPRITES.includes(name))
   .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
   .filter((i) => i >= 0);
 
-/* The emergency fleet, three stand ins until real art arrives: the
-   blue truck is the SWAT van, the red truck is the fire truck, the
-   blue car is the police unit. The renderer adds the wig wag roof
-   lights that sell the idea. They only ever appear in pursuit,
-   chasing a speeder from behind. */
-const EMERGENCY_VARIANT_IDS = ['truck3', 'tow_truck2', 'mini']
+/* The pursuit fleet: a city cruiser, a state car, a sheriff's car and
+   a SWAT van. These ride behind a speeder. */
+const EMERGENCY_VARIANT_IDS = ['police_cruiser', 'state_police', 'sheriff', 'swat']
+  .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
+  .filter((i) => i >= 0);
+
+/* On a call, alone. An ambulance or a fire truck does not chase
+   anybody, so instead of riding behind a speeder it replaces one: the
+   pass is a single vehicle, lights and siren, going somewhere. This
+   is the only way these two appear now that they are out of ordinary
+   traffic, and it reuses the pass machinery whole. */
+const SOLO_CALL_VARIANT_IDS = ['ambulance', 'fire_truck']
   .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
   .filter((i) => i >= 0);
 
@@ -1043,16 +1169,17 @@ function overtakerLaneClear(world, lane, vO, behindPx, behindFarPx = behindPx) {
 
 function maybeSpawnOvertaker(world) {
   const o = TUNING.overtakers;
-  const chance = tierConfig(world).overtakerChance;
-  if (!chance || chance <= 0) return;
   /* Exactly one pass event at a time: a lone speeder or one pursuit
      pair. The next cannot start until this one is done. */
   if (world.overtakers.length > 0) return;
+  /* Scheduled by road travelled, not by a per second roll. Until the
+     odometer reaches the mark there is nothing to do; past it we try
+     once a second until an attempt actually lands, so a pass blocked
+     by traffic is deferred rather than skipped. */
+  if (world.distancePx < world.nextPassAtPx) return;
   if (world.frame % TUNING.logic.hz !== 0) return;
   let s = world.rngState;
-  let roll;
-  [roll, s] = nextFloat01(s);
-  if (roll < chance) {
+  {
     let laneRoll;
     let speedRoll;
     let variantRoll;
@@ -1078,8 +1205,15 @@ function maybeSpawnOvertaker(world) {
     const behindPx = o.spawnBehindPx * (1 - o.spawnBehindJitter / 2 + behindRoll * o.spawnBehindJitter);
     /* Emergency vehicles only ever appear in pursuit: the speeder in
        front, the lights behind. Never solo, never leading. */
+    const sinceChasePx = world.distancePx - world.lastChaseAtPx;
     const chase = EMERGENCY_VARIANT_IDS.length > 0
-      && emergencyRoll < o.emergencyChance;
+      && emergencyRoll < o.emergencyChance
+      && sinceChasePx >= o.emergencyMinGapMeters * TUNING.speed.pxPerMeter;
+    /* Not a pursuit, so the pass may instead be one vehicle on a call.
+       Reads off the same roll from the far end, so no extra draw and
+       the two outcomes cannot both fire. */
+    const soloCall = !chase && SOLO_CALL_VARIANT_IDS.length > 0
+      && emergencyRoll > 1 - o.soloCallChance;
     const behindFarPx = chase ? behindPx + o.chaseGapPx : behindPx;
     const edgeA = laneRoll < 0.5 ? 0 : TUNING.road.laneCount - 1;
     const edgeB = TUNING.road.laneCount - 1 - edgeA;
@@ -1103,17 +1237,31 @@ function maybeSpawnOvertaker(world) {
       const pick = (ids, r) => ids[Math.min(ids.length - 1, Math.floor(r * ids.length))];
       world.overtakers.push({
         lane, distPx: world.distancePx - behindPx, speedPxPerSec: vO,
-        variant: pick(OVERTAKER_VARIANT_IDS, variantRoll), emergency: false
+        variant: soloCall ? pick(SOLO_CALL_VARIANT_IDS, variantRoll)
+                          : pick(OVERTAKER_VARIANT_IDS, variantRoll),
+        /* emergency drives the wig wag lights and the siren, so the
+           lone caller carries it exactly like a pursuit car does */
+        emergency: soloCall
       });
-      if (chase) {
+      if (soloCall) {
+        world.events.push('siren');
+      } else if (chase) {
         world.overtakers.push({
           lane, distPx: world.distancePx - behindFarPx, speedPxPerSec: vO,
           variant: pick(EMERGENCY_VARIANT_IDS, chaseRoll), emergency: true
         });
         world.events.push('siren');
+        world.lastChaseAtPx = world.distancePx;
       } else {
         world.events.push('overtake');
       }
+      /* The next gap is measured from the pass that actually
+         launched, so blocked attempts never bunch two passes up. */
+      let gapRoll;
+      [gapRoll, s] = nextFloat01(s);
+      const gapPx = o.passEveryMeters * TUNING.speed.pxPerMeter
+        * (1 - o.passJitter / 2 + gapRoll * o.passJitter);
+      world.nextPassAtPx = world.distancePx + gapPx;
     }
   }
   world.rngState = s;
@@ -1131,7 +1279,13 @@ function maybeSpawnOvertaker(world) {
 function updateBoostHint(world) {
   const was = world.boostHint;
   world.boostHint = false;
-  if (world.fuel < TUNING.boost.minFuel || isBoosting(world)) return;
+  /* A banked nitro is usable below the fuel floor, which tuning.js
+     calls the whole point of it: the moment you most need an escape
+     is the moment you can least afford one. Checking fuel alone made
+     the prompt go silent in exactly that case, while tryBoost and
+     view.boostReady both said the boost was available. */
+  const canBoost = world.fuel >= TUNING.boost.minFuel || world.nitroCharges > 0;
+  if (!canBoost || isBoosting(world)) return;
   const o = TUNING.overtakers;
   const windowPx = o.spawnBehindPx + o.chaseGapPx;
   for (let i = 0; i < world.overtakers.length; i += 1) {

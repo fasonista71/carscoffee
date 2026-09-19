@@ -10,6 +10,7 @@
 export const AUDIO_EVENTS = [
   'coffee_pickup',
   'heart_pickup',
+  'nitro_pickup',
   'boost_start',
   'boost_end',
   'crash',
@@ -23,5 +24,9 @@ export const AUDIO_EVENTS = [
   'siren',
   'boost_hint',
   'game_over',
+  'ui_press',
+  'ui_confirm',
+  'ui_toggle_on',
+  'ui_toggle_off',
   'music_loop'
 ];

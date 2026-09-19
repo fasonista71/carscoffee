@@ -43,6 +43,14 @@ const GLYPHS = {
   8: [0b111, 0b101, 0b111, 0b101, 0b111],
   9: [0b111, 0b101, 0b111, 0b001, 0b111],
   '&': [0b010, 0b101, 0b010, 0b101, 0b011],
+  /* The pickup callouts are '+COFFEE' and '+LIFE'. Without this glyph
+     drawText skipped the character silently and both read with a
+     leading blank, while textWidth still counted it, so centred text
+     sat 2px left of the pickup it was pointing at. */
+  '+': [0b000, 0b010, 0b111, 0b010, 0b000],
+  /* Only reachable from the haptics row's N/A fallback, but a missing
+     glyph there would render 'N A'. */
+  '/': [0b001, 0b001, 0b010, 0b100, 0b100],
   '.': [0b000, 0b000, 0b000, 0b000, 0b010],
   '!': [0b010, 0b010, 0b010, 0b000, 0b010],
   ' ': [0b000, 0b000, 0b000, 0b000, 0b000]

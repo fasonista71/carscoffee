@@ -13,7 +13,7 @@ import { VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
 function mkWorld() {
   return createWorld({
     seed: 1,
-    vehicle: VEHICLES.sports,
+    vehicle: VEHICLES.coupe,
     environment: ENVIRONMENTS.city
   });
 }

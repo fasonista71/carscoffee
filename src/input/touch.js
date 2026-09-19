@@ -2,14 +2,32 @@
   Touch adapter: swipe and tap zones, both active, normalized to the
   same intents the keyboard produces.
 
-  Listens on the whole viewport, not the canvas. The canvas is
-  letterboxed, so canvas only listeners leave a band of dead screen
-  around the play area, and lane taps land exactly there. Tap zones
-  are therefore screen thirds, not canvas thirds.
+  Listens on the stage element, which fills the viewport, rather than
+  the canvas or the window. Two reasons, and they pull in opposite
+  directions.
+
+  Not the canvas: it is letterboxed, so canvas only listeners leave a
+  band of dead screen around the play area, and lane taps land exactly
+  there. Tap zones are screen thirds, not canvas thirds.
+
+  Not the window: since iOS 11.3, WebKit makes touchstart and touchmove
+  listeners on window, document and body passive by DEFAULT, and a
+  passive listener cannot preventDefault. That matters more than it
+  sounds, because Apple documents that a one finger drag is a pan, and
+  during a pan iOS sends the page no touch events at all. Fail to
+  prevent the default and you do not merely fail to stop a scroll, you
+  stop receiving the gesture. Taps still arrive, drags vanish. A
+  listener on an ordinary element is not covered by that rule.
 
   Every touch is tracked independently by identifier, so a second tap
   that begins before the first finger has lifted still registers. Fast
   alternating thumb taps depend on this.
+
+  That claim used to be false. A second contact ran active.clear() and
+  threw away the in-flight gesture, so two thumbs produced no lane
+  changes at all and then a pause on lift. On a two thumb fidget game
+  that is the whole control scheme gone. Nothing caught it because no
+  test drives this adapter.
 
   Uses Touch Events rather than Pointer Events. This is deliberate:
   Touch Events are the oldest and most battle tested touch path on iOS
@@ -30,33 +48,49 @@
     resolves it per TUNING.input.tapMode, since resolution can depend
     on canvas geometry and car position, which input has no business
     knowing.
-  - A three finger touch toggles the dev overlay.
+  - Two fingers down together, with neither of them doing anything
+    else, is a pause. If either finger tapped or swiped, the gesture
+    was play and no pause is emitted: alternating thumbs routinely put
+    two fingers on the glass at once and must never pause the run.
+
+  There is deliberately no gesture for the dev overlay. It used to be
+  three fingers, which shipped, and meant a player could open a panel
+  of live tuning sliders by accident. The overlay is now behind a URL
+  parameter and is not in the build at all.
 */
 
 import { TUNING } from '../game/tuning.js';
 
-export function attachTouch(emit) {
+export function attachTouch(emit, target) {
+  /* The stage element when the app hands us one, the window only as a
+     last resort (see the passive by default note above). */
+  const node = target || document.getElementById('stage') || window;
   /* identifier -> { x, y, time, swiped } */
   const active = new Map();
-  /* Most fingers seen during the current gesture. Resolved when the
-     last finger lifts: two fingers pause, three toggle the overlay. */
+  /* Most fingers seen during the current gesture, and whether any of
+     them did something the player meant as play. Both are resolved
+     when the last finger lifts and reset on cancel, because a gesture
+     the OS steals must not leave its count behind to poison the next
+     tap. */
   let gestureMax = 0;
+  let gesturePlayed = false;
 
   function onOverlay(e) {
-    return Boolean(e.target && e.target.closest && e.target.closest('#dev-overlay'));
+    return Boolean(e.target && e.target.closest
+      && e.target.closest('#dev-overlay, #initials-entry'));
   }
 
   function onTouchStart(e) {
     if (onOverlay(e)) return;
     e.preventDefault();
     gestureMax = Math.max(gestureMax, e.touches.length);
-    if (e.touches.length > 1) {
-      active.clear();
-      return;
-    }
     for (let i = 0; i < e.changedTouches.length; i += 1) {
       const t = e.changedTouches[i];
       active.set(t.identifier, { x: t.clientX, y: t.clientY, time: e.timeStamp, swiped: false });
+      /* Where the finger went down, so a menu can show the button
+         pressed while it is held. Gameplay ignores this entirely:
+         nothing may act on a press, only on a release. */
+      emit({ type: 'pressAt', clientX: t.clientX, clientY: t.clientY });
     }
   }
 
@@ -72,6 +106,9 @@ export function attachTouch(emit) {
       const th = TUNING.input.swipeThresholdPx;
       if (Math.abs(dx) >= th || Math.abs(dy) >= th) {
         rec.swiped = true;
+        gesturePlayed = true;
+        /* Dragged off, so it is not being pressed any more. */
+        emit({ type: 'pressEnd' });
         if (Math.abs(dx) >= Math.abs(dy)) {
           emit({ type: 'lane', dir: dx > 0 ? 1 : -1 });
         } else if (dy < 0) {
@@ -96,12 +133,16 @@ export function attachTouch(emit) {
         emit({ type: 'releaseAt', clientX: t.clientX, clientY: t.clientY });
         continue;
       }
+      gesturePlayed = true;
       emit({ type: 'tapAt', clientX: t.clientX, clientY: t.clientY });
     }
     if (e.touches.length === 0) {
-      if (gestureMax >= 3) emit({ type: 'devtoggle' });
-      else if (gestureMax === 2) emit({ type: 'pause' });
+      /* A pause only when two fingers were down together and neither
+         of them played. Two thumbs mid rally hit gestureMax 2 all the
+         time and must be left alone. */
+      if (gestureMax === 2 && !gesturePlayed) emit({ type: 'pause' });
       gestureMax = 0;
+      gesturePlayed = false;
     }
   }
 
@@ -109,17 +150,26 @@ export function attachTouch(emit) {
     for (let i = 0; i < e.changedTouches.length; i += 1) {
       active.delete(e.changedTouches[i].identifier);
     }
+    /* The OS took the gesture; nothing is being held any more. */
+    emit({ type: 'pressEnd' });
+    /* A notification, a call or a control centre swipe cancels the
+       gesture. Without this reset the count survived into the next
+       one, so a single later tap could fire a pause. */
+    if (e.touches.length === 0) {
+      gestureMax = 0;
+      gesturePlayed = false;
+    }
   }
 
-  window.addEventListener('touchstart', onTouchStart, { passive: false });
-  window.addEventListener('touchmove', onTouchMove, { passive: false });
-  window.addEventListener('touchend', onTouchEnd, { passive: false });
-  window.addEventListener('touchcancel', onTouchCancel);
+  node.addEventListener('touchstart', onTouchStart, { passive: false });
+  node.addEventListener('touchmove', onTouchMove, { passive: false });
+  node.addEventListener('touchend', onTouchEnd, { passive: false });
+  node.addEventListener('touchcancel', onTouchCancel);
 
   return () => {
-    window.removeEventListener('touchstart', onTouchStart);
-    window.removeEventListener('touchmove', onTouchMove);
-    window.removeEventListener('touchend', onTouchEnd);
-    window.removeEventListener('touchcancel', onTouchCancel);
+    node.removeEventListener('touchstart', onTouchStart);
+    node.removeEventListener('touchmove', onTouchMove);
+    node.removeEventListener('touchend', onTouchEnd);
+    node.removeEventListener('touchcancel', onTouchCancel);
   };
 }

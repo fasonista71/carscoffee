@@ -1,7 +1,7 @@
 /*
   Sound engine. Synthesized Web Audio placeholders (square and
   triangle blips, noise bursts) behind the event name registry, plus a
-  soft two bar chip bass loop for music_loop.
+  arranged chip theme for music_loop, written as data in theme.js.
 
   The swap seam Jason asked for: MANIFEST maps event names to file
   urls. Any entry present is fetched and decoded at unlock time and
@@ -11,8 +11,12 @@
   iOS: an AudioContext starts suspended until created or resumed
   inside a user gesture (verified against current MDN autoplay
   guidance). unlock() is called from the Start button press, which is
-  exactly such a gesture.
+  exactly such a gesture. Separately, the Ring/Silent switch mutes
+  Web Audio in mobile Safari unless the page claims a playback audio
+  session; claimPlaybackSession below does that.
 */
+
+import { voicesAtStep, STEP_SEC, SONG_STEPS } from './theme.js';
 
 /* Event name -> file url. Fill in when real sounds arrive. */
 const MANIFEST = {};
@@ -26,18 +30,81 @@ export function createAudio() {
   let musicStep = 0;
   let nextNoteTime = 0;
 
+  /*
+    Nothing in here may ever throw into a caller. unlock() is the
+    first statement of the intent handler, so an exception escaping
+    this function would propagate out of the touch listener and kill
+    every gesture for the rest of the session while the title screen
+    sat there looking fine. Safari can refuse a context (the per page
+    concurrent context limit, or a managed WebView with audio off),
+    so the constructor is guarded and the failure is remembered:
+    ready() is false forever after, every voice no ops, and the game
+    runs silently. That is the stated invariant, audio never blocks
+    play.
+  */
+  let ctxFailed = false;
+
   function ensureCtx() {
     if (ctx) return ctx;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC();
+    if (ctxFailed) return null;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { ctxFailed = true; return null; }
+      ctx = new AC();
+    } catch (e) {
+      ctxFailed = true;
+      ctx = null;
+      return null;
+    }
     return ctx;
+  }
+
+  /*
+    The iPhone Ring/Silent switch. A game that draws to a canvas gets
+    muted by the hardware switch while a video on the same page does
+    not, because the page never claimed a media style audio session.
+    navigator.audioSession is the standardised way to claim one (W3C
+    Audio Session API); where that is missing, a looping near silent
+    element nudges Safari into the media category, which is the long
+    standing workaround. Both are best effort: neither throws where
+    it is unsupported, and neither is needed on desktop.
+  */
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YSADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+  let sessionClaimed = false;
+  let keepAlive = null;
+
+  function claimPlaybackSession() {
+    if (sessionClaimed) return;
+    sessionClaimed = true;
+    try {
+      if (navigator.audioSession) {
+        navigator.audioSession.type = 'playback';
+        return;
+      }
+    } catch (e) { /* property refused, fall through to the element */ }
+    try {
+      keepAlive = new Audio(SILENT_WAV);
+      keepAlive.loop = true;
+      keepAlive.volume = 0.001;
+      keepAlive.setAttribute('playsinline', '');
+      const started = keepAlive.play();
+      if (started && started.catch) started.catch(() => { /* blocked */ });
+    } catch (e) { /* no element audio available */ }
   }
 
   function unlock() {
     const c = ensureCtx();
     if (!c) return;
-    if (c.state === 'suspended') c.resume();
+    try {
+      claimPlaybackSession();
+      if (c.state === 'suspended') {
+        const r = c.resume();
+        if (r && r.catch) r.catch(() => { /* refused, stay silent */ });
+      }
+    } catch (e) {
+      /* The context exists but will not start. Silent, not broken. */
+      return;
+    }
     if (!manifestLoaded) {
       manifestLoaded = true;
       for (const [name, url] of Object.entries(MANIFEST)) {
@@ -86,6 +153,7 @@ export function createAudio() {
   const SYNTH = {
     coffee_pickup() { blip(660, 0.06, 'square', 0.18); blip(990, 0.09, 'square', 0.18, 0.05); },
     heart_pickup() { blip(523, 0.07, 'square', 0.16); blip(659, 0.07, 'square', 0.16, 0.06); blip(1047, 0.12, 'square', 0.16, 0.12); },
+    nitro_pickup() { blip(392, 0.06, 'sawtooth', 0.16); blip(587, 0.06, 'sawtooth', 0.16, 0.05); blip(784, 0.16, 'sawtooth', 0.18, 0.1); },
     boost_start() { blip(220, 0.25, 'square', 0.16, 0, 880); },
     boost_end() { blip(660, 0.18, 'square', 0.1, 0, 220); },
     crash() { noiseBurst(0.35, 0.35); blip(110, 0.3, 'square', 0.2, 0, 40); },
@@ -103,11 +171,32 @@ export function createAudio() {
       blip(880, 0.16, 'square', 0.09, 0.48);
     },
     boost_hint() { blip(1175, 0.05, 'square', 0.14); blip(1175, 0.05, 'square', 0.14, 0.09); },
+    /*
+      Menu voice. Quiet and short, because these fire on every stray
+      press and must never compete with a coffee blip or a siren.
+      ui_press is the finger landing, a dull low tick with no pitch
+      interest. ui_confirm is the button actually firing, a rising
+      pair. The toggles are the same two notes in opposite order, so
+      on and off are told apart by direction rather than by timbre,
+      which is the one cue that survives a phone speaker.
+    */
+    ui_press() { blip(196, 0.025, 'square', 0.07); },
+    ui_confirm() { blip(587, 0.05, 'square', 0.13); blip(880, 0.08, 'square', 0.13, 0.045); },
+    ui_toggle_on() { blip(523, 0.04, 'square', 0.11); blip(784, 0.06, 'square', 0.11, 0.04); },
+    ui_toggle_off() { blip(784, 0.04, 'square', 0.11); blip(523, 0.06, 'square', 0.11, 0.04); },
     game_over() { blip(392, 0.14, 'square', 0.14); blip(330, 0.14, 'square', 0.14, 0.14); blip(262, 0.3, 'square', 0.14, 0.28); }
   };
 
   function play(name) {
     if (!ready()) return;
+    try { playUnsafe(name); } catch (e) { /* a voice is never worth a frame */ }
+  }
+
+  function playUnsafe(name) {
+    /* The siren is a sustained voice driven by updateSiren while the
+       pursuit is on screen, not a one shot. The event still fires,
+       because haptics want it. */
+    if (name === 'siren') return;
     const buf = buffers.get(name);
     if (buf) {
       const src = ctx.createBufferSource();
@@ -121,18 +210,38 @@ export function createAudio() {
   }
 
   /* A quiet two bar bass line, scheduled with a small lookahead. */
-  const MUSIC_NOTES = [110, 110, 130.81, 110, 98, 98, 146.83, 130.81];
-  const MUSIC_STEP_SEC = 0.28;
+  /*
+    Voice mix. The music has to sit under the game: a coffee blip or a
+    siren must always win against it, so every level here is well
+    below the effect levels above. Lead is a square for the chip
+    character, everything else triangle so the top end stays clear for
+    effects.
+  */
+  const MUSIC_MIX = {
+    bass: { type: 'triangle', vol: 0.050, dur: 0.15 },
+    lead: { type: 'square',   vol: 0.032, dur: 0.13 },
+    arp:  { type: 'triangle', vol: 0.020, dur: 0.10 },
+    hat:  { vol: 0.011, dur: 0.028 }
+  };
 
   function scheduleMusic() {
+    try { scheduleMusicUnsafe(); } catch (e) { stopMusic(); }
+  }
+
+  function scheduleMusicUnsafe() {
     if (!ready()) return;
     const buf = buffers.get('music_loop');
     if (buf) return; /* a real music file loops via playMusicFile below */
     while (nextNoteTime < ctx.currentTime + 0.4) {
       const t = Math.max(nextNoteTime, ctx.currentTime);
-      blip(MUSIC_NOTES[musicStep % MUSIC_NOTES.length], 0.22, 'triangle', 0.045, t - ctx.currentTime);
-      musicStep += 1;
-      nextNoteTime = t + MUSIC_STEP_SEC;
+      const delay = t - ctx.currentTime;
+      const v = voicesAtStep(musicStep);
+      if (v.bass) blip(v.bass, MUSIC_MIX.bass.dur, MUSIC_MIX.bass.type, MUSIC_MIX.bass.vol, delay);
+      if (v.lead) blip(v.lead, MUSIC_MIX.lead.dur, MUSIC_MIX.lead.type, MUSIC_MIX.lead.vol, delay);
+      if (v.arp) blip(v.arp, MUSIC_MIX.arp.dur, MUSIC_MIX.arp.type, MUSIC_MIX.arp.vol, delay);
+      if (v.hat) noiseBurst(MUSIC_MIX.hat.dur, MUSIC_MIX.hat.vol * v.hat, delay);
+      musicStep = (musicStep + 1) % SONG_STEPS;
+      nextNoteTime = t + STEP_SEC;
     }
   }
 
@@ -150,6 +259,10 @@ export function createAudio() {
   }
 
   function startMusic() {
+    try { startMusicUnsafe(); } catch (e) { /* silent run */ }
+  }
+
+  function startMusicUnsafe() {
     if (musicTimer !== null) return;
     musicStep = 0;
     nextNoteTime = 0;
@@ -158,6 +271,60 @@ export function createAudio() {
       return;
     }
     musicTimer = setInterval(scheduleMusic, 200);
+  }
+
+  /*
+    The siren runs as a live voice for as long as the chase car is on
+    screen: a two tone that cycles, quiets with distance, and pitches
+    down as the car goes by, which is the doppler drop a real pass
+    gives you. relPx is the chase car's offset from the player,
+    negative while it is still behind.
+  */
+  const SIREN = {
+    loHz: 640,
+    hiHz: 880,
+    cycleSec: 0.55,
+    /* Peak pitch bend either side of the pass. */
+    doppler: 0.16,
+    /* Distance over which the pitch swings through, and the distance
+       at which the wail has faded to nothing. */
+    passPx: 120,
+    falloffPx: 420,
+    peakGain: 0.13
+  };
+  let sirenOsc = null;
+  let sirenGain = null;
+
+  function updateSiren(active, relPx) {
+    try { updateSirenUnsafe(active, relPx); } catch (e) { stopSiren(); }
+  }
+
+  function updateSirenUnsafe(active, relPx) {
+    if (!active || !ready()) { stopSiren(); return; }
+    if (sirenOsc === null) {
+      sirenOsc = ctx.createOscillator();
+      sirenGain = ctx.createGain();
+      sirenOsc.type = 'square';
+      sirenGain.gain.value = 0;
+      sirenOsc.connect(sirenGain).connect(ctx.destination);
+      sirenOsc.start();
+    }
+    const t = ctx.currentTime;
+    const two = Math.floor(t / SIREN.cycleSec) % 2 === 0 ? SIREN.loHz : SIREN.hiHz;
+    const bend = 1 - SIREN.doppler * Math.tanh(relPx / SIREN.passPx);
+    sirenOsc.frequency.setTargetAtTime(two * bend, t, 0.02);
+    const near = Math.max(0, 1 - Math.abs(relPx) / SIREN.falloffPx);
+    sirenGain.gain.setTargetAtTime(SIREN.peakGain * near * near, t, 0.05);
+  }
+
+  function stopSiren() {
+    if (sirenOsc === null) return;
+    try {
+      sirenGain.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
+      sirenOsc.stop(ctx.currentTime + 0.3);
+    } catch (e) { /* context gone, nothing to wind down */ }
+    sirenOsc = null;
+    sirenGain = null;
   }
 
   function stopMusic() {
@@ -176,6 +343,8 @@ export function createAudio() {
     play,
     startMusic,
     stopMusic,
+    updateSiren,
+    stopSiren,
     get muted() { return muted; },
     setMuted(m) { muted = m; }
   };

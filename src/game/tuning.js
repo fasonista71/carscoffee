@@ -1,6 +1,6 @@
 /* Shown small on the title screen so a stale phone cache is visible
    at a glance. Bump when shipping. */
-export const BUILD_TAG = 'M7';
+export const BUILD_TAG = 'M8';
 
 /*
   Every gameplay number lives here. Nothing elsewhere in the codebase is
@@ -37,8 +37,10 @@ export const TUNING = {
   },
 
   speed: {
-    /* Scroll speed of the world in logical px per second. GUESS. */
-    basePxPerSec: 150,
+    /* Scroll speed of the world in logical px per second. Raised
+       from 150 after device testing: the road wanted more urgency at
+       every tier, and the tier multipliers ride on top of this. */
+    basePxPerSec: 165,
     /* Purely a display conversion for the score readout. GUESS. */
     pxPerMeter: 8
   },
@@ -138,16 +140,24 @@ export const TUNING = {
     aggro: the share of full gap rows that deliberately target the
     player, dropping a single block onto the player's lane or opening
     a forced row's lane far from the player. Movement is the game;
-    aggro is what makes sitting still lose. overtakerChance: per
-    second odds of a sports car blasting past from behind.
+    aggro is what makes sitting still lose. Pass frequency is no
+    longer a tier field; it is scheduled by distance in overtakers.
   */
   tiers: [
-    { atMeters: 0,     theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.8,  stalledChance: 0.3,  speedFracMin: 0.12, speedFracMax: 0.62, aggro: 0.22, overtakerChance: 0 },
-    { atMeters: 2000,  theme: 'desert',   speed: 1.12, gapJitterMax: 1.3,  doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.1,  speedFracMax: 0.66, aggro: 0.32, overtakerChance: 0.33 },
-    { atMeters: 4000,  theme: 'snow',     speed: 1.25, gapJitterMax: 1.26, doubleRowChance: 0.5,  clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.7,  aggro: 0.4,  overtakerChance: 0.4 },
-    { atMeters: 6000,  theme: 'beach',    speed: 1.4,  gapJitterMax: 1.22, doubleRowChance: 0.54, clusterChance: 0.9,  stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72, aggro: 0.48, overtakerChance: 0.48 },
-    { atMeters: 8000,  theme: 'city',     speed: 1.56, gapJitterMax: 1.18, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74, aggro: 0.55, overtakerChance: 0.54 },
-    { atMeters: 10000, theme: 'city',     speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.62, clusterChance: 0.94, stalledChance: 0.2,  speedFracMin: 0.04, speedFracMax: 0.75, aggro: 0.62, overtakerChance: 0.6 }
+    { atMeters: 0,    theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.80, stalledChance: 0.30, speedFracMin: 0.12, speedFracMax: 0.62, aggro: 0.22 },
+    { atMeters: 1000, theme: 'farmland', speed: 1.1,  gapJitterMax: 1.32, doubleRowChance: 0.44, clusterChance: 0.82, stalledChance: 0.29, speedFracMin: 0.11, speedFracMax: 0.64, aggro: 0.27 },
+    { atMeters: 2000, theme: 'desert',   speed: 1.2,  gapJitterMax: 1.29, doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.10, speedFracMax: 0.66, aggro: 0.32 },
+    { atMeters: 3000, theme: 'volcanic', speed: 1.31, gapJitterMax: 1.26, doubleRowChance: 0.48, clusterChance: 0.86, stalledChance: 0.27, speedFracMin: 0.09, speedFracMax: 0.68, aggro: 0.37 },
+    { atMeters: 4000, theme: 'snow',     speed: 1.42, gapJitterMax: 1.24, doubleRowChance: 0.50, clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.70, aggro: 0.42 },
+    { atMeters: 5000, theme: 'forest',   speed: 1.53, gapJitterMax: 1.22, doubleRowChance: 0.52, clusterChance: 0.89, stalledChance: 0.25, speedFracMin: 0.07, speedFracMax: 0.71, aggro: 0.46 },
+    { atMeters: 6000, theme: 'beach',    speed: 1.64, gapJitterMax: 1.20, doubleRowChance: 0.54, clusterChance: 0.90, stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72, aggro: 0.50 },
+    /* Speed stops here on purpose. Everything past this point changes
+       what the road is made of, not how fast it comes at you: the
+       ceiling has to be reachable or the game turns into a reaction
+       time test and casual players leave. */
+    { atMeters: 7000, theme: 'cliffs',   speed: 1.75, gapJitterMax: 1.18, doubleRowChance: 0.56, clusterChance: 0.91, stalledChance: 0.23, speedFracMin: 0.05, speedFracMax: 0.73, aggro: 0.54 },
+    { atMeters: 8000, theme: 'city',     speed: 1.75, gapJitterMax: 1.16, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74, aggro: 0.58 },
+    { atMeters: 9000, theme: 'forest',   speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.60, clusterChance: 0.93, stalledChance: 0.21, speedFracMin: 0.04, speedFracMax: 0.75, aggro: 0.62 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -193,9 +203,10 @@ export const TUNING = {
   },
 
   overtakers: {
-    /* Sports cars that catch up from behind and speed past. How often
-       is per tier (overtakerChance); speed and spawn distance vary
-       per car so passes never feel scripted. */
+    /* Sports cars that catch up from behind and speed past. How
+       often is scheduled by distance (see the pacing note below);
+       speed, lane and spawn distance vary per car so no two passes
+       feel alike. */
     speedMultMin: 1.7,
     speedMultMax: 2.6,
     spawnBehindPx: 400,
@@ -219,6 +230,23 @@ export const TUNING = {
        lane. Clusters can pin the player to their corridor, so the
        guard checks corridors, not just single rows. */
     squeezeGuardSec: 1.2,
+    /*
+      Pacing is measured in road, not in dice. A pass was a per second
+      probability, which made passes arrive every few seconds and made
+      the rate swing with the tier table; now the schedule is one pass
+      per passEveryMeters of odometer, give or take passJitter, and
+      the first one waits until firstPassAtMeters so the opening
+      stretch stays calm. Because the clock is distance, a pass costs
+      the same road at every tier but less wall time as the car speeds
+      up, which is the busier feel later tiers want, for free.
+
+      A blocked attempt (no clear lane, traffic that cannot yield)
+      does not burn the slot: the scheduler keeps retrying once a
+      second until one lands, then measures the next gap from there.
+    */
+    passEveryMeters: 420,
+    passJitter: 0.4,
+    firstPassAtMeters: 1000,
     /* Pursuits: this share of passes bring the law along. The
        emergency vehicle only ever CHASES, riding chaseGapPx behind
        the speeder in the same lane, wig wag lights going, one longer
@@ -226,9 +254,54 @@ export const TUNING = {
        truck as SWAT van, red truck as fire truck, blue car as
        police; swap those sprites when real assets arrive. Exactly
        one pass event runs at a time (a lone speeder or one pursuit
-       pair); the next cannot start until it is over. */
-    emergencyChance: 0.35,
+       pair); the next cannot start until it is over. The number
+       reads high for "one in four" because the floor below rejects
+       some of these rolls; measured over 24 seeds the law actually
+       turns up every 2085m (median), which is the target. */
+    emergencyChance: 0.34,
+    /* Share of the remaining passes that are an ambulance or a fire
+       truck running alone on a call rather than a sports car. Same
+       mechanics as any pass, different sprite and a siren, so it
+       costs nothing to run and it is the only thing those two
+       vehicles do now that they are out of traffic. */
+    soloCallChance: 0.12,
+    /* An independent one in four roll produces clumps: two pursuits
+       485m apart happened in a tenth of cases, which reads as the law
+       being everywhere rather than rare. A hard floor between chases
+       turns "rare on average" into "rare as experienced", which is
+       the thing actually being asked for. */
+    emergencyMinGapMeters: 1200,
     chaseGapPx: 90
+  },
+
+  nitro: {
+    /* A bottle on the road that banks a free boost: full duration, no
+       coffee burned, and usable below the fuel floor that normally
+       gates one. That last part is the point. Boost is the escape
+       move, and the moment you most need one is the moment you can
+       least afford it. Banked rather than fired on pickup, because
+       every gap on this road is sized against the speed the player
+       will be doing, and that model only holds while boosting is a
+       choice. */
+    pickupChancePerGap: 0.05,
+    /* Charges bank rather than firing on pickup, so holding two is
+       possible; more than that and the road stops mattering. */
+    maxCharges: 2,
+    hitbox: { wPx: 12, hPx: 14 }
+  },
+
+  tips: {
+    /* One time teaching moments. coffeeLeadPx is how far ahead of the
+       player the first cup has to be for the tip to fire: far enough
+       that the player can still act on it, close enough that the cup
+       is clearly on screen and obviously the thing being pointed at.
+       The ceiling is playerYPx (252): a cup further ahead than that
+       has not entered the frame yet, and 260 put the callout under
+       the HUD band with its top line cut off. At 200 the cup sits
+       about 10px below the band with the whole callout in clear
+       road. showMs is how long it stays up afterwards. */
+    coffeeLeadPx: 200,
+    coffeeShowMs: 3200
   },
 
   stumble: {
@@ -279,9 +352,11 @@ export const TUNING = {
   },
 
   coffee: {
-    /* Chance each spawned row brings a cup with it. Lowered from
-       0.35 so fuel pressure bites harder. GUESS. */
-    spawnChancePerRow: 0.22,
+    /* Chance each spawned row brings a cup with it. Went 0.35 to
+       0.22 to make fuel bite, then back up to 0.32 once the faster
+       base speed made the old rate feel starved. Flat across tiers
+       for now; per tier rates are the obvious next step. */
+    spawnChancePerRow: 0.32,
     /* Share of cups placed in tension (beside or in the forced path
        of a hazard) versus free cups in gaps. Kept above the brief's
        70 percent floor. */
@@ -307,7 +382,10 @@ export const TUNING = {
     /* Row one: distance plate, the three hearts centered, best
        plate. Row two: coffee gauge on the left two thirds, labeled
        boost meter on the right third. */
-    fuelBar: { wPx: 84, hPx: 8, yPx: 28, cupGapPx: 3 },
+    /* labelWPx is the footprint of the word to the left of the gauge.
+       The bar shrank from 84 to make room for it, keeping the boost
+       pill in exactly the same place. */
+    fuelBar: { wPx: 77, hPx: 8, yPx: 28, labelWPx: 26 },
     hudPlate: { wPx: 54, hPx: 17, yPx: 3, marginPx: 2 },
     boostPill: { wPx: 42, hPx: 8 },
     /* Menu layout: one primary button plus option rows, hit tested in
@@ -318,6 +396,10 @@ export const TUNING = {
          phone at 2x logical scale, plus padded hit testing. */
       primary: { wPx: 108, hPx: 26 },
       option: { wPx: 140, hPx: 22, gapPx: 7 },
+      /* Clearance above a destructive row (Restart). The ordinary gap
+         of 7 is smaller than twice the hit pad, which left one pixel
+         between a toggle and an irreversible run ender. */
+      destructiveGapPx: 18,
       hitPadPx: 6,
       cooldownMs: 350
     },
@@ -326,17 +408,22 @@ export const TUNING = {
     /* Blink period for the boost prompt (label, pill ring, and the
        BOOST! callout over the car). Purely visual. */
     boostHintBlinkMs: 130,
+    /* The gauge label alternates COFFEE and LOW while the tank is
+       under fuel.lowThreshold. Slower than the boost prompt: this is a
+       warning to read, not a prompt to act on this instant. */
+    lowBlinkMs: 450,
     /* Stopped cars run their hazard flashers at this period, each row
        phase shifted so the road never blinks in unison. Visual. */
     hazardBlinkMs: 460,
     /* Emergency roof lights alternate sides at this period. Visual. */
     wigWagMs: 140,
     /* Where the light bar sits on each emergency sprite, as a
-       fraction of sprite height from the top. The default lands on a
-       car's roof; trucks carry their lights on the CAB (the
-       tow_truck2 flatbed hauls a car, and the lights belong to the
-       truck, not the cargo). Visual. */
-    wigWagRoofFrac: { default: 0.36, tow_truck2: 0.08, truck3: 0.1 },
+       fraction of sprite height from the top. Measured off the new
+       art rather than guessed: the three police cars all carry their
+       painted bar at 0.44 to 0.46, the SWAT van at 0.30, the
+       ambulance at 0.08 and the fire truck at 0.11, so the animated
+       wig wag lands on the bar that is already drawn. */
+    wigWagRoofFrac: { default: 0.45, swat: 0.30, ambulance: 0.08, fire_truck: 0.11 },
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
@@ -348,11 +435,15 @@ export const TUNING = {
     the drawing styles live in render.
   */
   sceneryThemes: {
-    mountain: { offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a' },
-    desert:   { offroad: '#ddba75', far: '#b97e4b', farDark: '#94603a', farAccent: '#d19a63', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#4e9e3f' },
-    snow:     { offroad: '#e9edf4', far: '#c7d0dd', farDark: '#a6b1c2', farAccent: '#ffffff', near: '#2f5c4a', nearDark: '#234636', trunk: '#5a4632' },
-    beach:    { offroad: '#ecd493', far: '#3f9edb', farDark: '#2f7fb8', farAccent: '#f4f4f4', near: '#3f8a3a', nearDark: '#2f6b2c', trunk: '#8a6238' },
-    city:     { offroad: '#7ec850', far: '#9aa7c4', farDark: '#7c88a6', farAccent: '#f4f4f4', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#7a5a3a' }
+    mountain: { farDensity: 85, nearDensity: 70, farItem: 'peak',     nearItem: 'pine',     offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a' },
+    farmland: { farDensity: 32, nearDensity: 42, farItem: 'barn',     nearItem: 'cow',      offroad: '#8fbf5a', far: '#b4553f', farDark: '#8c3f2e', farAccent: '#f4f4f4', near: '#5aa03f', nearDark: '#2c3a28', trunk: '#8c6a3f' },
+    desert:   { farDensity: 55, nearDensity: 58, farItem: 'mesa',     nearItem: 'cactus',   offroad: '#ddba75', far: '#b97e4b', farDark: '#94603a', farAccent: '#d19a63', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#4e9e3f' },
+    volcanic: { farDensity: 34, nearDensity: 62, farItem: 'volcano',  nearItem: 'lavarock', offroad: '#4a4046', far: '#5a4a52', farDark: '#3d3239', farAccent: '#ff6b35', near: '#6b5b62', nearDark: '#463b41', trunk: '#ffb937' },
+    snow:     { farDensity: 85, nearDensity: 58, farItem: 'snowpeak', nearItem: 'snowfront',     offroad: '#e9edf4', far: '#c7d0dd', farDark: '#a6b1c2', farAccent: '#ffffff', near: '#2f5c4a', nearDark: '#234636', trunk: '#5a4632' },
+    forest:   { farDensity: 80, nearDensity: 88, farItem: 'peak',     nearItem: 'pine',     offroad: '#3f7a3a', far: '#2f5c4a', farDark: '#234636', farAccent: '#4e9e3f', near: '#2f6b2c', nearDark: '#1f4a1e', trunk: '#5a4632' },
+    beach:    { farDensity: 100, nearDensity: 54, farItem: 'water',    nearItem: 'beachfront',     offroad: '#ecd493', far: '#3f9edb', farDark: '#2f7fb8', farAccent: '#f4f4f4', near: '#3f8a3a', nearDark: '#2f6b2c', trunk: '#8a6238' },
+    cliffs:   { farDensity: 72, nearDensity: 58, farItem: 'mesa',     nearItem: 'scrub',    offroad: '#b9b0a0', far: '#9a8a78', farDark: '#786a5c', farAccent: '#cdbfa8', near: '#6b8a4f', nearDark: '#4f6b39', trunk: '#8a7a68' },
+    city:     { farDensity: 78, nearDensity: 52, farItem: 'building', nearItem: 'treeblob', offroad: '#adadb8', far: '#8f9ab8', farDark: '#717c9c', farAccent: '#f4f4f4', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#7a5a3a' }
   },
 
   /* City palette, roughly 11 colors. Cheerful, high contrast. */
@@ -410,82 +501,149 @@ export const TUNING = {
   to atlas frames; the generator picks by index with an anti repeat
   memory so neighbors rarely match.
 */
-export const TRAFFIC_VARIANTS = [
-  { sprite: 'tow_truck', wPx: 33, hPx: 70 },
-  { sprite: 'tow_truck2', wPx: 33, hPx: 70 },
-  { sprite: 'tow_truck3', wPx: 33, hPx: 69 },
-  { sprite: 'truck2', wPx: 33, hPx: 66 },
-  { sprite: 'truck3', wPx: 33, hPx: 66 },
-  { sprite: 'landcruiser', wPx: 29, hPx: 56 },
-  { sprite: 'landcruiser2', wPx: 29, hPx: 56 },
-  { sprite: 'landcruiser3', wPx: 29, hPx: 56 },
-  { sprite: 'van', wPx: 29, hPx: 56 },
-  { sprite: 'raptor', wPx: 28, hPx: 55 },
-  { sprite: 'raptor2', wPx: 28, hPx: 55 },
-  { sprite: 'pickup', wPx: 28, hPx: 51 },
-  { sprite: 'suv', wPx: 28, hPx: 50 },
-  { sprite: 'suv2', wPx: 28, hPx: 50 },
-  { sprite: 'van2', wPx: 27, hPx: 50 },
-  { sprite: 'van3', wPx: 27, hPx: 50 },
-  { sprite: 'mustang2', wPx: 26, hPx: 49 },
-  { sprite: 'mustang3', wPx: 26, hPx: 47 },
-  { sprite: 'camaro', wPx: 26, hPx: 48 },
-  { sprite: 'camaro2', wPx: 26, hPx: 48 },
-  { sprite: 'challenger2', wPx: 28, hPx: 48 },
-  { sprite: 'challenger3', wPx: 28, hPx: 48 },
-  { sprite: 'lexus', wPx: 26, hPx: 48 },
-  { sprite: 'lexus2', wPx: 26, hPx: 48 },
-  { sprite: 'lexus3', wPx: 26, hPx: 48 },
-  { sprite: 'gwagon', wPx: 27, hPx: 47 },
-  { sprite: 'gwagon2', wPx: 27, hPx: 47 },
-  { sprite: 'patrol', wPx: 27, hPx: 47 },
-  { sprite: 'patrol2', wPx: 27, hPx: 47 },
-  { sprite: 'bmw', wPx: 25, hPx: 47 },
-  { sprite: 'bmw2', wPx: 25, hPx: 47 },
-  { sprite: 'bmw3', wPx: 25, hPx: 47 },
-  { sprite: 'lancer', wPx: 26, hPx: 47 },
-  { sprite: 'lancer2', wPx: 26, hPx: 47 },
-  { sprite: 'lambo', wPx: 27, hPx: 46 },
-  { sprite: 'lambo2', wPx: 27, hPx: 46 },
-  { sprite: 'wrangler', wPx: 24, hPx: 46 },
-  { sprite: 'wrangler2', wPx: 24, hPx: 46 },
-  { sprite: 'wrangler3', wPx: 24, hPx: 46 },
-  { sprite: 'wrangler4', wPx: 24, hPx: 46 },
-  { sprite: 'sunny', wPx: 25, hPx: 45 },
-  { sprite: 'tida', wPx: 24, hPx: 43 },
-  { sprite: 'tida2', wPx: 24, hPx: 43 },
-  { sprite: 'tida3', wPx: 24, hPx: 43 },
-  { sprite: 'mini', wPx: 24, hPx: 42 },
-  { sprite: 'convertible', wPx: 24, hPx: 41 },
-  { sprite: 'figo', wPx: 24, hPx: 41 },
-  { sprite: 'figo2', wPx: 24, hPx: 41 }
+/*
+  Atlas frames the player's own cars wear. These are deliberately
+  absent from TRAFFIC_VARIANTS, so no other car on the road can ever
+  be drawn in the player's bodywork and a pursuit can never look like
+  the police are chasing you. The filter in world.js is a second
+  guard on the same rule. Keep in step with ALIASES in
+  src/render/sprites.js.
+*/
+/*
+  The faces a rubble hazard can wear. One hitbox, one cost, eleven
+  looks: the road stopped reading as the same grey lump every time
+  without a single gameplay number moving. Index into this comes from
+  the row spec's artRoll.
+*/
+export const OBSTACLE_SPRITES = [
+  'obs_rubble', 'obs_cone', 'obs_barrier', 'obs_tire', 'obs_box',
+  'obs_drum', 'obs_pallet', 'obs_roadwork', 'obs_spikes', 'obs_log',
+  'obs_crate'
 ];
 
+export const PLAYER_SPRITES = ['fourbyfour', 'sport_coupe', 'classic'];
+
+export const TRAFFIC_VARIANTS = [
+  /*
+    Civilian traffic. pickVariant only ever deals inside this run.
+
+    model is the bodyshell; sprite is the paint. Twenty bodies carry
+    forty seven sprites, because repainting a car is free and drawing
+    one is not. The distinction earns its keep in the picker: two
+    muscle cars in adjacent lanes read as a repeat even in different
+    colours, so the no-repeat memory works on model, not on sprite.
+
+    Three groups are absent by design. The player's own three cars,
+    because seeing the model you are driving in the next lane reads as
+    a glitch. The police, ambulance and fire truck, because an
+    emergency vehicle should mean something is happening. And nothing
+    whose colour is information is ever repainted: no blue taxis, no
+    green fire trucks.
+  */
+  { sprite: 'sport_white',        wPx: 27, hPx: 46, model: 'sport_white' },
+  { sprite: 'sport_white_blue',   wPx: 27, hPx: 46, model: 'sport_white' },
+  { sprite: 'sport_white_rose',   wPx: 27, hPx: 46, model: 'sport_white' },
+  { sprite: 'sport_white_green',  wPx: 27, hPx: 46, model: 'sport_white' },
+  { sprite: 'muscle',             wPx: 27, hPx: 48, model: 'muscle' },
+  { sprite: 'muscle_red',         wPx: 27, hPx: 48, model: 'muscle' },
+  { sprite: 'muscle_blue',        wPx: 27, hPx: 48, model: 'muscle' },
+  { sprite: 'muscle_lime',        wPx: 27, hPx: 48, model: 'muscle' },
+  { sprite: 'super_car',          wPx: 27, hPx: 46, model: 'super_car' },
+  { sprite: 'super_car_green',    wPx: 27, hPx: 46, model: 'super_car' },
+  { sprite: 'super_car_cyan',     wPx: 27, hPx: 46, model: 'super_car' },
+  { sprite: 'super_car_plum',     wPx: 27, hPx: 46, model: 'super_car' },
+  { sprite: 'hot_hatch',          wPx: 26, hPx: 44, model: 'hot_hatch' },
+  { sprite: 'hot_hatch_amber',    wPx: 26, hPx: 44, model: 'hot_hatch' },
+  { sprite: 'hot_hatch_teal',     wPx: 26, hPx: 44, model: 'hot_hatch' },
+  { sprite: 'hot_hatch_indigo',   wPx: 26, hPx: 44, model: 'hot_hatch' },
+  { sprite: 'pickup',             wPx: 29, hPx: 56, model: 'pickup' },
+  { sprite: 'pickup_green',       wPx: 29, hPx: 56, model: 'pickup' },
+  { sprite: 'pickup_blue',        wPx: 29, hPx: 56, model: 'pickup' },
+  { sprite: 'pickup_amber',       wPx: 29, hPx: 56, model: 'pickup' },
+  { sprite: 'van',                wPx: 29, hPx: 56, model: 'van' },
+  { sprite: 'van_blue',           wPx: 29, hPx: 56, model: 'van' },
+  { sprite: 'van_amber',          wPx: 29, hPx: 56, model: 'van' },
+  { sprite: 'van_teal',           wPx: 29, hPx: 56, model: 'van' },
+  { sprite: 'wagon',              wPx: 28, hPx: 52, model: 'wagon' },
+  { sprite: 'wagon_cyan',         wPx: 28, hPx: 52, model: 'wagon' },
+  { sprite: 'wagon_orange',       wPx: 28, hPx: 52, model: 'wagon' },
+  { sprite: 'wagon_green',        wPx: 28, hPx: 52, model: 'wagon' },
+  { sprite: 'camper',             wPx: 29, hPx: 62, model: 'camper' },
+  { sprite: 'camper_blue',        wPx: 29, hPx: 62, model: 'camper' },
+  { sprite: 'camper_green',       wPx: 29, hPx: 62, model: 'camper' },
+  { sprite: 'camper_red',         wPx: 29, hPx: 62, model: 'camper' },
+  { sprite: 'suv',                wPx: 29, hPx: 56, model: 'suv' },
+  { sprite: 'suv_blue',           wPx: 29, hPx: 56, model: 'suv' },
+  { sprite: 'suv_green',          wPx: 29, hPx: 56, model: 'suv' },
+  { sprite: 'suv_amber',          wPx: 29, hPx: 56, model: 'suv' },
+  { sprite: 'roadster',           wPx: 26, hPx: 44, model: 'roadster' },
+  { sprite: 'rally',              wPx: 27, hPx: 46, model: 'rally' },
+  { sprite: 'luxury_sedan',       wPx: 27, hPx: 48, model: 'luxury_sedan' },
+  { sprite: 'taxi',               wPx: 27, hPx: 48, model: 'taxi' },
+  { sprite: 'rideshare',          wPx: 27, hPx: 48, model: 'rideshare' },
+  { sprite: 'delivery',           wPx: 29, hPx: 60, model: 'delivery' },
+  { sprite: 'food_truck',         wPx: 29, hPx: 62, model: 'food_truck' },
+  { sprite: 'tow_truck',          wPx: 33, hPx: 70, model: 'tow_truck' },
+  { sprite: 'snow_plow',          wPx: 31, hPx: 64, model: 'snow_plow' },
+  { sprite: 'garbage',            wPx: 33, hPx: 70, model: 'garbage' },
+  { sprite: 'cement_truck',       wPx: 33, hPx: 70, model: 'cement_truck' },
+  /* On a call only, past TRAFFIC_CIVILIAN_COUNT. The first four run
+     pursuits behind a speeder; the last two run alone. */
+  { sprite: 'police_cruiser',     wPx: 28, hPx: 52, model: 'police_cruiser' },
+  { sprite: 'state_police',       wPx: 28, hPx: 52, model: 'state_police' },
+  { sprite: 'sheriff',            wPx: 28, hPx: 52, model: 'sheriff' },
+  { sprite: 'swat',               wPx: 31, hPx: 64, model: 'swat' },
+  { sprite: 'ambulance',          wPx: 31, hPx: 62, model: 'ambulance' },
+  { sprite: 'fire_truck',         wPx: 33, hPx: 70, model: 'fire_truck' }
+];
+
+/* Index of the first call-only vehicle. Ordinary traffic deals over
+   [0, TRAFFIC_CIVILIAN_COUNT). */
+export const TRAFFIC_CIVILIAN_COUNT = 47;
+
+
 export const VEHICLES = {
-  sports: {
-    id: 'sports',
-    name: 'Sports car',
-    hitbox: { wPx: 20, hPx: 36 },
+  /*
+    Three cars, all unlocked from the start. Handling is identical
+    across them on purpose: the choice is meant to be taste, not a
+    difficulty setting. The one thing that does differ is the hitbox,
+    because it is derived from the sprite, and the 4x4 really is a
+    bigger object on the road. Hitboxes run about four fifths of the
+    sprite so a near miss reads as a near miss.
+  */
+  coupe: {
+    id: 'coupe',
+    name: 'Sport coupe',
+    hitbox: { wPx: 22, hPx: 40 },
     laneTweenMs: TUNING.movement.laneTweenMs,
     baseSpeedMultiplier: 1,
     fuelBurnMultiplier: 1,
     boostMultiplier: 1.6,
-    spriteKey: 'player_car',
+    spriteKey: 'player_coupe',
     locked: false
   },
-  lambo: {
-    id: 'lambo',
-    name: 'Lambo',
-    hitbox: { wPx: 22, hPx: 42 },
+  fourbyfour: {
+    id: 'fourbyfour',
+    name: '4x4',
+    hitbox: { wPx: 24, hPx: 45 },
     laneTweenMs: TUNING.movement.laneTweenMs,
-    baseSpeedMultiplier: 1.06,
-    fuelBurnMultiplier: 1.12,
-    boostMultiplier: 1.55,
-    spriteKey: 'player_lambo',
+    baseSpeedMultiplier: 1,
+    fuelBurnMultiplier: 1,
+    boostMultiplier: 1.6,
+    spriteKey: 'player_4x4',
     locked: false
   },
-  suv: { id: 'suv', name: '4x4 SUV', locked: true },
-  moto: { id: 'moto', name: 'Motorcycle', locked: true }
+  classic: {
+    id: 'classic',
+    name: 'Classic',
+    hitbox: { wPx: 22, hPx: 40 },
+    laneTweenMs: TUNING.movement.laneTweenMs,
+    baseSpeedMultiplier: 1,
+    fuelBurnMultiplier: 1,
+    boostMultiplier: 1.6,
+    spriteKey: 'player_classic',
+    locked: false
+  }
 };
 
 export const ENVIRONMENTS = {

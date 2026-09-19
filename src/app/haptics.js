@@ -16,7 +16,13 @@ const PATTERNS = {
   overtake: [8, 20, 8],
   siren: [12, 40, 12, 40, 12],
   boost_hint: [10, 30, 10],
-  game_over: [80]
+  game_over: [80],
+  /* A menu press should feel like a button, not like a crash. These
+     are the lightest patterns in the table on purpose. */
+  ui_press: [8],
+  ui_confirm: [12, 20, 12],
+  ui_toggle_on: [10],
+  ui_toggle_off: [10]
 };
 
 export function createHaptics() {

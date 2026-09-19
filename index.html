@@ -13,6 +13,13 @@
     background: #262b44;
     overflow: hidden;
     overscroll-behavior: none;
+    /* Not just the canvas. With viewport-fit=cover the body carries
+       the safe area padding, so on a phone there is real estate around
+       the canvas, and a drag starting there is a drag the browser is
+       free to give to whatever scrolls outside us. Embedded on a page
+       that scrolls (itch), that means the page takes the gesture and
+       the game never sees the swipe. */
+    touch-action: none;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
@@ -25,6 +32,7 @@
   #stage {
     width: 100%;
     height: 100%;
+    touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -36,10 +44,104 @@
     image-rendering: crisp-edges;
     image-rendering: pixelated;
   }
+  /* The boot card. Painted by the browser before a single module has
+     been fetched, so a stalled load, a failed atlas, or a module
+     graph that never parses shows a message instead of the black
+     rectangle with no explanation that this used to give. */
+  #boot {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: #262b44;
+    color: #c0cbdc;
+    font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+    z-index: 10;
+  }
+  #boot[hidden] { display: none; }
+  #boot .cup { font-size: 26px; letter-spacing: 2px; color: #ffcd75; }
+  #boot .msg { max-width: 260px; }
+  #boot button {
+    font: inherit;
+    color: #262b44;
+    background: #ffcd75;
+    border: 0;
+    border-radius: 3px;
+    padding: 9px 20px;
+    cursor: pointer;
+  }
+  #boot button[hidden] { display: none; }
 </style>
 </head>
 <body>
   <div id="stage"><canvas id="game"></canvas></div>
+  <div id="boot">
+    <div class="cup">CARS &amp; COFFEE</div>
+    <div class="msg" id="boot-msg">Loading&hellip;</div>
+    <button id="boot-retry" type="button" hidden>Try again</button>
+  </div>
+  <!--
+    Classic script, not a module, and deliberately before the module
+    tag. A module that fails to parse or fetch runs nothing at all, so
+    the recovery path cannot live inside the module graph it is there
+    to recover from.
+  -->
+  <script>
+  (function () {
+    var card = document.getElementById('boot');
+    var msg = document.getElementById('boot-msg');
+    var retry = document.getElementById('boot-retry');
+    var settled = false;
+
+    /* Long enough that a slow phone on a bad connection is not told
+       it failed while it is still working. The atlas is ~200KB. */
+    var STALL_MS = 15000;
+    var timer = setTimeout(function () { fail('Still loading. Your connection may have dropped.'); }, STALL_MS);
+
+    function fail(text) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      msg.textContent = text;
+      retry.hidden = false;
+      card.hidden = false;
+    }
+
+    function ok() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      card.hidden = true;
+    }
+
+    retry.addEventListener('click', function () {
+      retry.hidden = true;
+      msg.textContent = 'Loading\u2026';
+      location.reload();
+    });
+
+    /* main.js calls these. Set before the module tag so they exist by
+       the time the module body runs. */
+    window.__ccBootOk = ok;
+    window.__ccBootFail = function (err) {
+      fail('Could not load the game. ' + (err && err.message ? err.message : 'Something went wrong.'));
+    };
+
+    /* A module that 404s or throws while parsing never reaches
+       main.js at all; this is the only thing that hears about it. */
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target.tagName === 'SCRIPT') {
+        fail('Could not load the game files.');
+      }
+    }, true);
+  }());
+  </script>
   <script type="module" src="./src/app/main.js"></script>
 </body>
 </html>

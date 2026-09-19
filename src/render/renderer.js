@@ -9,10 +9,10 @@
   canvas upscaling has gaps. The CSS property stays on as a backstop.
 */
 
-import { TUNING, BUILD_TAG, TRAFFIC_VARIANTS } from '../game/tuning.js';
+import { TUNING, BUILD_TAG, TRAFFIC_VARIANTS, OBSTACLE_SPRITES } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
 import { getSprite, getTrafficSprite } from './sprites.js';
-import { drawText } from './font.js';
+import { drawText, textWidth } from './font.js';
 
 export function createRenderer(canvas) {
   const W = TUNING.render.logicalW;
@@ -63,6 +63,14 @@ export function createRenderer(canvas) {
     h = Math.imul(h ^ (h >>> 15), 0x735a2d97);
     return (h ^ (h >>> 15)) >>> 0;
   }
+  /*
+    Note for anyone pulling bits out of a hash below: shift it with
+    >>> and never >>. hash32 returns unsigned, but the signed shift
+    coerces it back to int32 first, so roughly half of all hashes come
+    out negative, and JS then hands back a negative modulus. That is
+    how the city ended up with three pixel wide windowless buildings
+    sitting outside their own band.
+  */
 
   /*
     Brief section 6: parallax layers. In a top down view that means
@@ -80,14 +88,27 @@ export function createRenderer(canvas) {
      other way, which read as the world driving against you. Item
      identity is keyed to world position (base - k), so each tree or
      peak keeps its shape while it rides down the screen. */
-  function bandItems(x0, bandW, factor, salt, distancePx, itemFn) {
+  /*
+    One item in every slot at a fixed pitch is wallpaper. The eye finds
+    the rhythm within a second and a barn every 56px stops reading as
+    countryside. Two dials fix that for every theme without touching a
+    single prop: density is the share of slots that carry anything, and
+    each item is nudged off its slot line. Both come from the item's own
+    hash, so a given stretch of road always looks the same on replay.
+  */
+  function bandItems(x0, bandW, factor, salt, distancePx, itemFn, density) {
     const period = TUNING.render.scenery.periodPx;
     const scroll = distancePx * factor;
     const offset = scroll % period;
     const base = Math.floor(scroll / period);
-    for (let k = -1; k <= Math.ceil(H / period) + 1; k += 1) {
-      const y = Math.round(k * period + offset - period);
-      itemFn(x0, bandW, y, hash32(base - k + salt * 7919));
+    const fill = density === undefined ? 100 : density;
+    /* two slots of margin, because jitter can pull an item on screen
+       from a slot that would otherwise be past the edge */
+    for (let k = -2; k <= Math.ceil(H / period) + 2; k += 1) {
+      const h = hash32(base - k + salt * 7919);
+      if (h % 100 >= fill) continue;
+      const jitter = Math.round((((h >>> 9) % period) - period / 2) * 0.45);
+      itemFn(x0, bandW, Math.round(k * period + offset - period + jitter), h);
     }
   }
 
@@ -120,24 +141,52 @@ export function createRenderer(canvas) {
     };
   }
 
+  /*
+    Ordinary city blocks: a rectangle, a dark outline and a regular
+    grid of windows, with height, width and position off the item hash
+    so no two in a row match. Roughly every ninth one is a tower, which
+    is taller, narrower and carries an antenna with a red beacon.
+  */
   function itemBuilding(c) {
+    const ink = TUNING.palette.city.outline;
+    const lit = TUNING.palette.city.edgeLine;
     return (x0, bw, y, h) => {
-      const bh = 26 + (h % 22);
-      const bwid = bw - 3;
-      bctx.fillStyle = TUNING.palette.city.outline;
-      bctx.fillRect(x0, y, bwid + 1, bh + 1);
-      bctx.fillStyle = (h & 4) ? c.far : c.farDark;
-      bctx.fillRect(x0 + 1, y + 1, bwid - 1, bh - 1);
-      bctx.fillStyle = c.farAccent;
-      bctx.fillRect(x0 + 3 + (h % 4), y + 5, 2, 2);
-      bctx.fillRect(x0 + 3 + ((h >> 3) % 4), y + 13, 2, 2);
+      const tower = (h >>> 19) % 9 === 0;
+      const bwid = tower ? 6 + ((h >>> 4) % 3) : 8 + ((h >>> 4) % Math.max(1, bw - 9));
+      const bh = tower ? 46 + (h % 16) : 16 + (h % 20);
+      const bx = x0 + 1 + ((h >>> 11) % Math.max(1, bw - bwid - 1));
+
+      const pale = (h & 4) !== 0;
+      bctx.fillStyle = ink;
+      bctx.fillRect(bx - 1, y - 1, bwid + 2, bh + 2);
+      bctx.fillStyle = pale ? c.far : c.farDark;
+      bctx.fillRect(bx, y, bwid, bh);
+
+      /* windows take whichever value the wall is not, or a pale block
+         comes out looking blank at this size */
+      const glass = pale ? ink : c.farAccent;
+      for (let ry = y + 2; ry <= y + bh - 4; ry += 4) {
+        for (let rx = bx + 2; rx <= bx + bwid - 4; rx += 3) {
+          const wh = hash32(rx * 31 + ry * 17 + h);
+          bctx.fillStyle = (wh % 6 === 0) ? lit : glass;
+          bctx.fillRect(rx, ry, 2, 2);
+        }
+      }
+
+      if (tower) {
+        const mx = bx + Math.floor(bwid / 2);
+        bctx.fillStyle = ink;
+        bctx.fillRect(mx, y - 6, 1, 6);
+        bctx.fillStyle = TUNING.palette.city.carBody;
+        bctx.fillRect(mx, y - 7, 1, 1);
+      }
     };
   }
 
   function itemPine(c) {
     return (x0, bw, y, h) => {
       const ph = 11 + (h % 4);
-      const cx = x0 + 2 + ((h >> 5) % Math.max(1, bw - 10)) + 4;
+      const cx = x0 + 2 + ((h >>> 5) % Math.max(1, bw - 10)) + 4;
       for (let r = 0; r < ph; r += 1) {
         const half = Math.max(1, Math.round((r / ph) * 4));
         bctx.fillStyle = (r % 3 === 0) ? c.nearDark : c.near;
@@ -150,7 +199,7 @@ export function createRenderer(canvas) {
 
   function itemCactus(c) {
     return (x0, bw, y, h) => {
-      const cx = x0 + 3 + ((h >> 5) % Math.max(1, bw - 8));
+      const cx = x0 + 3 + ((h >>> 5) % Math.max(1, bw - 8));
       const ch = 10 + (h % 5);
       bctx.fillStyle = c.near;
       bctx.fillRect(cx, y, 3, ch);
@@ -165,7 +214,7 @@ export function createRenderer(canvas) {
 
   function itemPalm(c) {
     return (x0, bw, y, h) => {
-      const cx = x0 + 4 + ((h >> 5) % Math.max(1, bw - 9));
+      const cx = x0 + 4 + ((h >>> 5) % Math.max(1, bw - 9));
       bctx.fillStyle = c.trunk;
       for (let r = 0; r < 9; r += 1) {
         bctx.fillRect(cx + Math.round(r / 4), y + 5 + r, 2, 1);
@@ -183,7 +232,7 @@ export function createRenderer(canvas) {
   function itemTreeBlob(c) {
     return (x0, bw, y, h) => {
       const r = 4 + (h % 3);
-      const cx = x0 + 3 + ((h >> 5) % Math.max(1, bw - 2 * r - 4)) + r;
+      const cx = x0 + 3 + ((h >>> 5) % Math.max(1, bw - 2 * r - 4)) + r;
       const cy = y + r;
       bctx.fillStyle = c.nearDark;
       bctx.fillRect(cx - r, cy - r + 1, 2 * r, 2 * r - 2);
@@ -194,10 +243,238 @@ export function createRenderer(canvas) {
     };
   }
 
+  /*
+    Props for the added scenes. Same contract as the originals: take the
+    theme, return a draw function, vary the shape off the per item hash
+    so a band never looks like a repeating stamp.
+  */
+  function itemBarn(c) {
+    return (x0, bw, y, h) => {
+      const kind = h % 3;
+      const scale = kind === 2 ? 0.6 : 1;
+      const w = Math.max(4, Math.round((bw - 7) * scale));
+      const bh = Math.max(5, Math.round((9 + (h % 8)) * scale));
+      const bx = x0 + 1 + ((h >>> 7) % Math.max(1, bw - w - 4));
+      const by = y + 5;
+      bctx.fillStyle = c.far;
+      bctx.fillRect(bx, by, w, bh);
+      bctx.fillStyle = c.farDark;
+      bctx.fillRect(bx - 1, by - 3, w + 2, 3);
+      bctx.fillStyle = c.farAccent;
+      const door = Math.floor(bh / 3);
+      bctx.fillRect(bx + Math.floor(w / 2) - 1, by + door, 2, bh - door);
+      if (kind === 0 && bx + w + 4 < x0 + bw) {
+        bctx.fillStyle = c.trunk;
+        bctx.fillRect(bx + w + 1, by - 2, 3, bh + 2);
+        bctx.fillStyle = c.farAccent;
+        bctx.fillRect(bx + w + 1, by - 3, 3, 1);
+      }
+    };
+  }
+  function itemCow(c) {
+    return (x0, bw, y, h) => {
+      const one = (cx, cy, flip) => {
+        bctx.fillStyle = c.farAccent;
+        bctx.fillRect(cx, cy, 7, 4);
+        bctx.fillRect(flip ? cx - 2 : cx + 7, cy - 1, 2, 3);
+        bctx.fillStyle = c.nearDark;
+        bctx.fillRect(cx + 1, cy, 2, 2);
+        bctx.fillRect(cx + 4, cy + 1, 2, 2);
+        bctx.fillRect(cx + 1, cy + 4, 1, 2);
+        bctx.fillRect(cx + 5, cy + 4, 1, 2);
+      };
+      const cx = x0 + 1 + ((h >>> 5) % Math.max(1, bw - 11));
+      one(cx, y + 3 + (h % 9), (h & 8) !== 0);
+      /* now and then a second one, grazing a little apart */
+      if (h % 5 === 0) one(cx + 1 + (h % 3), y + 17 + (h % 6), (h & 16) !== 0);
+    };
+  }
+  function itemVolcano(c) {
+    return (x0, bw, y, h) => {
+      const ph = 12 + (h % 23);
+      const spread = (bw - 2) * (0.55 + ((h >>> 3) % 6) / 10);
+      const cx = x0 + 2 + ((h >>> 6) % Math.max(1, bw - 4));
+      for (let r = 0; r < ph; r += 1) {
+        const half = Math.max(1, Math.round((r / ph) * spread / 2));
+        bctx.fillStyle = (h & 2) ? c.far : c.farDark;
+        bctx.fillRect(cx - half, y + r, half * 2, 1);
+      }
+      bctx.fillStyle = c.farAccent;
+      bctx.fillRect(cx - 1, y, 3, 2);
+      if (h & 4) bctx.fillRect(cx, y + 2, 1, 2 + (h % 4));
+    };
+  }
+  function itemLavaRock(c) {
+    return (x0, bw, y, h) => {
+      const rx = x0 + 2 + ((h >>> 4) % Math.max(1, bw - 9));
+      const ry = y + 4 + (h % 7);
+      const rw = 4 + (h % 3);
+      bctx.fillStyle = c.near;
+      bctx.fillRect(rx, ry, rw, 3);
+      bctx.fillStyle = c.nearDark;
+      bctx.fillRect(rx, ry + 3, rw, 1);
+      if (h & 4) {
+        bctx.fillStyle = c.trunk;
+        bctx.fillRect(rx + 1, ry + 1, 1, 1);
+      }
+    };
+  }
+  function itemScrub(c) {
+    return (x0, bw, y, h) => {
+      const sx = x0 + 2 + ((h >>> 3) % Math.max(1, bw - 8));
+      const sy = y + 6 + (h % 7);
+      bctx.fillStyle = c.near;
+      bctx.fillRect(sx, sy, 5, 2);
+      bctx.fillRect(sx + 1, sy - 1, 3, 1);
+      bctx.fillStyle = c.nearDark;
+      bctx.fillRect(sx, sy + 2, 5, 1);
+    };
+  }
+
+  /*
+    Some bands want a mix rather than one prop. These wrappers pick per
+    item off the hash and delegate, so the beach gets palms and beach
+    furniture and the snow gets a lift tower now and then without a
+    second density dial.
+  */
+  /*
+    Seen from above, which is the only view this game has, a parasol is
+    a disc in alternating wedges with the pole as one dark pixel in the
+    middle. Drawn as a row table so the silhouette stays round at 9px.
+  */
+  function itemUmbrella(c) {
+    const shades = [TUNING.palette.city.carBody, TUNING.palette.city.carWindow, TUNING.palette.city.edgeLine];
+    const rows = [3, 7, 9, 9, 9, 9, 9, 7, 3];
+    return (x0, bw, y, h) => {
+      const cx = x0 + 2 + ((h >>> 5) % Math.max(1, bw - 10));
+      const cy = y + 2;
+      const canopy = shades[(h >>> 9) % shades.length];
+      for (let r = 0; r < rows.length; r += 1) {
+        const w = rows[r];
+        const rx = cx + Math.floor((9 - w) / 2);
+        /* two quadrants coloured, two white, split on the disc centre */
+        for (let i = 0; i < w; i += 1) {
+          const left = rx + i < cx + 4;
+          const top = r < 4;
+          bctx.fillStyle = (left === top) ? canopy : c.farAccent;
+          bctx.fillRect(rx + i, cy + r, 1, 1);
+        }
+      }
+      bctx.fillStyle = c.trunk;
+      bctx.fillRect(cx + 4, cy + 4, 1, 1);
+    };
+  }
+
+  function itemBeachChair(c) {
+    return (x0, bw, y, h) => {
+      /* a lounger from above: fabric panel, white slats, raised headrest */
+      const draw = (cx, cy, fabric) => {
+        bctx.fillStyle = TUNING.palette.city.outline;
+        bctx.fillRect(cx, cy, 5, 9);
+        bctx.fillStyle = fabric;
+        bctx.fillRect(cx, cy + 1, 5, 7);
+        bctx.fillStyle = c.farAccent;
+        bctx.fillRect(cx + 1, cy + 2, 3, 1);
+        bctx.fillRect(cx + 1, cy + 5, 3, 1);
+        bctx.fillRect(cx + 1, cy, 3, 1);
+      };
+      const cx = x0 + 2 + ((h >>> 6) % Math.max(1, bw - 7));
+      const cy = y + 2;
+      const fabric = (h & 8) ? TUNING.palette.city.carWindow : TUNING.palette.city.carBody;
+      draw(cx, cy, fabric);
+      if (h % 3 === 0) draw(cx + ((h & 16) ? 1 : -1), cy + 12, fabric);
+    };
+  }
+
+  function itemBeachFront(c) {
+    const palm = itemPalm(c);
+    const umbrella = itemUmbrella(c);
+    const chair = itemBeachChair(c);
+    return (x0, bw, y, h) => {
+      const kind = (h >>> 3) % 8;
+      if (kind < 3) palm(x0, bw, y, h);
+      else if (kind < 6) { umbrella(x0, bw, y, h); chair(x0, bw, y + 11, h); }
+      else chair(x0, bw, y, h);
+    };
+  }
+
+  function itemSkiLift(c) {
+    const ink = TUNING.palette.city.outline;
+    return (x0, bw, y, h) => {
+      /* the line runs with the road, so from above the cable is vertical
+         and the tower is the crossbar; chairs ride the cable */
+      /* the cable is a property of the band, not of the slot: fixing cx
+         to the band centre means two lift slots in a row draw one
+         unbroken line instead of two offset stubs */
+      const cx = x0 + Math.floor(bw / 2);
+      const span = TUNING.render.scenery.periodPx;
+      bctx.fillStyle = ink;
+      bctx.fillRect(cx, y - span, 1, span * 2);
+      /* pylon */
+      bctx.fillRect(cx - 4, y + 4, 9, 2);
+      bctx.fillRect(cx - 1, y, 3, 6);
+      for (let i = 0; i < 3; i += 1) {
+        const chy = y - 22 + i * 22 + (h % 7);
+        bctx.fillStyle = ink;
+        bctx.fillRect(cx - 2, chy, 5, 1);
+        bctx.fillStyle = (h >>> i & 1) ? TUNING.palette.city.carBody : TUNING.palette.city.carWindow;
+        bctx.fillRect(cx - 2, chy + 1, 5, 3);
+      }
+    };
+  }
+
+  function itemSnowFront(c) {
+    const pine = itemPine(c);
+    const lift = itemSkiLift(c);
+    return (x0, bw, y, h) => {
+      if (h % 11 === 0) lift(x0, bw, y, h);
+      else pine(x0, bw, y, h);
+    };
+  }
+
+  function itemHelicopter(c) {
+    const ink = TUNING.palette.city.outline;
+    return (x0, bw, y, h) => {
+      const cx = x0 + 2 + ((h >>> 8) % Math.max(1, bw - 11));
+      const cy = y + 6;
+      /* rotor alternates between two spans so it reads as spinning */
+      const spin = Math.floor(performance.now() / 70) % 2;
+      bctx.fillStyle = ink;
+      bctx.fillRect(cx + 1, cy, 6, 3);
+      bctx.fillRect(cx + 6, cy + 1, 3, 1);
+      bctx.fillRect(cx + 8, cy, 1, 3);
+      bctx.fillRect(cx + 3, cy - 2, 1, 2);
+      bctx.fillRect(cx + 2, cy + 3, 1, 1);
+      bctx.fillRect(cx + 5, cy + 3, 1, 1);
+      bctx.fillStyle = TUNING.palette.city.carWindow;
+      bctx.fillRect(cx + 1, cy + 1, 2, 1);
+      bctx.fillStyle = ink;
+      if (spin === 0) bctx.fillRect(cx - 1, cy - 2, 9, 1);
+      else bctx.fillRect(cx + 2, cy - 2, 3, 1);
+      bctx.fillStyle = TUNING.palette.city.carBody;
+      bctx.fillRect(cx + 4, cy + 1, 1, 1);
+    };
+  }
+
+  function itemSnowPeak(c) {
+    const peak = itemPeak(c);
+    const heli = itemHelicopter(c);
+    return (x0, bw, y, h) => {
+      peak(x0, bw, y, h);
+      /* above the apex, so it flies over the range instead of perching */
+      if (h % 9 === 0) heli(x0, bw, y - 12, h);
+    };
+  }
+
+  /* Themes name their props; adding a scene is a data row plus, at
+     most, one new function above. */
+  const FAR_ITEMS = { peak: itemPeak, mesa: itemMesa, building: itemBuilding, barn: itemBarn, volcano: itemVolcano, snowpeak: itemSnowPeak };
+  const NEAR_ITEMS = { pine: itemPine, cactus: itemCactus, palm: itemPalm, treeblob: itemTreeBlob, cow: itemCow, lavarock: itemLavaRock, scrub: itemScrub, beachfront: itemBeachFront, snowfront: itemSnowFront };
+
   function drawScenery(distancePx, tier) {
     const { key, c } = themeFor(tier);
     const sc = TUNING.render.scenery;
-    if (key === 'beach') {
+    if (c.farItem === 'water') {
       /* the far band is open water with drifting foam */
       bctx.fillStyle = c.far;
       bctx.fillRect(0, 0, 15, H);
@@ -208,22 +485,43 @@ export function createRenderer(canvas) {
       const foam = (x0, bw, y, h) => {
         bctx.fillStyle = c.farAccent;
         bctx.fillRect(x0 + 2 + (h % 7), y, 4, 1);
-        bctx.fillRect(x0 + 1 + ((h >> 4) % 7), y + 22, 5, 1);
+        bctx.fillRect(x0 + 1 + ((h >>> 4) % 7), y + 22, 5, 1);
       };
       bandItems(0, 15, sc.farFactor, 1, distancePx, foam);
       bandItems(W - 15, 15, sc.farFactor, 2, distancePx, foam);
     } else {
-      const farItem = key === 'desert' ? itemMesa(c)
-        : (key === 'city' ? itemBuilding(c) : itemPeak(c));
-      bandItems(0, 15, sc.farFactor, 1, distancePx, farItem);
-      bandItems(W - 15, 15, sc.farFactor, 2, distancePx, farItem);
+      const farItem = (FAR_ITEMS[c.farItem] || itemPeak)(c);
+      bandItems(0, 15, sc.farFactor, 1, distancePx, farItem, c.farDensity);
+      bandItems(W - 15, 15, sc.farFactor, 2, distancePx, farItem, c.farDensity);
     }
-    const nearItem = key === 'desert' ? itemCactus(c)
-      : (key === 'beach' ? itemPalm(c)
-        : (key === 'city' ? itemTreeBlob(c) : itemPine(c)));
-    bandItems(16, 13, 1, 3, distancePx, nearItem);
-    bandItems(W - 29, 13, 1, 4, distancePx, nearItem);
+    const nearItem = (NEAR_ITEMS[c.nearItem] || itemPine)(c);
+    bandItems(16, 13, 1, 3, distancePx, nearItem, c.nearDensity);
+    bandItems(W - 29, 13, 1, 4, distancePx, nearItem, c.nearDensity);
   }
+
+  /*
+    Render side timers are written in 60Hz frames because that is how
+    they were tuned, but they are stepped by wall clock, not by frame
+    count. A 120Hz ProMotion iPhone, which is the primary device, was
+    running every one of them at double speed: the crash shake lasted
+    117ms instead of 233ms and the pickup callout flashed past before
+    it could be read. frameUnits converts the real elapsed time into
+    those same 60Hz units, so the tuned numbers keep their meaning at
+    any refresh rate. Clamped at 4 so a tab returning from the
+    background does not jump every timer to zero at once.
+  */
+  const REF_HZ = 60;
+  let lastFrameMs = 0;
+
+  function frameUnits() {
+    const now = performance.now();
+    if (lastFrameMs === 0) { lastFrameMs = now; return 1; }
+    const dt = now - lastFrameMs;
+    lastFrameMs = now;
+    return Math.min(4, Math.max(0, dt) * REF_HZ / 1000);
+  }
+
+  let units = 1;
 
   /* Pickup puffs and similar one shot particles. Render only. */
   let particles = [];
@@ -246,7 +544,8 @@ export function createRenderer(canvas) {
   function addPickupPop(x, y, kind) {
     const cCoffee = ['#b78152', '#e8d5b0'];
     const cHeart = ['#e43b44', '#ffffff'];
-    const colors = kind === 'heart' ? cHeart : cCoffee;
+    const cNitro = ['#2a6aff', '#c2e4ff'];
+    const colors = kind === 'heart' ? cHeart : (kind === 'nitro' ? cNitro : cCoffee);
     for (let i = 0; i < 16; i += 1) {
       particles.push({
         x, y,
@@ -259,20 +558,20 @@ export function createRenderer(canvas) {
     }
     particles.push({
       x, y: y - 6,
-      text: kind === 'heart' ? '+LIFE' : '+COFFEE',
+      text: kind === 'heart' ? '+LIFE' : (kind === 'nitro' ? 'NITRO!' : '+COFFEE'),
       color: colors[1],
       vx: 0, vy: -0.55,
       life: 46
     });
-    if (kind !== 'heart') gaugeFlashFrames = 22;
+    if (kind === 'coffee') gaugeFlashFrames = 22;
   }
 
   function drawParticles() {
     for (let i = particles.length - 1; i >= 0; i -= 1) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 1;
+      p.x += p.vx * units;
+      p.y += p.vy * units;
+      p.life -= units;
       if (p.life <= 0) {
         particles.splice(i, 1);
         continue;
@@ -341,7 +640,7 @@ export function createRenderer(canvas) {
   */
   function drawPlayer(view) {
     if (view.invulnFrames > 0 && Math.floor(view.invulnFrames / 4) % 2 === 1) return;
-    const spr = getSprite(view.playerSpriteKey || 'player_car');
+    const spr = getSprite(view.playerSpriteKey || 'player_coupe');
     const cx = laneCenterXPx(view.laneFloat);
     const cy = TUNING.render.playerYPx;
     if (view.spinFrames > 0) {
@@ -393,18 +692,9 @@ export function createRenderer(canvas) {
       const ov = view.overtakers[i];
       const dy = ov.distPx - view.distancePx;
       const screenY = TUNING.render.playerYPx - dy;
-      if (screenY > H + 40 && Math.floor(t * 6) % 2 === 0) {
-        /* still below the screen: warning chevrons */
-        const cx = Math.round(laneCenterXPx(ov.lane));
-        bctx.fillStyle = pal.carBody;
-        for (let c = 0; c < 2; c += 1) {
-          const baseY = H - 8 - c * 7;
-          for (let k = -3; k <= 3; k += 1) {
-            bctx.fillRect(cx + k, baseY + Math.abs(k) - 3, 1, 3);
-          }
-        }
-        continue;
-      }
+      /* The chevrons are drawn by drawOvertakerWarnings, after the
+         traffic layer. See the note there. */
+      if (screenY > H + 40) continue;
       if (screenY < -70 || screenY > H + 70) continue;
       const spr = getTrafficSprite(ov.variant);
       const x = Math.round(laneCenterXPx(ov.lane) - spr.width / 2);
@@ -435,8 +725,9 @@ export function createRenderer(canvas) {
   function drawHazards(view) {
     for (let i = 0; i < view.hazards.length; i += 1) {
       const h = view.hazards[i];
-      const key = h.type === 'rubble' ? 'obstacle_rubble'
-        : (h.dir > 0 ? 'obstacle_slick_right' : 'obstacle_slick_left');
+      const key = h.type === 'rubble'
+        ? (OBSTACLE_SPRITES[h.art] || OBSTACLE_SPRITES[0])
+        : (h.dir > 0 ? 'obs_oil_right' : 'obs_oil_left');
       const spr = getSprite(key);
       const screenY = TUNING.render.playerYPx - (h.distPx - view.distancePx);
       if (screenY < -24 || screenY > H + 24) continue;
@@ -492,30 +783,131 @@ export function createRenderer(canvas) {
     Cups shiver by a pixel, phase offset per cup so they never sync.
     Purely visual: collection uses the unjiggled position.
   */
+  /*
+    Every collectible moves the same way, because the motion IS the
+    affordance: the cups jiggle, so a thing that jiggles is a thing to
+    drive into, and a thing that sits still is a thing to dodge.
+    Hearts and nitro used to only bob, on a shared phase, which read
+    as scenery and left the two rarest pickups looking less inviting
+    than the common one.
+
+    They also get four sparks that pulse outward, which the cups do
+    not. Coffee turns up constantly and has the gauge to explain it;
+    a heart or a nitro might be the only one in a run, so it is worth
+    a little extra insistence.
+  */
+  /*
+    Every pickup carries an accent now, not just the two new ones. The
+    coffee cup reads at speed because it is wide and warm against grey
+    tarmac; nitro is eleven pixels across and heart is a small shape,
+    so on the road they were easy to miss even though all three
+    already shared the same bob.
+
+    Three things do the work, and none of them touches the art:
+    a contact shadow, which is what actually lifts a sprite off a flat
+    road; a pulsing ring of accent marks, eight positions rather than
+    four and two pixels rather than one, so the pulse is visible in
+    peripheral vision; and a dark keyline dropped under the sprite,
+    which stops a pale pickup dissolving into a pale car behind it.
+  */
+  const SPARK_ACCENT = { coffee: '#ffd08a', heart: '#ff5d66', nitro: '#5fcde4' };
+
+  /* sprite canvas -> a solid dark stamp of the same shape */
+  const silhouettes = new Map();
+  function silhouetteFor(spr) {
+    let sil = silhouettes.get(spr);
+    if (sil) return sil;
+    sil = document.createElement('canvas');
+    sil.width = spr.width;
+    sil.height = spr.height;
+    const sctx = sil.getContext('2d');
+    sctx.imageSmoothingEnabled = false;
+    sctx.drawImage(spr, 0, 0);
+    sctx.globalCompositeOperation = 'source-in';
+    sctx.fillStyle = TUNING.palette.city.outline;
+    sctx.fillRect(0, 0, spr.width, spr.height);
+    silhouettes.set(spr, sil);
+    return sil;
+  }
+
+  function drawCollectible(spr, cx, cy, phase, kind) {
+    const jx = Math.round(Math.sin(phase));
+    const jy = Math.round(Math.sin(phase * 0.63 + 1.3) * 0.6);
+    const x = Math.round(cx - spr.width / 2) + jx;
+    const y = Math.round(cy - spr.height / 2) + jy;
+    const mx = Math.round(x + spr.width / 2);
+    const my = Math.round(y + spr.height / 2);
+    const hw = Math.round(spr.width / 2);
+    const hh = Math.round(spr.height / 2);
+
+    /*
+      Contact shadow. Anchored to the road rather than to the sprite,
+      so it stays put while the pickup bobs above it, which is what
+      makes the bob read as floating instead of as the whole thing
+      sliding around.
+    */
+    const shadowY = Math.round(cy + spr.height / 2) - 1;
+    const sw = Math.max(6, spr.width - 2);
+    bctx.globalAlpha = 0.28;
+    bctx.fillStyle = TUNING.palette.city.tire;
+    bctx.fillRect(Math.round(cx - sw / 2) + 1, shadowY, sw - 2, 2);
+    bctx.fillRect(Math.round(cx - sw / 2), shadowY + 1, sw, 1);
+    bctx.globalAlpha = 1;
+
+    const accent = SPARK_ACCENT[kind];
+    if (accent) {
+      const pulse = (Math.sin(phase * 0.42) + 1) / 2;
+      const r = 3 + Math.round(pulse * 3);
+      const d = Math.round(r * 0.7);
+      bctx.globalAlpha = 0.35 + 0.55 * (1 - pulse);
+      bctx.fillStyle = accent;
+      /* four on the axes, two pixels each */
+      bctx.fillRect(mx - 1, my - hh - r, 2, 2);
+      bctx.fillRect(mx - 1, my + hh + r - 2, 2, 2);
+      bctx.fillRect(mx - hw - r, my - 1, 2, 2);
+      bctx.fillRect(mx + hw + r - 2, my - 1, 2, 2);
+      /* four on the diagonals, one pixel, offset in phase so the ring
+         shimmers rather than breathing as a single unit */
+      bctx.globalAlpha = 0.25 + 0.5 * pulse;
+      bctx.fillRect(mx - hw - d, my - hh - d, 1, 1);
+      bctx.fillRect(mx + hw + d - 1, my - hh - d, 1, 1);
+      bctx.fillRect(mx - hw - d, my + hh + d - 1, 1, 1);
+      bctx.fillRect(mx + hw + d - 1, my + hh + d - 1, 1, 1);
+      bctx.globalAlpha = 1;
+    }
+
+    /* A one pixel drop shadow, down and right, exact to the
+       silhouette. An outline on all four sides fattens the shape and
+       the art already has its own; offsetting in one direction reads
+       as the pickup sitting above the road instead. Offset copies of
+       the sprite itself would smear colour, so this is a solid dark
+       stamp of its shape, built once per sprite and cached. */
+    bctx.globalAlpha = 0.55;
+    bctx.drawImage(silhouetteFor(spr), x + 1, y + 1);
+    bctx.globalAlpha = 1;
+    bctx.drawImage(spr, x, y);
+  }
+
   function drawPickups(view) {
-    const cupSpr = getSprite('pickup_coffee');
-    const heartSpr = getSprite('ui_heart_full');
+    const spr = {
+      coffee: getSprite('pickup_coffee'),
+      heart: getSprite('item_heart'),
+      nitro: getSprite('item_nitro')
+    };
     const t = performance.now() / 1000;
     const hz = TUNING.render.coffeeJiggleHz;
     for (let i = 0; i < view.pickups.length; i += 1) {
       const item = view.pickups[i];
       const screenY = TUNING.render.playerYPx - (item.distPx - view.distancePx);
       if (screenY < -32 || screenY > H + 32) continue;
-      if (item.kind === 'heart') {
-        /* drawn at 2x so a life reads bigger than a coffee */
-        const w = heartSpr.width * 2;
-        const h = heartSpr.height * 2;
-        const x = Math.round(laneCenterXPx(item.lane) - w / 2);
-        bctx.drawImage(heartSpr, x, Math.round(screenY - h / 2), w, h);
-        continue;
-      }
+      /* distPx in the phase so two pickups on screen are never in
+         step with each other */
       const phase = t * hz * Math.PI * 2 + item.lane * 1.7 + item.distPx * 0.01;
-      const jx = Math.round(Math.sin(phase));
-      const jy = Math.round(Math.sin(phase * 0.63 + 1.3) * 0.6);
-      const x = Math.round(laneCenterXPx(item.lane) - cupSpr.width / 2) + jx;
-      bctx.drawImage(cupSpr, x, Math.round(screenY - cupSpr.height / 2) + jy);
+      drawCollectible(spr[item.kind] || spr.coffee, laneCenterXPx(item.lane), screenY,
+        phase, item.kind);
     }
   }
+
 
   /*
     Cartoon fuel gauge, centered at the top: the coffee cup as the
@@ -525,13 +917,86 @@ export function createRenderer(canvas) {
     capsule in a bright ring.
   */
   /* The chunky capsule language every HUD element shares. */
-  function drawPlate(x, y, w, h, pal) {
+  function drawPlate(x, y, w, h, pal, fill) {
     bctx.fillStyle = pal.outline;
     bctx.fillRect(x + 1, y - 1, w - 2, h + 2);
     bctx.fillRect(x - 1, y + 1, w + 2, h - 2);
     bctx.fillRect(x, y, w, h);
-    bctx.fillStyle = pal.road;
+    bctx.fillStyle = fill || pal.road;
     bctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  }
+
+  /*
+    The one time coffee lesson. A cup on its own is just a shape, and
+    nothing on the screen says why to steer into one; testers read the
+    gauge running down and never connected the two. The first time a
+    cup comes into reading distance we hang a two line callout off it
+    with a short leader back to the cup, so the lesson is attached to
+    the object rather than buried in a menu. Shown once per browser,
+    never again.
+  */
+  /*
+    Latched onto one cup, not re-picked each frame. The old version
+    chose the nearest cup ahead every frame, so the callout followed a
+    cup for the ~1.2s it took to reach the player and then jumped to
+    the next one, which was usually outside the draw window. The
+    lesson got about a third of its 3.2s budget and flickered.
+
+    It also reports back. The flag that spends this lesson forever
+    used to be written when the simulation emitted coffee_seen, which
+    fires at a cup distance putting cupY about three pixels inside the
+    draw cut off, with the render distance interpolated and the event
+    distance not. A frame landing the wrong side of that burned the
+    only tutorial in the game with nothing shown. Now the renderer
+    says whether it actually drew, and main.js spends the flag on
+    reading time, not on an event.
+  */
+  let tipLatchDistPx = null;
+  let tipLatchLane = 0;
+
+  function drawCoffeeTip(view, pal) {
+    if (!view.coffeeTip) { tipLatchDistPx = null; return false; }
+    if (tipLatchDistPx === null) {
+      if (!view.pickups) return false;
+      let best = null;
+      for (let i = 0; i < view.pickups.length; i += 1) {
+        const item = view.pickups[i];
+        if (item.kind !== 'coffee') continue;
+        const dy = item.distPx - view.distancePx;
+        if (dy <= 0) continue;
+        if (best === null || dy < best.dy) best = { item, dy };
+      }
+      if (best === null) return false;
+      /* Latch only once the cup is genuinely in reading range, so a
+         frame that arrives a few pixels early does not latch onto a
+         cup and then refuse to draw it. */
+      if (TUNING.render.playerYPx - best.dy < TUNING.render.hudBandHPx + 8) return false;
+      tipLatchDistPx = best.item.distPx;
+      tipLatchLane = best.item.lane;
+    }
+
+    const cupX = Math.round(laneCenterXPx(tipLatchLane));
+    /* Once the cup reaches the car, hold the callout where it is for
+       the rest of the window rather than chasing it off the bottom of
+       the screen or teleporting to another cup. */
+    const rawY = TUNING.render.playerYPx - (tipLatchDistPx - view.distancePx);
+    const cupY = Math.round(Math.min(rawY, H - 40));
+    if (cupY < TUNING.render.hudBandHPx + 8) return false;
+
+    const l1 = 'Coffee is fuel';
+    const l2 = 'Grab it';
+    const w = Math.max(textWidth(l1, 1), textWidth(l2, 1)) + 8;
+    const h = 15;
+    /* clamped so the callout never hangs off the edge of a phone */
+    const x = Math.max(3, Math.min(W - w - 3, Math.round(cupX - w / 2)));
+    const y = cupY + 14;
+
+    bctx.fillStyle = pal.outline;
+    bctx.fillRect(cupX, cupY + 6, 1, y - cupY - 6);
+    drawPlate(x, y, w, h, pal);
+    drawText(bctx, l1, x + w / 2, y + 2, pal.edgeLine, { scale: 1, align: 'center' });
+    drawText(bctx, l2, x + w / 2, y + 9, pal.text, { scale: 1, align: 'center' });
+    return true;
   }
 
   function drawHudBand(pal) {
@@ -545,20 +1010,47 @@ export function createRenderer(canvas) {
   /* Row two, flush left: coffee gauge, then boost pill, then hearts. */
   function drawFuelBar(view, pal) {
     const fb = TUNING.render.fuelBar;
-    const cup = getSprite('pickup_coffee');
     const x0 = 2;
-    const barX = x0 + cup.width + fb.cupGapPx;
+    const barX = x0 + fb.labelWPx;
     const barY = fb.yPx;
     const low = view.fuel <= TUNING.fuel.lowThreshold;
 
-    /* cup icon, shivering when low */
-    let cupJx = 0;
-    if (low) {
-      const t = performance.now() / 1000;
-      cupJx = Math.round(Math.sin(t * TUNING.render.coffeeJiggleHz * Math.PI * 2));
+    /*
+      The gauge is labelled, and the label is also the warning. Players
+      read BOOST and understand boost; the coffee gauge was the only
+      thing on this HUD without a word, and it was the thing testers
+      could not read. Under the low threshold the word alternates
+      COFFEE and LOW, both red, with LOW centred inside COFFEE's own
+      footprint so the eye has nothing to chase.
+    */
+    /*
+      Row two was the one HUD element with no plate under it, and the
+      label sits at x=2 while the road starts at x=30, so it was drawn
+      over the bright green shoulder. Red on that, under the 55% band,
+      measured 1.49:1 on five pixel type: the most urgent state in the
+      run was the least readable thing on screen, and it was legible
+      right up until the moment it mattered and then vanished.
+
+      A dark chip fixes the background rather than the foreground, so
+      the warning no longer depends on what is scrolling underneath.
+      On it the amber reaches 8.10:1 and the resting white 12.63:1.
+      Amber rather than red because red on any dark ground is about
+      3.3:1; the red stays where it still works, on the bar fill.
+    */
+    /* drawPlate with the outline as its own interior: the same pixel
+       rounded silhouette every other HUD element wears, in the one
+       colour dark enough to carry five pixel type. */
+    drawPlate(1, barY - 1, 25, 7, pal, pal.outline);
+
+    const blinkLow = low
+      && Math.floor(performance.now() / TUNING.render.lowBlinkMs) % 2 === 0;
+    if (blinkLow) {
+      drawText(bctx, 'Low', x0 + textWidth('Coffee', 1) / 2, barY + 1, pal.hazardLight,
+        { scale: 1, align: 'center' });
+    } else {
+      drawText(bctx, 'Coffee', x0, barY + 1, low ? pal.hazardLight : pal.text,
+        { scale: 1, align: 'left' });
     }
-    const cupY = Math.round(barY + fb.hPx / 2 - cup.height / 2);
-    bctx.drawImage(cup, x0 + cupJx, cupY);
 
     /* capsule outline with pixel rounded corners */
     bctx.fillStyle = pal.outline;
@@ -573,7 +1065,7 @@ export function createRenderer(canvas) {
     /* fill with highlight and shadow bands; a fresh cup makes the
        whole gauge flash bright for a beat */
     const flashOn = gaugeFlashFrames > 0 && Math.floor(gaugeFlashFrames / 4) % 2 === 0;
-    if (gaugeFlashFrames > 0) gaugeFlashFrames -= 1;
+    if (gaugeFlashFrames > 0) gaugeFlashFrames = Math.max(0, gaugeFlashFrames - units);
     const frac = Math.max(0, Math.min(1, view.fuel / TUNING.fuel.max));
     const fillW = Math.round((fb.wPx - 2) * frac);
     if (fillW > 0) {
@@ -592,20 +1084,19 @@ export function createRenderer(canvas) {
       bctx.fillRect(tx, barY, 1, fb.hPx);
     }
 
-    /* boost ring */
-    if (view.boosting) {
-      bctx.fillStyle = pal.dash;
-      bctx.fillRect(barX - 1, barY - 4, fb.wPx + 2, 1);
-      bctx.fillRect(barX - 1, barY + fb.hPx + 3, fb.wPx + 2, 1);
-      bctx.fillRect(barX - 3, barY - 1, 1, fb.hPx + 2);
-      bctx.fillRect(barX + fb.wPx + 2, barY - 1, 1, fb.hPx + 2);
-    }
+    /* No ring around the coffee gauge while boosting. It read as
+       measurement scaffolding rather than as state, and the boost pill
+       two inches to the right already fills white for the whole
+       duration, with exhaust flames on the car saying the same thing. */
 
     /* labeled boost meter on the right third of the row */
     const bp = TUNING.render.boostPill;
     const labelX = barX + fb.wPx + 8;
     const hintOn = view.boostHint && !view.boosting
       && (Math.floor(performance.now() / TUNING.render.boostHintBlinkMs) % 2 === 0);
+    /* Matching chip, so row two reads as one designed row rather than
+       one labelled element and one bare one. */
+    drawPlate(labelX - 1, barY - 1, textWidth('Boost', 1) + 3, 7, pal, pal.outline);
     drawText(bctx, 'Boost', labelX, barY + 1, hintOn ? pal.dash : pal.text,
       { scale: 1, align: 'left' });
     const bpX = labelX + 22;
@@ -615,10 +1106,21 @@ export function createRenderer(canvas) {
       bctx.fillStyle = pal.dash;
       bctx.fillRect(bpX + 1, bpY + 1, Math.round((bp.wPx - 2) * view.boostFrac), bp.hPx - 2);
     } else if (view.boostReady) {
-      bctx.fillStyle = hintOn ? pal.dash : pal.edgeLine;
+      /* A banked nitro reads as its own colour, not as a full coffee
+         gauge: the player has to be able to tell at a glance that the
+         next boost is the free one that works when the cup is empty. */
+      const charged = view.nitroCharges > 0;
+      bctx.fillStyle = charged ? pal.wigWagBlue : (hintOn ? pal.dash : pal.edgeLine);
       bctx.fillRect(bpX + 1, bpY + 1, bp.wPx - 2, bp.hPx - 2);
-      bctx.fillStyle = pal.carDark;
+      bctx.fillStyle = charged ? pal.carWindow : pal.carDark;
       bctx.fillRect(bpX + 1, bpY + bp.hPx - 2, bp.wPx - 2, 1);
+      /* one notch per banked charge */
+      if (charged) {
+        bctx.fillStyle = pal.text;
+        for (let i = 0; i < view.nitroCharges; i += 1) {
+          bctx.fillRect(bpX + 2 + i * 3, bpY + 2, 2, bp.hPx - 4);
+        }
+      }
     }
     /* pulse ring around the pill while the hint is live */
     if (hintOn) {
@@ -643,10 +1145,18 @@ export function createRenderer(canvas) {
     drawText(bctx, String(view.high), hiX + p.wPx / 2, p.yPx + 4, pal.edgeLine,
       { scale: 2, align: 'center' });
     /* the three hearts sit between the two plates */
-    const heartSpr = getSprite('ui_heart_full');
+    const heartSpr = getSprite('item_heart');
+    const nitroSpr = getSprite('item_nitro');
     const heartsW = TUNING.lives.max * (heartSpr.width + 2) - 2;
     let hx = Math.round(W / 2 - heartsW / 2);
     const hy = p.yPx + Math.round(p.hPx / 2 - heartSpr.height / 2);
+    /* Sound off is a state the player chose and then forgets, so say
+       so for the whole run rather than only on the menu. It sits in
+       the gap between the score plate and the hearts. */
+    if (view.soundOn === false) {
+      const mute = getSprite('ui_mute');
+      bctx.drawImage(mute, hx - mute.width - 4, hy);
+    }
     for (let i = 0; i < TUNING.lives.max; i += 1) {
       const spr = getSprite(i < view.hearts ? 'ui_heart_full' : 'ui_heart_empty');
       bctx.drawImage(spr, hx, hy);
@@ -670,53 +1180,107 @@ export function createRenderer(canvas) {
     and hit tested in logical coordinates by the app. Starting a run
     is ONLY ever the primary button; stray taps and keys do nothing.
   */
-  function menuLayout(mode) {
+  function menuLayout(mode, showSoundTip, hapticsSupported = true) {
     const m = TUNING.render.menu;
     const items = [];
-    let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 170);
+    let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 122);
     const primaryLabel = mode === 'title' ? 'Start' : (mode === 'paused' ? 'Resume' : 'Go again');
     items.push({ id: 'primary', label: primaryLabel, x: Math.round((W - m.primary.wPx) / 2), y, w: m.primary.wPx, h: m.primary.hPx });
     y += m.primary.hPx + m.option.gapPx + 6;
-    for (const id of ['car', 'sound', 'haptics']) {
+    /* No rumble row where rumble cannot happen. Safari has never
+       implemented navigator.vibrate on iOS or the desktop, so on an
+       iPhone this row could only ever read N/A, and a control that
+       does nothing is worse than no control. Android still gets it. */
+    const optionIds = hapticsSupported ? ['car', 'sound', 'haptics'] : ['car', 'sound'];
+    for (const id of optionIds) {
       items.push({ id, x: Math.round((W - m.option.wPx) / 2), y, w: m.option.wPx, h: m.option.hPx });
       y += m.option.hPx + m.option.gapPx;
     }
     if (mode === 'paused') {
-      items.push({ id: 'restart', label: 'Restart', x: Math.round((W - m.option.wPx) / 2), y: y + 6, w: m.option.wPx, h: m.option.hPx });
+      /* Restart throws the run away with no confirmation, and it used
+         to sit 6px below Sound wearing the same plate and the same
+         label colour as the two toggles. With the hit pad that left
+         one logical pixel between a reversible toggle and an
+         irreversible run ender. It now gets real clearance, and
+         drawMenu gives it the hazard colours. */
+      items.push({ id: 'restart', label: 'Restart', x: Math.round((W - m.option.wPx) / 2), y: y + m.destructiveGapPx, w: m.option.wPx, h: m.option.hPx });
+    }
+    /* The phone's own ring switch mutes the game and no browser can
+       read it, so this is a hint rather than a readout. It sits last
+       so its padded hit box can never steal a tap from a real row. */
+    if (mode === 'title' && showSoundTip) {
+      items.push({ id: 'soundtip', x: 8, y: 284, w: W - 16, h: 13 });
     }
     return items;
   }
 
-  function hitTestMenu(mode, lx, ly) {
+  /*
+    The pad is 6 on every side and the gap between rows is 7, so every
+    adjacent pair of padded boxes overlaps by 5 logical pixels. That
+    padding is what carries the 44pt touch target on a small viewport,
+    so shrinking it is the wrong trade. Instead the overlap band is
+    resolved by which row's centre is nearer, rather than by whichever
+    happens to be first in layout order: a tap aimed just above Sound
+    used to cycle the car every time, and now it lands where the
+    finger actually was.
+  */
+  function hitTestMenu(mode, lx, ly, showSoundTip, hapticsSupported = true) {
     if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver') return null;
     if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
     const pad = TUNING.render.menu.hitPadPx;
-    for (const item of menuLayout(mode)) {
-      if (lx >= item.x - pad && lx <= item.x + item.w + pad
-          && ly >= item.y - pad && ly <= item.y + item.h + pad) {
-        return item.id;
-      }
+    let bestId = null;
+    let bestD = Infinity;
+    for (const item of menuLayout(mode, showSoundTip, hapticsSupported)) {
+      if (lx < item.x - pad || lx > item.x + item.w + pad) continue;
+      if (ly < item.y - pad || ly > item.y + item.h + pad) continue;
+      const d = Math.abs(ly - (item.y + item.h / 2));
+      if (d < bestD) { bestD = d; bestId = item.id; }
     }
-    return null;
+    return bestId;
   }
 
+  /*
+    A button with no press state on a phone is a button you are not
+    sure you hit, so you hit it again. Pressed rows sink one pixel and
+    lose their top highlight, which is the whole vocabulary a pixel
+    button needs: the plate stops catching the light and sits lower in
+    its own socket. Render only, and cleared by the app on release, on
+    a drag off the button, and on an OS cancel, so a press that is
+    thought better of leaves nothing behind.
+  */
   function drawMenu(view, pal, mode) {
-    for (const item of menuLayout(mode)) {
-      if (item.id === 'primary') {
+    const pressed = view.pressedMenuId;
+    for (const item of menuLayout(mode, view.soundTip, view.hapticsSupported)) {
+      const down = item.id === pressed ? 1 : 0;
+      if (item.id === 'soundtip') {
+        drawText(bctx, 'NO SOUND. CHECK THE SIDE SWITCH', W / 2, item.y, pal.edgeLine,
+          { scale: 1, align: 'center' });
+        drawText(bctx, 'TAP HERE TO HIDE', W / 2, item.y + 8, pal.text,
+          { scale: 1, align: 'center' });
+      } else if (item.id === 'primary') {
+        const iy = item.y + down;
         bctx.fillStyle = pal.outline;
-        bctx.fillRect(item.x + 1, item.y - 1, item.w - 2, item.h + 2);
-        bctx.fillRect(item.x - 1, item.y + 1, item.w + 2, item.h - 2);
-        bctx.fillRect(item.x, item.y, item.w, item.h);
+        bctx.fillRect(item.x + 1, iy - 1, item.w - 2, item.h + 2);
+        bctx.fillRect(item.x - 1, iy + 1, item.w + 2, item.h - 2);
+        bctx.fillRect(item.x, iy, item.w, item.h);
         bctx.fillStyle = pal.edgeLine;
-        bctx.fillRect(item.x + 1, item.y + 1, item.w - 2, item.h - 2);
-        bctx.fillStyle = pal.carDark;
-        bctx.fillRect(item.x + 1, item.y + item.h - 2, item.w - 2, 1);
-        drawText(bctx, item.label, item.x + item.w / 2, item.y + Math.round(item.h / 2) - 5, pal.outline, { scale: 2, align: 'center' });
+        bctx.fillRect(item.x + 1, iy + 1, item.w - 2, item.h - 2);
+        /* The shadow row under the face is what makes it read as
+           raised, so a pressed button does not get one. */
+        if (!down) {
+          bctx.fillStyle = pal.carDark;
+          bctx.fillRect(item.x + 1, iy + item.h - 2, item.w - 2, 1);
+        } else {
+          bctx.fillStyle = pal.carDark;
+          bctx.fillRect(item.x + 1, iy + 1, item.w - 2, 1);
+        }
+        drawText(bctx, item.label, item.x + item.w / 2, iy + Math.round(item.h / 2) - 5, pal.outline, { scale: 2, align: 'center' });
       } else if (item.id === 'restart') {
-        drawPlate(item.x, item.y, item.w, item.h, pal);
-        drawText(bctx, item.label, item.x + item.w / 2, item.y + Math.round(item.h / 2) - 2, pal.text, { scale: 1, align: 'center' });
+        /* Destructive, so it does not wear the toggle's clothes. */
+        drawPlate(item.x, item.y + down, item.w, item.h, pal, down ? pal.outline : pal.carDark);
+        drawText(bctx, item.label, item.x + item.w / 2, item.y + down + Math.round(item.h / 2) - 2, pal.text, { scale: 1, align: 'center' });
       } else {
-        drawPlate(item.x, item.y, item.w, item.h, pal);
+        drawPlate(item.x, item.y + down, item.w, item.h, pal, down ? pal.outline : undefined);
         let label;
         let value;
         if (item.id === 'car') {
@@ -729,10 +1293,35 @@ export function createRenderer(canvas) {
           label = 'Rumble';
           value = view.hapticsSupported ? (view.hapticsOn ? 'ON' : 'OFF') : 'N/A';
         }
-        const ty = item.y + Math.round(item.h / 2) - 2;
+        const ty = item.y + down + Math.round(item.h / 2) - 2;
         drawText(bctx, label, item.x + 7, ty, pal.text, { scale: 1, align: 'left' });
         drawText(bctx, value, item.x + item.w - 7, ty, pal.edgeLine, { scale: 1, align: 'right' });
       }
+    }
+  }
+
+  /*
+    The top five. Rank and initials read left, distance reads right,
+    and the row just earned is picked out in the accent so a player
+    can find themselves without counting. Drawing is skipped entirely
+    when the board is empty, which is what keeps it clear of the ring
+    switch hint on a fresh install.
+  */
+  function drawBoard(view, pal, topY) {
+    const rows = view.board || [];
+    if (rows.length === 0) return;
+    /* The world keeps moving behind both screens, so the board gets
+       the same shaded band the HUD uses rather than trusting the dim
+       layer to keep a cup or a car off the text. */
+    bctx.fillStyle = pal.hudBand;
+    bctx.fillRect(28, topY - 5, W - 56, 13 + rows.length * 7);
+    drawText(bctx, 'Top five', W / 2, topY, pal.edgeLine, { scale: 1, align: 'center' });
+    for (let i = 0; i < rows.length; i += 1) {
+      const y = topY + 8 + i * 7;
+      const mine = i === view.newEntryIndex;
+      const color = mine ? pal.edgeLine : pal.text;
+      drawText(bctx, (i + 1) + ' ' + rows[i].name, 42, y, color, { scale: 1, align: 'left' });
+      drawText(bctx, rows[i].meters + 'M', W - 42, y, color, { scale: 1, align: 'right' });
     }
   }
 
@@ -742,21 +1331,84 @@ export function createRenderer(canvas) {
     const badge = getSprite('ui_badge');
     bctx.drawImage(badge, Math.round((W - badge.width) / 2), 16);
     drawMenu(view, pal, 'title');
+    drawBoard(view, pal, 275);
     drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.road, { scale: 1, align: 'right' });
+  }
+
+  /*
+    Reads in the order the player asks the questions: what happened,
+    how far did I get, how does that compare, now let me go again. The
+    top five used to sit above all of that, which put someone else's
+    score in front of your own result. It now sits under the menu,
+    where it is still there to look at and no longer the headline.
+  */
+  /*
+    The only advance warning the game gives of a threat coming from
+    behind, and it was the least visible thing on the road: red on
+    undimmed tarmac at 1.60:1, sitting in the last 7% of the canvas
+    under the player's thumb, and painted before the traffic layer so
+    a car parked in the same lane covered it.
+
+    Now amber with a dark keyline (3.92:1 as a graphic, 8.10:1 at the
+    glyph edge), lifted clear of the thumb, and drawn last so nothing
+    can paint over it. The 3Hz blink stays: it is what makes the thing
+    read as a warning rather than road furniture.
+  */
+  function drawOvertakerWarnings(view, pal) {
+    const t = performance.now() / 1000;
+    if (Math.floor(t * 6) % 2 !== 0) return;
+    for (let i = 0; i < view.overtakers.length; i += 1) {
+      const ov = view.overtakers[i];
+      const screenY = TUNING.render.playerYPx - (ov.distPx - view.distancePx);
+      if (screenY <= H + 40) continue;
+      const cx = Math.round(laneCenterXPx(ov.lane));
+      for (let c = 0; c < 2; c += 1) {
+        const baseY = H - 22 - c * 7;
+        /* keyline first, then the arrow inside it */
+        bctx.fillStyle = pal.outline;
+        for (let k = -4; k <= 4; k += 1) {
+          bctx.fillRect(cx + k, baseY + Math.abs(k) - 5, 1, 5);
+        }
+        bctx.fillStyle = pal.hazardLight;
+        for (let k = -3; k <= 3; k += 1) {
+          bctx.fillRect(cx + k, baseY + Math.abs(k) - 3, 1, 3);
+        }
+      }
+    }
   }
 
   function drawGameOver(pal, view) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
-    const cause = view.deathCause === 'fuel' ? 'Out of fuel' : 'Crashed';
-    drawText(bctx, cause, W / 2, 88, pal.carBody, { scale: 2, align: 'center' });
-    drawText(bctx, view.meters + ' m', W / 2, 116, pal.text, { scale: 2, align: 'center' });
+    /*
+      The world keeps scrolling behind this screen, so the headline
+      was drawn on a background that changed every frame: 2.87:1 over
+      road, 1.67:1 over the green shoulder, 1.14:1 when a pale car
+      passed under it. drawBoard's comment two functions down explains
+      exactly this and gives the board a band; the lesson was never
+      applied to the line that says why you died, which matters more.
+      A translucent band is not enough here (it only reaches 2.34:1
+      over a white car), so this one is opaque: the result block now
+      has a fixed background whatever is driving past behind it.
+    */
+    drawPlate(14, 42, W - 28, 72, pal, pal.outline);
+    /* one highlight row, the same bevel the plates carry */
+    bctx.fillStyle = pal.road;
+    bctx.fillRect(15, 43, W - 30, 1);
+    const cause = view.deathCause === 'fuel' ? 'Out of coffee' : 'Crashed';
+    drawText(bctx, cause, W / 2, 50, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m', W / 2, 78, pal.text, { scale: 2, align: 'center' });
     if (view.newBest) {
-      drawText(bctx, 'New best!', W / 2, 140, pal.edgeLine, { scale: 1, align: 'center' });
+      drawText(bctx, 'New best!', W / 2, 104, pal.edgeLine, { scale: 1, align: 'center' });
     } else {
-      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 140, pal.text, { scale: 1, align: 'center' });
+      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 104, pal.text, { scale: 1, align: 'center' });
     }
     drawMenu(view, pal, 'gameOver');
+    /* One fixed y, below the longest the menu can be (the rumble row
+       makes it end at 241). A y that moved with the menu length had
+       the board hanging off the bottom of a 320px screen on the
+       shorter layout. */
+    drawBoard(view, pal, 252);
   }
 
   function drawPaused(view, pal) {
@@ -771,6 +1423,7 @@ export function createRenderer(canvas) {
     distancePx and laneFloat are already interpolated by the caller.
   */
   function drawFrame(view) {
+    units = frameUnits();
     const pal = TUNING.palette.city;
     const sx = view.shakeX | 0;
     const sy = view.shakeY | 0;
@@ -782,10 +1435,15 @@ export function createRenderer(canvas) {
     drawPickups(view);
     drawOvertakers(view, pal);
     drawTraffic(view);
+    drawOvertakerWarnings(view, pal);
     drawPlayer(view);
     drawParticles();
+    view.coffeeTipDrawn = drawCoffeeTip(view, pal);
     bctx.restore();
-    if (view.mode === 'playing' || view.mode === 'paused' || view.mode === 'gameOver') {
+    /* The game over screen states the distance and the best in full
+       size, so the run HUD is redundant there, and dropping it frees
+       the top band for the board. */
+    if (view.mode === 'playing' || view.mode === 'paused') {
       drawHudBand(pal);
       drawFuelBar(view, pal);
       drawScore(view, pal);

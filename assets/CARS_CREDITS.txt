@@ -1,1 +1,11 @@
-This is a collection of cars used in my first game Road To Rage (available on Google Play).  Feel free to use them in any of your projects (with or without modifications).  I just ask that you link to my website tmdstudios.wordpress.com
+Vehicle art for Cars & Coffee.
+
+The 30 top-down vehicles in assets/cars.png are original artwork
+commissioned for this project by Jason Fields (Fasonista), cut from the
+"Cars & Coffee Vehicle Sprite Sheet, 30 unique vehicles, top-down,
+north facing" and reduced to game resolution.
+
+Earlier builds of this game shipped the "Road To Rage" vehicle pack by
+TMD Studios (tmdstudios.wordpress.com). That pack is no longer used and
+none of its art remains in this build. The attribution is kept here as
+a record of what previous builds contained.

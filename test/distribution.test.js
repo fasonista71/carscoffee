@@ -22,7 +22,7 @@ test('center lane blocks, hazard presence, and static cups across seeds', () => 
   let slicks = 0;
   let rubbles = 0;
   for (let seed = 1; seed <= 10; seed += 1) {
-    const w = createWorld({ seed, vehicle: VEHICLES.sports, environment: ENVIRONMENTS.city });
+    const w = createWorld({ seed, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city });
     let countedTo = 0;
     const seenHazards = new Set();
     for (let f = 0; f < 9000; f += 1) {

@@ -42,7 +42,7 @@ function scriptedIntents(frame) {
 function runSimulation() {
   const world = createWorld({
     seed: 0xc0ffee,
-    vehicle: VEHICLES.sports,
+    vehicle: VEHICLES.coupe,
     environment: ENVIRONMENTS.city
   });
   for (let f = 0; f < 10000; f += 1) {

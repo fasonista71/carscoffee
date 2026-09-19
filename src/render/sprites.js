@@ -1,9 +1,11 @@
 /*
   Sprite registry, now backed by a real spritesheet.
 
-  Car art: "Road To Rage" vehicle pack by TMD Studios,
-  tmdstudios.wordpress.com, used with attribution per the license note
-  shipped in assets/CARS_CREDITS.txt.
+  Car art: original artwork commissioned for this project by Jason
+  Fields (Fasonista), cut from the 30 vehicle top-down sheet and
+  reduced to game resolution. The third party "Road To Rage" pack this
+  file used to name is gone; none of its art remains in the atlas.
+  assets/CARS_CREDITS.txt is the record.
 
   The atlas is a libGDX TexturePacker text atlas. Coordinates were
   verified empirically against the sheet: xy is measured from the TOP
@@ -19,12 +21,13 @@
 const ATLAS_URL = 'assets/cars.atlas';
 const IMAGE_URL = 'assets/cars.png';
 
-import { TUNING, TRAFFIC_VARIANTS } from '../game/tuning.js';
+import { TUNING, TRAFFIC_VARIANTS, OBSTACLE_SPRITES } from '../game/tuning.js';
 
 /* Registry keys used by the game map to atlas frame names here. */
 const ALIASES = {
-  player_car: 'porsche',
-  player_lambo: 'lambo'
+  player_coupe: 'sport_coupe',
+  player_4x4: 'fourbyfour',
+  player_classic: 'classic'
 };
 
 const registry = new Map();
@@ -90,9 +93,16 @@ export function loadSprites() {
   });
   return Promise.all([atlasReady, imageReady, coffeeReady, badgeReady]).then(([text, img]) => {
     const frames = parseAtlas(text);
+    /* Everything sliced out of the atlas is named here. The set is
+       explicit rather than "slice every frame" so a frame the game
+       does not actually use is a loud missing-name error at build
+       time instead of silent dead weight in memory. */
     const needed = new Set([
       ...Object.values(ALIASES),
-      ...TRAFFIC_VARIANTS.map((v) => v.sprite)
+      ...TRAFFIC_VARIANTS.map((v) => v.sprite),
+      ...OBSTACLE_SPRITES,
+      'obs_oil_left', 'obs_oil_right',
+      'item_heart', 'item_nitro'
     ]);
     for (const name of needed) {
       const f = frames[name];
@@ -125,75 +135,11 @@ function buildSurface(w, h, draw) {
   return c;
 }
 
-function buildSlick(dir) {
-  const pal = TUNING.palette.city;
-  const w = 34;
-  const h = 16;
-  return buildSurface(w, h, (ctx) => {
-    /* outline blob, inner puddle, sheen streak */
-    for (let y = 0; y < h; y += 1) {
-      const ry = ((y + 0.5) / h) * 2 - 1;
-      const half = Math.floor(Math.sqrt(Math.max(0, 1 - ry * ry)) * (w / 2));
-      if (half <= 0) continue;
-      ctx.fillStyle = pal.outline;
-      ctx.fillRect(w / 2 - half, y, half * 2, 1);
-      if (y > 0 && y < h - 1 && half > 2) {
-        ctx.fillStyle = pal.slick;
-        ctx.fillRect(w / 2 - half + 1, y, half * 2 - 2, 1);
-      }
-      if (y === 3 && half > 8) {
-        ctx.fillStyle = pal.slickSheen;
-        ctx.fillRect(w / 2 - half + 4, y, half - 3, 1);
-      }
-    }
-    /* three thick chevrons pointing in the slide direction */
-    ctx.fillStyle = pal.slickArrow;
-    const cy = Math.floor(h / 2);
-    for (let c0 = 0; c0 < 3; c0 += 1) {
-      const baseX = dir > 0 ? 7 + c0 * 8 : w - 9 - c0 * 8;
-      for (let k = -3; k <= 3; k += 1) {
-        const off = 3 - Math.abs(k);
-        const x = dir > 0 ? baseX + off : baseX - off;
-        ctx.fillRect(x, cy + k, 2, 1);
-      }
-    }
-  });
-}
 
 /*
   Rubble: a chunky mound of overlapping rock lumps, sized to read at
   speed. Lit from the top, shadowed at the base, dark outline.
 */
-function buildRubble() {
-  const pal = TUNING.palette.city;
-  const w = 24;
-  const h = 16;
-  const lumps = [
-    { cx: 7, cy: 10, rx: 6.5, ry: 5 },
-    { cx: 16, cy: 9, rx: 6.5, ry: 5.5 },
-    { cx: 11, cy: 6, rx: 5, ry: 4 }
-  ];
-  const inside = (x, y) => lumps.some((l) => {
-    const dx = (x - l.cx) / l.rx;
-    const dy = (y - l.cy) / l.ry;
-    return dx * dx + dy * dy <= 1;
-  });
-  return buildSurface(w, h, (ctx) => {
-    for (let y = 0; y < h; y += 1) {
-      for (let x = 0; x < w; x += 1) {
-        if (!inside(x, y)) continue;
-        const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
-        let color;
-        if (edge) color = pal.outline;
-        else if (y <= 5) color = pal.rubbleLight;
-        else if (y >= 12) color = pal.rubbleDark;
-        else color = ((x * 7 + y * 5) % 11 < 3) ? pal.rubbleDark : pal.rubbleMid;
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-  });
-}
 
 const HEART_ROWS = [
   '.RR...RR.',
@@ -204,6 +150,22 @@ const HEART_ROWS = [
   '..RRRRR..',
   '...RRR...',
   '....R....'
+];
+
+/*
+  Muted speaker, drawn at heart size so it sits in the HUD top row
+  without disturbing the spacing. S is the cone, X the slash.
+*/
+const MUTE_ROWS = [
+  '....SS..X',
+  '...SSS.X.',
+  '..SSSSX..',
+  'SSSSSX...',
+  'SSSSXS...',
+  'SSSXSS...',
+  '..XSSS...',
+  '.X.SSS...',
+  'X...SS...'
 ];
 
 function buildPixmap(rows, colors) {
@@ -228,14 +190,19 @@ function buildPixmap(rows, colors) {
 
 function buildProcedural() {
   const pal = TUNING.palette.city;
-  registry.set('obstacle_slick_left', buildSlick(-1));
-  registry.set('obstacle_slick_right', buildSlick(1));
-  registry.set('obstacle_rubble', buildRubble());
+  /* Obstacles and the two directional slicks now come from the atlas
+     and are registered by their frame names in the loop above. The
+     old buildSlick and buildRubble generators are gone with them. */
   registry.set('ui_heart_full', buildPixmap(HEART_ROWS, {
     R: pal.carBody, W: pal.dash
   }));
   registry.set('ui_heart_empty', buildPixmap(HEART_ROWS, {
     R: pal.heartEmpty, W: pal.heartEmpty
+  }));
+  /* The cone has to carry against the road and the shaded HUD band,
+     so it takes the text colour; only the slash is red. */
+  registry.set('ui_mute', buildPixmap(MUTE_ROWS, {
+    S: pal.text, X: pal.carBody
   }));
 }
 

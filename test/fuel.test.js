@@ -15,7 +15,7 @@ TUNING.obstacles.firstSpawnDistPx = 1e9;
 TUNING.tiers.splice(1);
 
 function mkWorld() {
-  return createWorld({ seed: 7, vehicle: VEHICLES.sports, environment: ENVIRONMENTS.city });
+  return createWorld({ seed: 7, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city });
 }
 
 test('ignoring coffee ends the run by fuel in roughly 45 seconds', () => {

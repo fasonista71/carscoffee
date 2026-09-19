@@ -14,7 +14,7 @@ TUNING.tiers.splice(1);
 TUNING.fuel.passiveDrainPerSec = 0;
 
 function mkWorld() {
-  return createWorld({ seed: 7, vehicle: VEHICLES.sports, environment: ENVIRONMENTS.city });
+  return createWorld({ seed: 7, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city });
 }
 
 function mkRow(world, aheadPx, lanes) {

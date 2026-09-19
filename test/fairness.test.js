@@ -214,7 +214,7 @@ test('an oracle player survives the real simulation through every tier for every
   for (let seed = 1; seed <= SEED_COUNT; seed += 1) {
     const world = createWorld({
       seed,
-      vehicle: VEHICLES.sports,
+      vehicle: VEHICLES.coupe,
       environment: ENVIRONMENTS.city
     });
     let topTier = 0;
