@@ -1858,6 +1858,29 @@ export function createRenderer(canvas) {
     drawParkedCar(view);
   }
 
+  /*
+    The build tag.
+
+    It is the only version signal this game has. There is no telemetry
+    behind it, so when a player says something is broken, the thing on
+    this line is the whole of what can be established about which code
+    they were running. It was drawn in the scenery grey on whatever
+    the shoulder happened to be, which measured about 1.1 to 1 against
+    the dimmed offroad on some themes: present, and unreadable.
+
+    It keeps its place and its size, because it is not for the player
+    in the ordinary case. It gets the same dark plate the rest of the
+    interface uses, so it reads at a consistent contrast whichever
+    theme is scrolling underneath, and stops being scenery.
+  */
+  function drawBuildTag(pal) {
+    const w = textWidth(BUILD_TAG, 1) + 6;
+    const x = W - 2 - w;
+    const y = H - 11;
+    drawPlate(x, y, w, 11, pal);
+    drawText(bctx, BUILD_TAG, W - 5, y + 3, pal.text, { scale: 1, align: 'right' });
+  }
+
   function drawTitle(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
@@ -1875,13 +1898,9 @@ export function createRenderer(canvas) {
       five is the thing being asked about. On the title it was a list
       of other people's runs in front of the car you were choosing.
     */
-    /* The build tag is the only version signal this game has, with no
-       telemetry behind it, and it was drawn at 1.08:1 on the dimmed
-       shoulder: recessive to the point of being unreadable, which is
-       no use to a player being asked which build they are on. */
     drawParkedCar(view);
     drawSoundNote(view, pal);
-    drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.building, { scale: 1, align: 'right' });
+    drawBuildTag(pal);
     drawHelpButton(view, pal);
   }
 
@@ -1954,11 +1973,16 @@ export function createRenderer(canvas) {
       drawText(bctx, 'Best ' + view.high + ' m', W / 2, 104, pal.text, { scale: 1, align: 'center' });
     }
     drawMenu(view, pal, 'gameOver');
-    /* One fixed y, below the longest the menu can be (the rumble row
-       makes it end at 241). A y that moved with the menu length had
-       the board hanging off the bottom of a 320px screen on the
-       shorter layout. */
-    drawBoard(view, pal, 252);
+    /*
+      The board hangs off the last menu row rather than sitting at a
+      fixed y. It used to be pinned at 252, which is where the longest
+      layout ends, so on a phone with no Rumble row (every iPhone) the
+      menu stopped 29 pixels short and the gap read as a missing
+      element. Anchoring keeps the same spacing on both, and the board
+      is 47 pixels tall against a 320 pixel screen, so the longer
+      layout still clears the bottom with room to spare.
+    */
+    drawBoard(view, pal, menuBottomY('gameOver', view.hapticsSupported) + 11);
   }
 
   function drawPaused(view, pal) {
