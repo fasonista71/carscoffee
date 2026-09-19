@@ -11,10 +11,10 @@
 
 import {
   TUNING, BUILD_TAG, TRAFFIC_VARIANTS, OBSTACLE_SPRITES,
-  SCENERY_WATER, SCENERY_RUN_SLOTS, SCENERY_WATER_IN, SCENERY_TALL, SCENERY_TALL_EVERY
+  SCENERY_STRIP_H, SCENERY_SEA, SCENERY_SEA_IN
 } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
-import { getSprite, getTrafficSprite, sceneryTiles, sceneryTallTile } from './sprites.js';
+import { getSprite, getTrafficSprite, sceneryStrip } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 
 export function createRenderer(canvas) {
@@ -129,64 +129,56 @@ export function createRenderer(canvas) {
     worth a black screen.
   */
   /*
-    Which tiles a slot may use. Water runs in stretches rather than
-    being dealt slot by slot, because a coast that alternates with the
-    inland every thirty pixels is not a coast. Each side of the road
-    rolls for itself, so a stretch can have sea on the left, on the
-    right, on both, or on neither, and the road can run along a beach
-    with a field on the other side.
-  */
-  function sceneryChoices(theme, tiles, slot, side) {
-    const water = SCENERY_WATER[theme];
-    if (!water || water.length === 0) return null;
-    const run = Math.floor(slot / SCENERY_RUN_SLOTS);
-    const roll = hash32(run * 2 + side + 7331);
-    const wet = roll % SCENERY_WATER_IN === 0;
-    const out = [];
-    for (let i = 0; i < tiles.length; i += 1) {
-      if (water.indexOf(i) >= 0 === wet) out.push(i);
-    }
-    return out.length === 0 ? null : out;
-  }
+    The roadside.
 
-  /* A tall tile hangs down over the slot below it, so that slot draws
-     nothing of its own. */
-  function tallAnchor(theme, slot, side) {
-    /* The column index can be zero, which is a perfectly good column
-       and a falsy value, so this asks whether the place has an entry
-       rather than whether its entry is truthy. */
-    if (SCENERY_TALL[theme] === undefined) return false;
-    const water = SCENERY_WATER[theme];
-    if (water && water.length > 0) return false;
-    return hash32(slot * 2 + side + 20011) % SCENERY_TALL_EVERY === 0;
+    One strip per side, drawn down the screen and mirrored end over
+    end so the joins never show. The strips are cut from the verges of
+    Jason's art, whole, which is why nothing is clipped that was not
+    clipped when it was drawn.
+
+    The left side is the same strip flipped across, so the shoulder
+    faces the road on both sides and the two verges never read as
+    copies of each other.
+
+    Which pass shows the sea is decided per side, so a stretch of
+    coast can be on the left, the right, both, or neither.
+  */
+  function stripFor(theme, pass, side) {
+    const sea = SCENERY_SEA[theme];
+    if (sea && hash32(pass * 2 + side + 7331) % SCENERY_SEA_IN === 0) {
+      const wet = sceneryStrip(sea);
+      if (wet) return wet;
+    }
+    return sceneryStrip(theme);
   }
 
   function drawScenery(distancePx, tier) {
     const t = themeFor(tier);
-    const px = TUNING.render.scenery.tilePx;
+    const w = TUNING.render.scenery.stripWPx;
     bctx.fillStyle = t.c.offroad;
-    bctx.fillRect(0, 0, px, H);
-    bctx.fillRect(W - px, 0, px, H);
-    const tiles = sceneryTiles(t.key);
-    if (tiles.length === 0) return;
-    const tall = sceneryTallTile(t.key);
-    const offset = Math.floor(distancePx) % px;
-    const base = Math.floor(distancePx / px);
-    for (let k = -2; k <= Math.ceil(H / px) + 1; k += 1) {
-      const y = k * px - offset;
-      const slot = base - k;
+    bctx.fillRect(0, 0, w, H);
+    bctx.fillRect(W - w, 0, w, H);
+    if (!sceneryStrip(t.key)) return;
+    const sh = SCENERY_STRIP_H;
+    const offset = Math.floor(distancePx) % sh;
+    const base = Math.floor(distancePx / sh);
+    for (let k = -1; k <= Math.ceil(H / sh) + 1; k += 1) {
+      const y = k * sh - offset;
+      if (y > H || y + sh < 0) continue;
+      const pass = base - k;
       for (let side = 0; side < 2; side += 1) {
-        const x = side === 0 ? 0 : W - px;
-        if (tall && tallAnchor(t.key, slot, side)) {
-          bctx.drawImage(tall, x, y);
-          continue;
-        }
-        /* Covered by the tall tile in the slot above this one. */
-        if (tall && tallAnchor(t.key, slot + 1, side)) continue;
-        const choices = sceneryChoices(t.key, tiles, slot, side);
-        const h = hash32(slot * 2 + side + 104729);
-        const i = choices ? choices[h % choices.length] : h % tiles.length;
-        bctx.drawImage(tiles[i], x, y);
+        const strip = stripFor(t.key, pass, side);
+        if (!strip) continue;
+        /* Every other pass is upside down, which is what makes the
+           repeat seamless: the last row of one is the last row of the
+           next. */
+        const flipY = ((pass % 2) + 2) % 2 === 1;
+        const flipX = side === 0;
+        bctx.save();
+        bctx.translate(side === 0 ? w : W - w, y);
+        bctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+        bctx.drawImage(strip, 0, flipY ? -sh : 0, w, sh);
+        bctx.restore();
       }
     }
   }

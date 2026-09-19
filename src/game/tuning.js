@@ -574,12 +574,12 @@ export const TUNING = {
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     /*
-      The roadside is tiled art now, one square per side per slot.
-      tilePx has to equal road.roadLeftPx, because the strip is
+      The roadside is Jason's art, one strip per side.
+      stripWPx has to equal road.roadLeftPx, because the strip is
       exactly the ground between the screen edge and the tarmac, and
-      the sheet in assets/scenery.png is cut to that size.
+      the sheet in assets/scenery.png is cut to that width.
     */
-    scenery: { tilePx: 30 }
+    scenery: { stripWPx: 30 }
   },
 
   /*
@@ -677,43 +677,34 @@ export const OBSTACLE_SPRITES = [
 ];
 
 /*
-  The roadside tile sheet, assets/scenery.png: one row per place in
-  this order, eight tiles across, thirty pixels square. The order is
-  the sheet's, so changing it here without recutting the sheet puts
-  cactus in the snow.
+  The roadside, assets/scenery.png: one strip per place, each thirty
+  pixels wide and six hundred tall, in this order.
+
+  Strips rather than tiles. The tile squares in the sheet Jason sent
+  are crops out of a larger scene, so their props are cut off at the
+  square's edge and their borders tiled into seams. A verge taken
+  whole has neither problem: nothing is clipped that was not clipped
+  in the art, and there are no joins to show.
+
+  It repeats by mirroring: every other pass down the strip is drawn
+  upside down, so the end of one always meets the start of the next.
+  That doubles the distance before anything looks familiar and costs
+  nothing but a flip.
+
+  beach_water is the sea verge, kept as its own strip so a stretch of
+  coast can be on the left, the right, both, or neither.
 */
-export const SCENERY_TILE_THEMES = [
+export const SCENERY_STRIPS = [
   'mountain', 'farmland', 'desert', 'volcanic', 'snow',
-  'forest', 'beach', 'cliffs', 'city'
+  'forest', 'beach', 'cliffs', 'city', 'beach_water'
 ];
 
-export const SCENERY_TILES_PER_THEME = 8;
+export const SCENERY_STRIP_H = 600;
 
-/*
-  Which tiles in a row are water. Water has to run in stretches rather
-  than be dealt slot by slot, or the coast turns into a chequerboard,
-  and each side of the road decides for itself, so a run can have sea
-  on one side, both, or neither. Only the beach has any.
-*/
-export const SCENERY_WATER = { beach: [4, 5, 6, 7] };
-
-/* How many slots a stretch of coast or inland holds before the roll
-   is taken again, and how often the roll says water. */
-export const SCENERY_RUN_SLOTS = 7;
-export const SCENERY_WATER_IN = 3;
-
-/*
-  Tiles two slots tall, in the band under the main grid, one column
-  each. A barn does not fit in thirty pixels: the sheet's own barn is
-  cut off by the width of its lane, so it is re-cut whole from the
-  strip art and given the room it needs. Keyed by place, with the
-  column it sits in.
-*/
-export const SCENERY_TALL = { farmland: 0 };
-
-/* Roughly one slot in this many carries a tall tile, where a place
-   has one. Low enough that a barn is an event rather than a fence. */
-export const SCENERY_TALL_EVERY = 9;
+/* Which place has a sea verge, and how often a pass down the strip
+   draws it rather than the land one. */
+export const SCENERY_SEA = { beach: 'beach_water' };
+export const SCENERY_SEA_IN = 3;
 
 export const PLAYER_SPRITES = ['fourbyfour', 'sport_coupe', 'classic'];
 

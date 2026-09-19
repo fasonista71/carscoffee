@@ -37,7 +37,7 @@ const IMAGE_URL = asset('cars.png');
 
 import {
   TUNING, TRAFFIC_VARIANTS, REPAINTS, PLAYER_REPAINTS,
-  SCENERY_TILE_THEMES, SCENERY_TILES_PER_THEME, SCENERY_TALL
+  SCENERY_STRIPS, SCENERY_STRIP_H
 } from '../game/tuning.js';
 /* The frame names and the parser live in atlas.js, which is the half
    of this file that touches no pixels, so the node tests can hold the
@@ -174,45 +174,26 @@ function paintJobs(from, src, mask, jobs) {
   sprite registry, because nothing asks for a tile by name; the
   renderer asks for a place and gets its set.
 */
-const sceneryByTheme = new Map();
-const sceneryTallByTheme = new Map();
-
-function cutTile(img, sx, sy, w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, sx, sy, w, h, 0, 0, w, h);
-  return c;
-}
+const sceneryByName = new Map();
 
 function sliceScenery(img) {
-  const px = TUNING.render.scenery.tilePx;
-  for (let row = 0; row < SCENERY_TILE_THEMES.length; row += 1) {
-    const set = [];
-    for (let col = 0; col < SCENERY_TILES_PER_THEME; col += 1) {
-      set.push(cutTile(img, col * px, row * px, px, px));
-    }
-    sceneryByTheme.set(SCENERY_TILE_THEMES[row], set);
-  }
-  /* The tall band sits under the grid, one column per place that has
-     something too big for a single slot. */
-  const tallY = SCENERY_TILE_THEMES.length * px;
-  for (const theme of Object.keys(SCENERY_TALL)) {
-    const col = SCENERY_TALL[theme];
-    sceneryTallByTheme.set(theme, cutTile(img, col * px, tallY, px, px * 2));
+  const w = TUNING.render.scenery.stripWPx;
+  const h = SCENERY_STRIP_H;
+  for (let i = 0; i < SCENERY_STRIPS.length; i += 1) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, i * w, 0, w, h, 0, 0, w, h);
+    sceneryByName.set(SCENERY_STRIPS[i], c);
   }
 }
 
-/* Empty until the sheet lands, and empty forever if it never does,
+/* Null until the sheet lands, and null forever if it never does,
    which the renderer treats as "draw the flat verge". */
-export function sceneryTiles(theme) {
-  return sceneryByTheme.get(theme) || [];
-}
-
-export function sceneryTallTile(theme) {
-  return sceneryTallByTheme.get(theme) || null;
+export function sceneryStrip(name) {
+  return sceneryByName.get(name) || null;
 }
 
 /*
