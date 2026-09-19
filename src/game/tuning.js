@@ -1,6 +1,6 @@
 /* Shown small on the title screen so a stale phone cache is visible
    at a glance. Bump when shipping. */
-export const BUILD_TAG = 'M8';
+export const BUILD_TAG = 'M9';
 
 /*
   Every gameplay number lives here. Nothing elsewhere in the codebase is
