@@ -185,7 +185,7 @@ haptic on a turn.
 
 ---
 
-## D6 Vehicle colours from Land Rover and Porsche PTS
+## D6 Vehicle colours from Land Rover and Porsche PTS · DONE
 
 > Utilize Land Rover traditional colors and Porsche PTS colors as the color
 > sources used for all of the vehicles that are not already colored.
@@ -324,13 +324,25 @@ Updated 19 September, after the evening's work.
 | D8 part one, taxi and tow truck lights | Done, on the right parts of the vehicles. | |
 | D5 arcade initials | Done. Wheel in the canvas, no text field, closes 1.11 and 2.8. | |
 | D1 two lane tap | Shipped, **not closed**: the fairness oracle still drives one lane moves only, so nothing has actually tested the new one. | an oracle pass |
-| D6 vehicle colours | Lists are in hand. Needs the survey of which vehicles are repaintable, then a contrast pass against the road grey. | nothing |
+| D6 vehicle colours | Done. Nine traffic bodies in Porsche colours, the 4x4 in Coniston Green, by runtime recolour rather than new art. | |
 | D7 pulled over runner | Not started. | shoulder or lane, which is a different size of job either way |
 | D8 part two, the mixer drum | Not started. Needs frames and an atlas contract that understands a sequence. | art |
 | D3 scenery overhaul | Not started. | art |
 | D4 online board | Not started. The seam in `leaderboard.js` is a morning; the product is not. | a product decision, and whether it waits for Game Center |
 
-The honest order from here: the oracle pass on D1 first, because it is the one
-thing shipped without its gate; then D6, which is small and now unblocked;
-then D7 once Jason says shoulder or lane. Everything else waits on art or on a
-decision.
+The honest order from here: the oracle pass on D1, because it is the one thing
+shipped without its gate; then D7 once Jason says shoulder or lane. Everything
+else waits on art or on a decision.
+
+What D6 left behind, for whoever picks the colours up again:
+
+- Black and Midnight Blue are held back from traffic because they vanish
+  against the road at this size. If dark cars are wanted, they need something
+  the eye can catch: a lighter roof, a brighter light cluster, or a rim of the
+  outline colour that the road does not share.
+- The four single colour cars (roadster, rally, luxury sedan, rideshare) were
+  not touched. They have no variant pair, so each needs a hand checked mask
+  like the 4x4 got.
+- The Land Rover list is barely used: one colour on one vehicle. The obvious
+  home for the rest is the 4x4 as a chooser, which would mean a colour row in
+  the menu and a saved setting.
