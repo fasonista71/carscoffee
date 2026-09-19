@@ -214,6 +214,64 @@ await ensureRunning(page);
 await swipe(page, cdp, box, -90);
 log(await running(page), 'a swipe up still boosts');
 
+/*
+  --- a tap goes the whole way, not one lane per tap ---
+
+  Measured off the canvas rather than out of the game's own state, so
+  this is the control as a player meets it. The car is the only thing
+  on its row that is not road, dash or edge line, so its centre is the
+  centroid of everything else across that row.
+
+  Starting from lane 0 is what makes this discriminating: a tap on
+  lane 2 from there is the two lane case, and against the build before
+  this change the car stops in the middle lane.
+*/
+const carLane = () => page.evaluate(() => {
+  const c = document.getElementById('game');
+  const g = c.getContext('2d');
+  const unit = c.width / 180;
+  /* The player's own row. The car is 46 tall and centred here, so
+     this line always crosses its middle. */
+  const y = Math.floor((252 + 0.5) * unit);
+  const d = g.getImageData(0, y, c.width, 1).data;
+  const road = (px) => Math.abs(px[0] - 0x5a) <= 8 && Math.abs(px[1] - 0x5a) <= 8 && Math.abs(px[2] - 0x6e) <= 8;
+  const dash = (px) => px[0] > 230 && px[1] > 230 && px[2] > 230;
+  const edge = (px) => px[0] > 230 && px[1] > 190 && px[2] < 110;
+  /* Road interior only: 30 to 150, three lanes of 40. */
+  const runs = [];
+  let start = -1;
+  for (let lx = 32; lx <= 148; lx += 1) {
+    const i = Math.floor((lx + 0.5) * unit) * 4;
+    const px = [d[i], d[i + 1], d[i + 2]];
+    const bg = road(px) || dash(px) || edge(px);
+    if (!bg && start < 0) start = lx;
+    if (bg && start >= 0) { runs.push((start + lx - 1) / 2); start = -1; }
+  }
+  if (start >= 0) runs.push((start + 148) / 2);
+  /* Lane centres are 50, 90 and 130. Take the run sitting on one of
+     them, which is the car; anything else on this row is not. */
+  let best = null;
+  for (const centre of runs) {
+    for (let lane = 0; lane < 3; lane += 1) {
+      const want = 50 + lane * 40;
+      if (Math.abs(centre - want) <= 4 && best === null) best = lane;
+    }
+  }
+  return best;
+});
+
+await freshRun(page);
+await page.touchscreen.tap(at(box, 50, 252).x, at(box, 50, 252).y);
+await page.waitForTimeout(500);
+const fromLane0 = await carLane();
+await page.touchscreen.tap(at(box, 130, 252).x, at(box, 130, 252).y);
+await page.waitForTimeout(700);
+const afterSweep = await carLane();
+log(fromLane0 === 0, 'a tap on the left lane puts the car in the left lane', 'lane=' + fromLane0);
+log(afterSweep === 2,
+  'and one tap two lanes away crosses the whole way, not one lane per tap',
+  'lane=' + afterSweep + ' (the build before this one stops at 1)');
+
 /* --- two fingers is still the backup --- */
 await freshRun(page);
 const p1 = { x: box.x + box.width * 0.3, y: box.y + box.height * 0.5, id: 1 };

@@ -12,6 +12,9 @@ const PATTERNS = {
   rubble_hit: [25],
   slick_slide: [15, 25, 15],
   boost_start: [12],
+  /* A crossing has more to it than a lane change, which has no
+     pattern at all: two short taps, the tyres and then the landing. */
+  lane_sweep: [10, 30, 10],
   tier_up: [20, 25, 20],
   overtake: [8, 20, 8],
   siren: [12, 40, 12, 40, 12],

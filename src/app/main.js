@@ -652,6 +652,10 @@ const loop = createLoop({
     view.overtakers = world ? world.overtakers : [];
     view.fuel = world ? world.fuel : TUNING.fuel.max;
     view.boosting = world ? isBoosting(world) : false;
+    /* A two lane crossing lays rubber the way a launch does. The flag
+       is on the tween rather than on the world, because it belongs to
+       the move and ends when the move does. */
+    view.sweeping = !!(world && world.player.tween && world.player.tween.sweep);
     view.boostFrac = world ? world.boostFramesLeft / BOOST_TOTAL_FRAMES : 0;
     view.nitroCharges = world ? world.nitroCharges : 0;
     view.boostReady = world ? (world.fuel >= TUNING.boost.minFuel || world.nitroCharges > 0) : true;

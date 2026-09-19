@@ -238,8 +238,9 @@ function tickTimers(world) {
   if (world.tierFlashFrames > 0) world.tierFlashFrames -= 1;
 }
 
-function tweenTotalFrames(world) {
-  return Math.max(1, Math.round((world.laneTweenMs / 1000) * TUNING.logic.hz));
+function tweenTotalFrames(world, span = 1) {
+  const ms = world.laneTweenMs * (span > 1 ? TUNING.movement.laneSweepMult : 1);
+  return Math.max(1, Math.round((ms / 1000) * TUNING.logic.hz));
 }
 
 function laneInRange(lane) {
@@ -261,22 +262,26 @@ function applyIntent(world, intent) {
       p.queuedDir = intent.dir;
     }
   } else if (intent.type === 'tapLane') {
-    /* Positional tap, resolved against where the car is committed to
-       be: the tween target mid tween, the current lane otherwise.
-       One tap moves one lane toward the tapped lane, sharing the same
-       single slot queue as relative moves. A tap on the committed
-       lane itself is the boost gesture. */
+    /*
+      Positional tap, resolved against where the car is committed to
+      be: the tween target mid tween, the current lane otherwise.
+
+      A tap goes the whole way to the lane tapped, one lane or two, in
+      a single move. It used to go one lane per tap, so crossing the
+      road meant tapping the far lane twice, which is the one thing a
+      positional control should never ask: the finger already said
+      where. A tap on the committed lane itself is the boost gesture.
+    */
     const committed = p.tween ? p.tween.to : p.lane;
-    const diff = intent.lane - committed;
-    if (diff === 0) {
+    if (intent.lane === committed) {
       tryBoost(world);
-    } else {
-      const dir = diff > 0 ? 1 : -1;
-      if (!p.tween) {
-        startTween(world, dir);
-      } else if (p.queuedDir === 0) {
-        p.queuedDir = dir;
-      }
+    } else if (!p.tween) {
+      startTweenTo(world, intent.lane);
+    } else if (p.queuedLane < 0 && p.queuedDir === 0) {
+      /* Still one queued input, as with relative moves. A destination
+         queued behind a move in flight is honoured from wherever that
+         move lands, so the queue never turns into a path. */
+      p.queuedLane = intent.lane;
     }
   } else if (intent.type === 'boost') {
     tryBoost(world);
@@ -301,12 +306,33 @@ function tryBoost(world) {
   world.events.push('boost_start');
 }
 
-function startTween(world, dir) {
+/*
+  Every steering move goes through here. span is how many lanes the
+  car crosses, which decides both how long it takes and whether the
+  tyres complain about it: one lane is the ordinary shift, two is a
+  sweep and lays rubber on the way.
+
+  The crossing stays continuous, so a sweep through an occupied middle
+  lane still collides. Collision reads the eased float position rather
+  than the endpoints, and at the sweep's own speed the car moves about
+  five pixels a frame against a hitbox tens of pixels wide, so there
+  is no gap for a car to slip through.
+*/
+function startTweenTo(world, target) {
   const p = world.player;
-  const target = p.lane + dir;
   if (!laneInRange(target)) return;
-  p.tween = { from: p.lane, to: target, frame: 0, totalFrames: tweenTotalFrames(world) };
+  const span = Math.abs(target - p.lane);
+  if (span === 0) return;
+  p.tween = {
+    from: p.lane, to: target, frame: 0,
+    totalFrames: tweenTotalFrames(world, span), sweep: span > 1
+  };
   world.events.push('lane_change');
+  if (span > 1) world.events.push('lane_sweep');
+}
+
+function startTween(world, dir) {
+  startTweenTo(world, world.player.lane + dir);
 }
 
 function advancePlayer(world) {
@@ -316,7 +342,12 @@ function advancePlayer(world) {
   if (p.tween.frame >= p.tween.totalFrames) {
     p.lane = p.tween.to;
     p.tween = null;
-    if (p.queuedDir !== 0) {
+    if (p.queuedLane >= 0) {
+      const to = p.queuedLane;
+      p.queuedLane = -1;
+      p.queuedDir = 0;
+      startTweenTo(world, to);
+    } else if (p.queuedDir !== 0) {
       const dir = p.queuedDir;
       p.queuedDir = 0;
       startTween(world, dir);
@@ -876,6 +907,7 @@ function startSlide(world, slick) {
   const p = world.player;
   const target = slick.lane + slick.dir; /* in range by construction */
   p.queuedDir = 0;
+  p.queuedLane = -1;
   p.lane = slick.lane;
   p.tween = { from: slick.lane, to: target, frame: 0, totalFrames: tweenTotalFrames(world) };
   world.slideLockFrames = msToFrames(TUNING.hazards.slick.slideLockMs);

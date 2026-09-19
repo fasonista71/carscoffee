@@ -32,6 +32,23 @@ export const TUNING = {
        the smoothstep easing in entities.js this is what makes the
        shift feel organic. GUESS. */
     laneTweenMs: 170,
+    /*
+      A tap two lanes away crosses in one motion rather than in two
+      moves. The sweep is longer than a single lane change and shorter
+      than two of them (298ms against 340 at the default 170), so the
+      wide move stays the quicker way across while still having enough
+      weight on screen to read as a manoeuvre rather than a snap. A
+      multiplier and not a fixed duration, because laneTweenMs is per
+      vehicle and a heavier car should sweep heavier too.
+
+      The fair gap is sized for a worst case two lane crossing at two
+      separate tween lengths, so a car that can do it in one is inside
+      a budget that was already being paid. That is an argument, not a
+      proof: the oracle drives the simulation with one lane moves, so
+      it does not exercise this, and its silence about it is not a
+      pass. GUESS, chosen by feel, confirmed on device.
+    */
+    laneSweepMult: 1.75,
     /* Exactly one input may queue during a tween. Brief requirement. */
     maxQueuedInputs: 1
   },
@@ -454,7 +471,7 @@ export const TUNING = {
       Each mark now spans the ground covered since the last one, up to
       maxLenPx so a stall or a tab switch cannot lay a long bar.
     */
-    skid: { trackPx: 7, wPx: 3, lenPx: 3, maxLenPx: 14, fadeMs: 1400, maxAlpha: 1, minStrength: 0.35 },
+    skid: { trackPx: 7, wPx: 3, lenPx: 3, maxLenPx: 14, fadeMs: 1400, maxAlpha: 1, minStrength: 0.35, sweepStrength: 0.7, maxBridge: 8 },
     /* Where the car waits on the title screen: on the road below the
        last menu row, framed, this far off the bottom edge. It does not
        move while it is there, so choosing a car never makes it jump.

@@ -17,6 +17,11 @@ export function createPlayer(vehicle) {
     lane: 1,
     tween: null,
     queuedDir: 0,
+    /* A queued positional tap, as a lane index. Negative is empty.
+       Kept apart from queuedDir because the two say different things:
+       a direction is one step from wherever you end up, a lane is a
+       destination that does not care where you were. */
+    queuedLane: -1,
     hitbox: { wPx: vehicle.hitbox.wPx, hPx: vehicle.hitbox.hPx },
     spriteKey: vehicle.spriteKey
   };

@@ -685,29 +685,56 @@ export function createRenderer(canvas) {
      ground between them rather than leaving a hole in the line. Null
      means this is the first frame of a burst. */
   let lastRubberPx = null;
+  let lastRubberCx = null;
 
-  function layRubber(view, cx, rearY) {
+  /*
+    A pair of marks under the rear wheels, bridging both ways.
+
+    Forward, because the road moves several pixels between frames and
+    a stamp the size of one frame's worth of travel leaves a dotted
+    line. Sideways, because a two lane sweep moves the car across the
+    road faster than it moves down it, and marks that only bridge the
+    vertical gap come out as a row of dashes stepping across the lane
+    rather than as a track. The crossing is the one place the rubber
+    has a shape worth drawing, so it is the one place worth the extra
+    few rectangles.
+  */
+  function layRubber(view, cx, rearY, force) {
     const k = TUNING.render.skid;
-    const strength = Math.max(k.minStrength, Math.min(1, view.boostFrac || 0));
+    const strength = force !== undefined
+      ? force
+      : Math.max(k.minStrength, Math.min(1, view.boostFrac || 0));
     const gap = lastRubberPx === null ? 0 : view.distancePx - lastRubberPx;
-    const len = Math.max(k.lenPx, Math.min(k.maxLenPx, Math.ceil(gap) + 1));
-    lastRubberPx = view.distancePx;
-    for (const side of [-1, 1]) {
-      skids.push({
-        x: Math.round(cx + side * k.trackPx - k.wPx / 2),
-        y: Math.round(rearY),
-        len,
-        laidAtPx: view.distancePx,
-        bornMs: worldNow(),
-        strength
-      });
+    const drift = lastRubberCx === null ? 0 : cx - lastRubberCx;
+    const steps = Math.max(1, Math.min(k.maxBridge, Math.ceil(Math.abs(drift))));
+    const len = Math.max(k.lenPx, Math.min(k.maxLenPx, Math.ceil(gap / steps) + 1));
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = cx - drift * (1 - t);
+      /* Laid at the current distance, so they all scroll together;
+         the ones from earlier in the frame sit further down the
+         screen by the ground covered since. */
+      const y = rearY + gap * (1 - t);
+      for (const side of [-1, 1]) {
+        skids.push({
+          x: Math.round(x + side * k.trackPx - k.wPx / 2),
+          y: Math.round(y),
+          len,
+          laidAtPx: view.distancePx,
+          bornMs: worldNow(),
+          strength
+        });
+      }
     }
+    lastRubberPx = view.distancePx;
+    lastRubberCx = cx;
   }
 
   /* A burst that ended must not bridge to the next one, which could be
      half a screen later. */
   function endRubber() {
     lastRubberPx = null;
+    lastRubberCx = null;
   }
 
   function drawSkids(view, pal) {
@@ -735,6 +762,7 @@ export function createRenderer(canvas) {
   function clearSkids() {
     skids.length = 0;
     lastRubberPx = null;
+    lastRubberCx = null;
   }
 
   /*
@@ -835,7 +863,15 @@ export function createRenderer(canvas) {
     /* Rubber, laid under the rear wheels while the boost is on. The
        marks are drawn with the road rather than here, so traffic and
        the car pass over them rather than under. */
+    /*
+      Rubber comes from two places now. A boost lays it straight, and
+      a two lane sweep lays it sideways: the marks follow the car's
+      own x, so the crossing draws its own arc. A sweep is not a
+      launch, so it goes down at a constant strength rather than
+      fading with a boost meter it does not have.
+    */
     if (view.boosting) layRubber(view, cx, cy + spr.height / 2 - 4);
+    else if (view.sweeping) layRubber(view, cx, cy + spr.height / 2 - 4, TUNING.render.skid.sweepStrength);
     else endRubber();
     /* blinking BOOST! callout when an overtaker is bearing down on
        this lane and a boost is banked, so the escape move is obvious */

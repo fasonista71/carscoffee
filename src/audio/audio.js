@@ -195,6 +195,11 @@ export function createAudio() {
     crash() { noiseBurst(0.35, 0.35); blip(110, 0.3, 'square', 0.2, 0, 40); },
     stumble() { blip(440, 0.1, 'square', 0.16, 0, 220); blip(330, 0.1, 'square', 0.16, 0.09, 165); noiseBurst(0.15, 0.15); },
     lane_change() { blip(880, 0.03, 'triangle', 0.06); },
+    /* Two lanes in one move is the tyres letting go for a moment. The
+       same squeal the launch uses, shorter and softer, because this
+       happens far more often than a boost does and a full launch
+       screech every time you cross the road would wear through. */
+    lane_sweep() { noiseSqueal(0.16, 0.5, 1700, 820); blip(880, 0.03, 'triangle', 0.05); },
     rubble_hit() { noiseBurst(0.12, 0.22); blip(90, 0.1, 'triangle', 0.14, 0, 60); },
     slick_slide() { blip(700, 0.35, 'triangle', 0.14, 0, 180); },
     fuel_low() { blip(523, 0.09, 'square', 0.16); blip(523, 0.09, 'square', 0.16, 0.14); },
