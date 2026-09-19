@@ -958,37 +958,37 @@ export function createRenderer(canvas) {
     same row do not blink in lockstep and a given vehicle's beat does
     not change as it comes up the screen.
   */
-  function drawWorkLight(variant, x, y, spr, pal, now, distPx) {
-    const spec = TUNING.render.workLights[TRAFFIC_VARIANTS[variant].sprite];
+  function drawWorkLight(spriteName, x, y, spr, pal, now, distPx) {
+    const spec = TUNING.render.workLights[spriteName];
     if (!spec) return;
     const phase = Math.floor(now / spec.ms + (distPx % 5) * 0.37) % 2;
     const ly = y + Math.round(spr.height * spec.roofFrac);
     const cx = x + Math.round(spr.width / 2);
-    /*
-      Both of these vehicles are yellow, so an amber lamp painted
-      straight onto the bodywork is the one thing that cannot read.
-      Every lamp gets the outline the rest of the game gives its
-      pixels, which is what separates it from the paint underneath and
-      makes the off beat as legible as the on one.
-    */
     if (spec.kind === 'sign') {
-      /* A roof sign: wider than it is tall, which is the shape that
-         reads as a sign at six pixels across. */
-      bctx.fillStyle = pal.outline;
-      bctx.fillRect(cx - 4, ly - 1, 8, 4);
+      /*
+        The taxi already has a roof sign painted on it, with its own
+        dark border. So this lights the face of that sign rather than
+        adding a second one: ten pixels across and three deep, inside
+        the border, which is the whole of what a roof sign does at
+        this size.
+      */
       bctx.fillStyle = phase === 0 ? pal.hazardLight : pal.hazardLightDim;
-      bctx.fillRect(cx - 3, ly, 6, 2);
+      bctx.fillRect(cx - 5, ly, 10, 3);
       return;
     }
-    /* A beacon sweeping: one side bright, the other banked, trading
-       every beat, which is the cheapest honest read of a rotating
-       lamp. */
+    /*
+      A beacon sweeping: one side bright, the other banked, trading
+      every beat, which is the cheapest honest read of a rotating
+      lamp. The truck is yellow, so the lamps get the outline the rest
+      of the game gives its pixels, and that is what makes the dark
+      half of the beat as legible as the lit one.
+    */
     bctx.fillStyle = pal.outline;
-    bctx.fillRect(cx - 5, ly - 1, 10, 4);
+    bctx.fillRect(cx - 6, ly - 1, 12, 5);
     bctx.fillStyle = phase === 0 ? pal.hazardLight : pal.hazardLightDim;
-    bctx.fillRect(cx - 4, ly, 3, 2);
+    bctx.fillRect(cx - 5, ly, 4, 3);
     bctx.fillStyle = phase === 0 ? pal.hazardLightDim : pal.hazardLight;
-    bctx.fillRect(cx + 1, ly, 3, 2);
+    bctx.fillRect(cx + 1, ly, 4, 3);
   }
 
   function drawTraffic(view) {
@@ -1020,12 +1020,18 @@ export function createRenderer(canvas) {
         const off = row.offsets ? row.offsets[lane] : 0;
         const y = Math.round(screenY - off - spr.height / 2);
         bctx.drawImage(spr, x, y);
+        const spriteName = TRAFFIC_VARIANTS[row.variants[lane]].sprite;
         if (flash) {
+          /* On the back of the vehicle, which is not always the
+             bottom of its frame. */
+          const fracs = TUNING.render.bodyBottomFrac;
+          const frac = fracs[spriteName] !== undefined ? fracs[spriteName] : fracs.default;
+          const tailY = y + Math.round(spr.height * frac) - 3;
           bctx.fillStyle = pal.hazardLight;
-          bctx.fillRect(x + 1, y + spr.height - 3, 2, 2);
-          bctx.fillRect(x + spr.width - 3, y + spr.height - 3, 2, 2);
+          bctx.fillRect(x + 1, tailY, 2, 2);
+          bctx.fillRect(x + spr.width - 3, tailY, 2, 2);
         }
-        drawWorkLight(row.variants[lane], x, y, spr, pal, now, row.distPx);
+        drawWorkLight(spriteName, x, y, spr, pal, now, row.distPx);
       }
     }
   }
@@ -1540,7 +1546,7 @@ export function createRenderer(canvas) {
     if (mode === 'howto') {
       return [{ id: 'primary', label: 'Back', x: Math.round((W - m.primary.wPx) / 2), y: 210, w: m.primary.wPx, h: m.primary.hPx }];
     }
-    let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 122);
+    let y = mode === 'title' ? 150 : (mode === 'paused' ? 116 : 114);
     const primaryLabel = mode === 'title' ? 'Start' : (mode === 'paused' ? 'Resume' : 'Go again');
     items.push({ id: 'primary', label: primaryLabel, x: Math.round((W - m.primary.wPx) / 2), y, w: m.primary.wPx, h: m.primary.hPx });
     y += m.primary.hPx + m.option.gapPx + 6;
@@ -1731,40 +1737,54 @@ export function createRenderer(canvas) {
     rather than drawing nothing, and the ring switch hint hangs off
     the bottom of whichever of the two is on screen.
   */
+  /*
+    The top five, at the size of the thing it is competing with.
+
+    It used to be five lines of 3 by 5 type at single scale under a
+    single scale heading: legible at desk distance, a grey smudge at
+    arm's length on a phone, which is the only distance this is ever
+    read from. It is the same size as the headline above it now, on
+    the same framed plate, because a leaderboard that cannot be read
+    across the room is not a leaderboard, it is a receipt.
+
+    Always five rows, earned or not. Drawing only what exists meant
+    the board changed height as it filled and, on a first run, showed
+    a single line where the thing being competed for is a top five.
+    The empty ranks are dashes and a zero in the recessive colour, so
+    the shape of the goal is visible from the first game over and a
+    filled row reads as progress against it.
+  */
+  const BOARD_ROW_H = 12;
+
+  function boardHeight(slots) {
+    return 9 + slots * BOARD_ROW_H + 3;
+  }
+
   function drawBoard(view, pal, topY) {
     const rows = view.board || [];
     const slots = view.boardSlots || rows.length;
-    /*
-      Always five rows, whether they are earned or not. Drawing only
-      what exists meant the board changed height as it filled and, on
-      a first run, showed a single line where the thing being competed
-      for is a top five. The empty ranks are dashes and a zero, in the
-      recessive colour, so the shape of the goal is visible from the
-      first game over and a filled row reads as progress against it.
-    */
-    /*
-      Opaque, not the translucent HUD band. At one or two rows the
-      world showing through was texture; at a guaranteed five it is a
-      car driving across the text, and the dimmest rows on it are the
-      placeholders. The game over headline above made the same move
-      for the same reason.
-    */
-    drawPlate(27, topY - 5, W - 54, 12 + slots * 7, pal, pal.outline);
+    /* Opaque and framed, like the headline. At one or two rows the
+       world showing through was texture; at a guaranteed five it is a
+       car driving across the text. */
+    drawPlate(14, topY - 4, W - 28, boardHeight(slots), pal, pal.outline);
+    bctx.fillStyle = pal.road;
+    bctx.fillRect(15, topY - 3, W - 30, 1);
     drawText(bctx, 'Top five', W / 2, topY, pal.edgeLine, { scale: 1, align: 'center' });
     for (let i = 0; i < slots; i += 1) {
-      const y = topY + 8 + i * 7;
+      const y = topY + 9 + i * BOARD_ROW_H;
       const row = rows[i];
       if (!row) {
-        drawText(bctx, (i + 1) + ' ---', 42, y, pal.building, { scale: 1, align: 'left' });
-        drawText(bctx, '0M', W - 42, y, pal.building, { scale: 1, align: 'right' });
+        drawText(bctx, (i + 1) + ' ---', 22, y, pal.building, { scale: 2, align: 'left' });
+        drawText(bctx, '0M', W - 22, y, pal.building, { scale: 2, align: 'right' });
         continue;
       }
       const mine = i === view.newEntryIndex;
       const color = mine ? pal.edgeLine : pal.text;
-      drawText(bctx, (i + 1) + ' ' + row.name, 42, y, color, { scale: 1, align: 'left' });
-      drawText(bctx, row.meters + 'M', W - 42, y, color, { scale: 1, align: 'right' });
+      drawText(bctx, (i + 1) + ' ' + row.name, 22, y, color, { scale: 2, align: 'left' });
+      drawText(bctx, row.meters + 'M', W - 22, y, color, { scale: 2, align: 'right' });
     }
   }
+
 
   /*
     The way in to the legend. A row in the menu would have cost the
@@ -1996,17 +2016,22 @@ export function createRenderer(canvas) {
       over a white car), so this one is opaque: the result block now
       has a fixed background whatever is driving past behind it.
     */
-    drawPlate(14, 42, W - 28, 72, pal, pal.outline);
+    /*
+      The whole screen moved up eight pixels to pay for the board at
+      the bottom, which is now the same size as this block rather than
+      a footnote under it. Nothing here got smaller.
+    */
+    drawPlate(14, 34, W - 28, 72, pal, pal.outline);
     /* one highlight row, the same bevel the plates carry */
     bctx.fillStyle = pal.road;
-    bctx.fillRect(15, 43, W - 30, 1);
+    bctx.fillRect(15, 35, W - 30, 1);
     const cause = view.deathCause === 'fuel' ? 'Out of coffee' : 'Crashed';
-    drawText(bctx, cause, W / 2, 50, pal.carBody, { scale: 2, align: 'center' });
-    drawText(bctx, view.meters + ' m', W / 2, 78, pal.text, { scale: 2, align: 'center' });
+    drawText(bctx, cause, W / 2, 42, pal.carBody, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m', W / 2, 70, pal.text, { scale: 2, align: 'center' });
     if (view.newBest) {
-      drawText(bctx, 'New best!', W / 2, 104, pal.edgeLine, { scale: 1, align: 'center' });
+      drawText(bctx, 'New best!', W / 2, 96, pal.edgeLine, { scale: 1, align: 'center' });
     } else {
-      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 104, pal.text, { scale: 1, align: 'center' });
+      drawText(bctx, 'Best ' + view.high + ' m', W / 2, 96, pal.text, { scale: 1, align: 'center' });
     }
     drawMenu(view, pal, 'gameOver');
     /*

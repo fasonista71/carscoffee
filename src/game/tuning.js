@@ -533,9 +533,25 @@ export const TUNING = {
       as a flicker.
     */
     workLights: {
-      taxi: { roofFrac: 0.30, kind: 'sign', ms: 560 },
-      tow_truck: { roofFrac: 0.17, kind: 'beacon', ms: 320 }
+      /*
+        Measured off the art rather than guessed at. The taxi's frame
+        is 48 tall: hood to row 11, windshield 12 to 18, and the roof
+        sign is painted on rows 25 to 29, so the lamp goes inside the
+        sign that is already there rather than on the glass in front
+        of it. The tow truck is 70 tall with its cab roof on rows 25
+        to 36, and the beacon sits at the front of it.
+      */
+      taxi: { roofFrac: 0.55, kind: 'sign', ms: 560 },
+      tow_truck: { roofFrac: 0.38, kind: 'beacon', ms: 320 }
     },
+    /*
+      Where the bodywork ends, as a fraction of the frame, for the
+      hazard flashers that go on a breakdown's rear corners. The tow
+      truck's boom and hook hang nine pixels past the back of the
+      truck, so the corners of the frame are not the corners of the
+      vehicle and its flashers were floating in the road behind it.
+    */
+    bodyBottomFrac: { default: 1, tow_truck: 0.87 },
     /* Roadside parallax: the far band scrolls slower than the road,
        the near band rides with it. */
     scenery: { farFactor: 0.55, periodPx: 56 }
