@@ -5,12 +5,12 @@
   120Hz phone as far as automation here can.
 */
 import { chromium } from 'playwright';
-const EXEC = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+import { chromiumOpts } from './launch.mjs';
 const BASE = process.env.BASE || 'http://127.0.0.1:8099';
 const out = [];
 const log = (ok, n, x = '') => out.push(`${ok ? 'PASS' : 'FAIL'}  ${n}${x ? '  :: ' + x : ''}`);
 
-const b = await chromium.launch({ executablePath: EXEC });
+const b = await chromium.launch(chromiumOpts());
 
 async function startedPage(ctx) {
   const page = await ctx.newPage();

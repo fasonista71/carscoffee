@@ -25,11 +25,12 @@ node tools/browser/controls.mjs
 node tools/browser/boot.mjs              # starts its own servers on 8110-8114
 ```
 
-Needs `npm i playwright`. This container had chromium 1194 and webkit
-2359 preinstalled under `/opt/pw-browsers`, and the scripts point
-chromium's `executablePath` at that build because the installed
-playwright wanted a newer revision. On a machine with a normal
-`npx playwright install`, delete the `executablePath` line.
+Needs `npm i playwright` and `npx playwright install chromium webkit`.
+The scripts launch whatever browsers playwright installed, so nothing
+else is required. `launch.mjs` holds the one exception: set
+`PW_CHROMIUM` to an executable if you are on a machine whose chromium
+lives somewhere playwright will not look, which is how this harness was
+originally written and is why it would not run anywhere else.
 
 ## What each one covers
 

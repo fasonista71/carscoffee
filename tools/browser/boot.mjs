@@ -4,9 +4,9 @@
   offered a way back, instead of looking at a black rectangle.
 */
 import { chromium } from 'playwright';
+import { chromiumOpts } from './launch.mjs';
 import { spawn } from 'node:child_process';
 
-const EXEC = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
 function server(port, env) {
   return new Promise((res) => {
@@ -36,7 +36,7 @@ const CASES = [
 const out = [];
 for (const c of CASES) {
   const srv = await server(c.port, c.env);
-  const b = await chromium.launch({ executablePath: EXEC });
+  const b = await chromium.launch(chromiumOpts());
   const page = await (await b.newContext({ viewport: { width: 390, height: 780 }, hasTouch: true })).newPage();
   page.on('pageerror', () => {});
   await page.goto('http://127.0.0.1:' + c.port + '/game/index.html', { waitUntil: 'load' })
@@ -70,7 +70,7 @@ for (const c of CASES) {
 /* And the control: nothing broken, the card must get out of the way. */
 {
   const srv = await server(8114, {});
-  const b = await chromium.launch({ executablePath: EXEC });
+  const b = await chromium.launch(chromiumOpts());
   const page = await (await b.newContext({ viewport: { width: 390, height: 780 }, hasTouch: true })).newPage();
   await page.goto('http://127.0.0.1:8114/game/index.html', { waitUntil: 'load' });
   let hidden = false;

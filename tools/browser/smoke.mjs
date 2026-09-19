@@ -1,4 +1,5 @@
 import { chromium, webkit } from 'playwright';
+import { chromiumOpts } from './launch.mjs';
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8099';
 const which = process.argv[2] || 'chromium';
@@ -9,13 +10,7 @@ const log = (ok, name, extra = '') => {
   out.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  :: ' + extra : ''}`);
 };
 
-/* The container has chromium 1194 on disk and playwright 1.63, which
-   wants 1243. The CDP surface used here is stable across that gap, so
-   point at the binary that is actually present. WebKit 2359 matches
-   1.63 exactly and needs nothing. */
-const launchOpts = which === 'webkit'
-  ? {}
-  : { executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' };
+const launchOpts = which === 'webkit' ? {} : chromiumOpts();
 const browser = await engine.launch(launchOpts);
 const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, hasTouch: true });
 const page = await ctx.newPage();

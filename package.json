@@ -6,5 +6,8 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   }
 }

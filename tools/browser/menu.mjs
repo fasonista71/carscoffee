@@ -4,12 +4,12 @@
   pixels for the press state and the Web Audio graph for the sounds.
 */
 import { chromium } from 'playwright';
-const EXEC = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+import { chromiumOpts } from './launch.mjs';
 const BASE = process.env.BASE || 'http://127.0.0.1:8399';
 const out = [];
 const log = (ok, n, x = '') => out.push(`${ok ? 'PASS' : 'FAIL'}  ${n}${x ? '  :: ' + x : ''}`);
 
-const b = await chromium.launch({ executablePath: EXEC, args: ['--autoplay-policy=no-user-gesture-required'] });
+const b = await chromium.launch(chromiumOpts({ args: ['--autoplay-policy=no-user-gesture-required'] }));
 const ctx = await b.newContext({ viewport: { width: 390, height: 780 }, hasTouch: true });
 
 /* Count every oscillator the game starts, so a sound is observable. */
