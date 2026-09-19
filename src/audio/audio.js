@@ -92,15 +92,39 @@ export function createAudio() {
     } catch (e) { /* no element audio available */ }
   }
 
+  /*
+    Anything that is not running gets a resume, not just 'suspended'.
+
+    Safari has a third state, 'interrupted', which it uses when
+    something takes the audio session away: a call, a route change, or
+    a presentation change such as an embedded frame going fullscreen.
+    A context sitting in it looks alive, reports no error, and makes
+    no sound. This used to check for 'suspended' alone, so an
+    interrupted context was never resumed and the game went quiet for
+    the rest of the session while still playing perfectly. Testing for
+    "not running" costs nothing and does not depend on knowing the
+    name of every state a browser might invent.
+  */
+  function wake() {
+    if (!ctx) return;
+    try {
+      if (ctx.state !== 'running') {
+        const r = ctx.resume();
+        if (r && r.catch) r.catch(() => { /* refused, stay silent */ });
+      }
+    } catch (e) { /* nothing to do, the game stays silent */ }
+  }
+
   function unlock() {
     const c = ensureCtx();
     if (!c) return;
     try {
       claimPlaybackSession();
-      if (c.state === 'suspended') {
-        const r = c.resume();
-        if (r && r.catch) r.catch(() => { /* refused, stay silent */ });
-      }
+      /* The browser tells us when it takes the session away, so take
+         the chance to ask for it back rather than waiting for the
+         next gesture. */
+      if (!c.onstatechange) c.onstatechange = wake;
+      wake();
     } catch (e) {
       /* The context exists but will not start. Silent, not broken. */
       return;
@@ -384,6 +408,10 @@ export function createAudio() {
     play,
     startMusic,
     stopMusic,
+    /* For the app layer to call when the page comes back: a tab
+       unhidden, a window refocused, a frame entering or leaving
+       fullscreen. Cheap, and safe to call when nothing is wrong. */
+    wake,
     updateSiren,
     stopSiren,
     get muted() { return muted; },

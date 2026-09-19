@@ -815,8 +815,75 @@ canvas.addEventListener('click', (e) => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pauseRun();
+  else audio.wake();
 });
-window.addEventListener('blur', pauseRun);
+
+/*
+  Losing focus is not the same as leaving, and inside a frame it is
+  not even unusual.
+
+  On itch the game runs in an iframe and every control around it
+  belongs to the parent page, so the fullscreen button, and any click
+  on the page, blurs us. This handler treated that as the player
+  walking away: it paused the run and stopped the music, and since
+  the pause screen still draws the world behind it, what a player saw
+  was a game that went silent and stopped answering the keyboard for
+  no reason they caused.
+
+  Embedded, the authority on whether the player is still there is
+  document visibility, which fires when the tab is actually hidden.
+  Standalone, blur still means another window took over and pausing
+  is the right thing, so that behaviour is kept where it was correct.
+*/
+const EMBEDDED = (() => {
+  try { return window.top !== window.self; } catch (e) { return true; }
+})();
+
+window.addEventListener('blur', () => {
+  if (!EMBEDDED || document.hidden) pauseRun();
+});
+
+/*
+  Coming back. A frame entering or leaving fullscreen is a
+  presentation change, which is one of the things that takes Safari's
+  audio session away, and it also hands focus to the document that
+  owns the button. Ask for both back.
+*/
+function reclaim() {
+  try { window.focus(); } catch (e) { /* refused, the click will do it */ }
+  claimKeyboard();
+  audio.wake();
+}
+window.addEventListener('focus', () => audio.wake());
+
+/*
+  Fullscreen is announced to the document that owns the element, which
+  for an embedded game is the page around it, not us. Inside the frame
+  nothing fires but a resize, and there is no reliable way to ask
+  whether that resize was a fullscreen: Safari reports screen.width
+  and screen.height as the frame's own size rather than the display's,
+  so comparing against the screen says yes before anything has
+  happened.
+
+  What is left is the shape of the change. Going fullscreen makes the
+  frame very much bigger in one step, and the player who pressed the
+  button is not typing into the host page at that moment. Both
+  conditions together are narrow enough to take focus on, and taking
+  focus is otherwise rude: it would pull the caret out of whatever
+  someone was writing in a comment box.
+*/
+const GROWTH = 1.4;
+let lastArea = window.innerWidth * window.innerHeight;
+
+document.addEventListener('fullscreenchange', reclaim);
+document.addEventListener('webkitfullscreenchange', reclaim);
+window.addEventListener('resize', () => {
+  const area = window.innerWidth * window.innerHeight;
+  const grew = area > lastArea * GROWTH;
+  lastArea = area;
+  if (grew && !document.hasFocus()) reclaim();
+  else audio.wake();
+});
 
 /* Sprites load once before the first frame; the game does not start
    on a half loaded sheet. */
