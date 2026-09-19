@@ -32,6 +32,10 @@ const notFound = [];
 page.on('response', (r) => {
   if (r.status() >= 400 && !r.url().endsWith('/favicon.ico')) notFound.push(r.status() + ' ' + r.url());
 });
+/* Every url the game fetches, so the cache safety property can be
+   checked rather than assumed. */
+const fetched = [];
+page.on('request', (r) => fetched.push(new URL(r.url()).pathname));
 
 await page.goto(BASE + '/game/index.html', { waitUntil: 'load' });
 
@@ -48,7 +52,8 @@ log(bootHidden, 'boot card clears after load');
 
 // 2. build tag present in source
 const tag = await page.evaluate(() => document.querySelector('script[type=module]').getAttribute('src'));
-log(/src-M\d+\/app\/main\.js$/.test(tag), 'entry script points at a versioned source dir', tag);
+log(/^\.\/v[0-9a-f]{10}\/src\/app\/main\.js$/.test(tag),
+  'entry script points at a content versioned directory', tag);
 
 // 3. canvas is actually painted (not a black rectangle)
 const painted = await page.evaluate(() => {
@@ -135,6 +140,18 @@ log(await isMoving(), 'a resting second finger does not pause the run');
 // 8. no uncaught errors anywhere in that session
 log(errors.length === 0, 'no page errors or console errors', errors.slice(0, 4).join(' | '));
 log(notFound.length === 0, 'every request the game made returned 200', JSON.stringify(notFound));
+
+/*
+  The one that matters for an in place update on itch. Thirteen builds
+  shipped as src-M8/ and a browser paired cached modules with fresh
+  ones, which cost Safari its audio. Nothing but the entry page may
+  live at a url a previous build also used.
+*/
+const stable = fetched.filter((p) => !/\/v[0-9a-f]{10}\//.test(p)
+  && !/\/index\.html$/.test(p) && !/favicon/.test(p) && p !== '/game/');
+log(stable.length === 0,
+  'only the entry page sits at a url a previous build could have cached',
+  stable.length ? stable.join(' ') : String(fetched.length) + ' requests, all versioned');
 
 /* Last, because it is a deliberate 404 and would otherwise show up in
    the two checks above. */

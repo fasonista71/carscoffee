@@ -18,8 +18,22 @@
   aliases, and variant list below. Nothing outside render/ changes.
 */
 
-const ATLAS_URL = 'assets/cars.atlas';
-const IMAGE_URL = 'assets/cars.png';
+/*
+  Resolved against this module, not against the page. That is what
+  lets the packaging step drop the whole tree into one content
+  versioned directory: move src/ and assets/ together and the art
+  follows the code, so a browser holding an old build cannot pair its
+  cached atlas with a new sheet. A page relative string would have
+  resolved to the site root and broken that.
+*/
+const asset = (name) => new URL('../../assets/' + name, import.meta.url).href;
+/* The boot card shows whatever these errors say, and a player does
+   not need a content hashed absolute url; the file name is the part
+   that means anything. */
+const shortName = (url) => String(url).split('/').pop();
+
+const ATLAS_URL = asset('cars.atlas');
+const IMAGE_URL = asset('cars.png');
 
 import { TUNING, TRAFFIC_VARIANTS, OBSTACLE_SPRITES } from '../game/tuning.js';
 
@@ -57,14 +71,14 @@ function parseAtlas(text) {
   return frames;
 }
 
-const COFFEE_URL = 'assets/coffee.png';
-const BADGE_URL = 'assets/badge.png';
+const COFFEE_URL = asset('coffee.png');
+const BADGE_URL = asset('badge.png');
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Could not load ' + url));
+    img.onerror = () => reject(new Error('Could not load ' + shortName(url)));
     img.src = url;
   });
 }
@@ -88,7 +102,7 @@ export function loadSprites() {
     registry.set('ui_badge', toSurface(img));
   });
   const atlasReady = fetch(ATLAS_URL).then((r) => {
-    if (!r.ok) throw new Error('Could not load ' + ATLAS_URL);
+    if (!r.ok) throw new Error('Could not load ' + shortName(ATLAS_URL));
     return r.text();
   });
   return Promise.all([atlasReady, imageReady, coffeeReady, badgeReady]).then(([text, img]) => {

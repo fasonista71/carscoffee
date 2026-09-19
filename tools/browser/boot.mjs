@@ -16,11 +16,21 @@ function server(port, env) {
   });
 }
 
+/* The bundle puts src and assets under one content hashed directory,
+   so the harness has to read the name out of the built page rather
+   than assume it. */
+import fs from 'node:fs';
+import path from 'node:path';
+const BUNDLE = process.env.BUNDLE || 'cars-and-coffee-web';
+const VERDIR = (fs.readFileSync(path.join(BUNDLE, 'index.html'), 'utf8')
+  .match(/\.\/(v[0-9a-f]{10})\/src\/app\/main\.js/) || [])[1];
+if (!VERDIR) { console.error('could not find the versioned directory in index.html'); process.exit(2); }
+
 const CASES = [
-  { name: 'atlas 500s',            port: 8110, env: { FAIL_PATHS: '/game/assets/cars.atlas' } },
-  { name: 'sprite sheet 500s',     port: 8111, env: { FAIL_PATHS: '/game/assets/cars.png' } },
-  { name: 'a module 500s',         port: 8112, env: { FAIL_PATHS: '/game/' + (process.env.SRCDIR || 'src-M8') + '/game/world.js' } },
-  { name: 'the atlas never replies', port: 8113, env: { STALL_PATHS: '/game/assets/cars.atlas' } }
+  { name: 'atlas 500s',            port: 8110, env: { FAIL_PATHS: '/game/' + VERDIR + '/assets/cars.atlas' } },
+  { name: 'sprite sheet 500s',     port: 8111, env: { FAIL_PATHS: '/game/' + VERDIR + '/assets/cars.png' } },
+  { name: 'a module 500s',         port: 8112, env: { FAIL_PATHS: '/game/' + VERDIR + '/src/game/world.js' } },
+  { name: 'the atlas never replies', port: 8113, env: { STALL_PATHS: '/game/' + VERDIR + '/assets/cars.atlas' } }
 ];
 
 const out = [];
