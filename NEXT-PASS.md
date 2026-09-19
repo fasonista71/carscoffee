@@ -30,6 +30,13 @@ The detail for most items is in `REMEDIATION-BACKLOG.md`, numbered by tier.
 This file is the plan and the working agreement; that file is the inventory.
 Do not restate it here, work from it.
 
+`DESIGN-BACKLOG.md` is the third file and a different kind of list: the things
+Jason wants that are not defects. Nothing in it is scheduled here. Read it
+before starting anything large in the renderer or the generator, because two
+of its items (the two lane tap and the pulled over pursuit) change the
+fairness geometry and one (arcade initials entry) deletes work you might
+otherwise be about to do on the initials modal.
+
 ---
 
 ## Working agreement
