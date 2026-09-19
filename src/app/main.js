@@ -355,14 +355,7 @@ function onIntent(intent) {
   audio.unlock();
   if (intent.type === 'pause') {
     if (mode === 'playing') pauseRun();
-    /* A swipe pauses but never resumes. Pressing a menu button and
-       then dragging away from it, which is how a player cancels a
-       press they thought better of, is a drag past the swipe
-       threshold and usually a downward one. Letting that resume would
-       mean the run restarted behind the menu the player was still
-       reading. Two fingers and the keyboard still toggle both ways,
-       and Resume is right there. */
-    else if (mode === 'paused' && intent.from !== 'swipe') resumeRun();
+    else if (mode === 'paused') resumeRun();
     return;
   }
   if (intent.type === 'pressEnd') {
@@ -370,6 +363,17 @@ function onIntent(intent) {
     return;
   }
   if (mode !== 'playing') {
+    /* The keyboard's way in. Enter and Space press the primary
+       button, R restarts, and both respect the same cooldown that
+       stops a frantic last tap launching a run. */
+    if (intent.type === 'confirm' || intent.type === 'restart') {
+      if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+      uiSound('ui_confirm');
+      if (intent.type === 'restart' && mode !== 'title') startRun();
+      else if (mode === 'paused') resumeRun();
+      else startRun();
+      return;
+    }
     /* Menus respond only to presses on their buttons, but accept a
        sloppy press (releaseAt) as readily as a clean tap. Nothing
        here can start a run by swipe, key, or stray tap. */
@@ -383,8 +387,32 @@ function onIntent(intent) {
     }
     return;
   }
+  /* In play, confirm is boost's twin and means nothing on its own;
+     R restarts. */
+  if (intent.type === 'confirm') return;
+  if (intent.type === 'restart') { startRun(); return; }
+  /* In play the only thing a press can land on is the pause button. */
+  if (intent.type === 'pressAt') {
+    const p = renderer.screenToLogical(intent.clientX, intent.clientY);
+    if (renderer.hitTestPause(p.x, p.y)) {
+      pressedMenuId = 'hudPause';
+      uiSound('ui_press');
+    }
+    return;
+  }
+  if (intent.type === 'tapAt' || intent.type === 'releaseAt') {
+    const p = renderer.screenToLogical(intent.clientX, intent.clientY);
+    if (renderer.hitTestPause(p.x, p.y)) {
+      pressedMenuId = null;
+      if (intent.type === 'tapAt') {
+        uiSound('ui_confirm');
+        pauseRun();
+      }
+      return;
+    }
+  }
   pressedMenuId = null;
-  if (intent.type === 'releaseAt' || intent.type === 'pressAt') return;
+  if (intent.type === 'releaseAt') return;
   pending.push(intent.type === 'tapAt' ? resolveTap(intent.clientX) : intent);
 }
 

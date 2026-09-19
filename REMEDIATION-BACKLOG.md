@@ -224,10 +224,17 @@ the coffee tip, under `cc.controls.v1`. Every character needed is in the font.
 any mode, so once Start is tapped the title screen is unreachable without a
 reload.
 
-*The pause half of this is DONE.* A swipe down now pauses, alongside the two
-finger gesture, so the paused menu and its Restart button are reachable on a
-phone. There is still no drawn pause control, so the gesture has the same
-discoverability problem as every other one, which is 2.1's problem.
+*The pause half of this is DONE, and properly.* There is a pause button in the
+top right of the HUD, which is where a phone game puts it, with a deliberate
+two finger hold as the backup. The swipe down that briefly did the job was
+removed: the genre reads down as duck or brake, and on an iPhone a downward
+swipe near the top edge belongs to Notification Centre.
+
+*Also DONE, from the same controls review:* the keyboard can now work the
+menus. Enter and Space press the primary button and R restarts, where before
+a desktop player could not start, restart or resume a run without a mouse.
+Full arrow key navigation of the option rows is still missing, so a keyboard
+player cannot change car or toggle sound; that is small and left open.
 
 **2.3 The board has no empty state.** `drawBoard` returns immediately when
 empty, so on a fresh install the bottom 90 logical pixels, 28% of the title

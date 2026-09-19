@@ -386,7 +386,15 @@ export const TUNING = {
        The bar shrank from 84 to make room for it, keeping the boost
        pill in exactly the same place. */
     fuelBar: { wPx: 77, hPx: 8, yPx: 28, labelWPx: 26 },
-    hudPlate: { wPx: 54, hPx: 17, yPx: 3, marginPx: 2 },
+    hudPlate: { wPx: 50, hPx: 17, yPx: 3, marginPx: 2 },
+    /* The pause control, top right, where a phone game puts it. The
+       plate is 18 wide but the tap target is the whole corner of the
+       band: 26 by 42 logical, which is 52 by 84 CSS at the 2x scale a
+       phone reaches, so it clears the 44pt minimum on both axes. The
+       target is bounded in y as well as x on purpose, because a tap
+       resolves to a lane by its x alone, and a player steering by
+       tapping the right hand lane must not pause instead. */
+    pauseBtn: { wPx: 18, hPx: 17, hitWPx: 26 },
     boostPill: { wPx: 42, hPx: 8 },
     /* Menu layout: one primary button plus option rows, hit tested in
        logical coordinates. Restart taps are ignored for a beat after

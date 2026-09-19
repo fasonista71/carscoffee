@@ -42,7 +42,8 @@
   Gesture rules:
   - Finger travel past swipeThresholdPx classifies the touch as a
     swipe: dominant horizontal axis is a lane change in that direction,
-    dominant vertical axis upward is boost, downward is pause.
+    dominant vertical axis upward is boost, downward is unmapped and
+    reserved, because the genre reads down as duck or brake.
   - A release with no swipe within tapMaxMs is a tap. The adapter does
     not decide what a tap means; it emits the position and the app
     resolves it per TUNING.input.tapMode, since resolution can depend
@@ -53,11 +54,8 @@
     gesture was play and no pause is emitted: alternating thumbs
     routinely put two fingers on the glass at once and must never
     pause the run.
-  - The two finger gesture toggles, so it also resumes. The swipe does
-    not: dragging a finger off a button you decided against is a
-    downward drag past the threshold, and it must not start the run
-    running again behind the menu you are looking at. Resuming is a
-    tap on Resume, two fingers, or a key.
+  - Two fingers is the backup for the pause button in the HUD, and it
+    toggles, so it also resumes.
 
   There is deliberately no gesture for the dev overlay. It used to be
   three fingers, which shipped, and meant a player could open a panel
@@ -119,17 +117,12 @@ export function attachTouch(emit, target) {
           emit({ type: 'lane', dir: dx > 0 ? 1 : -1 });
         } else if (dy < 0) {
           emit({ type: 'boost' });
-        } else {
-          /* Down is pause. Until now the only ways to pause were a
-             keyboard, which a phone does not have, and two fingers,
-             which nothing tells you about. That left the paused menu,
-             and the Restart button on it, effectively unreachable on
-             the primary surface. Up is already the escape move, so
-             down is the one direction left and it means the opposite:
-             stop. Tagged, because the app must be able to tell a
-             deliberate swipe from the two finger gesture. */
-          emit({ type: 'pause', from: 'swipe' });
         }
+        /* Downward is deliberately unmapped. It briefly meant pause,
+           which is wrong twice over: in every runner a player has
+           met, down is duck, slide or brake, and on an iPhone a
+           downward swipe that starts near the top edge belongs to
+           Notification Centre. Pause is a button in the HUD now. */
       }
     }
   }

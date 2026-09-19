@@ -1135,20 +1135,53 @@ export function createRenderer(canvas) {
   /* Brief HUD: score, high score, fuel meter, stumble indicator, all
      in the same cartoon capsule style on the shaded band. Row one is
      the double size digits. */
+  /*
+    The pause control's geometry, shared by the drawing and the hit
+    test so they cannot drift.
+  */
+  function pauseRect() {
+    const p = TUNING.render.hudPlate;
+    const b = TUNING.render.pauseBtn;
+    return { x: W - p.marginPx - b.wPx, y: p.yPx, w: b.wPx, h: b.hPx };
+  }
+
+  /*
+    A tap pauses only inside the band. Steering resolves a tap to a
+    lane by its x alone, so an unbounded corner target would swallow
+    every tap a player made to move into the right hand lane.
+  */
+  function hitTestPause(lx, ly) {
+    if (!Number.isFinite(lx) || !Number.isFinite(ly)) return false;
+    const b = TUNING.render.pauseBtn;
+    return lx >= W - b.hitWPx && ly >= 0 && ly <= TUNING.render.hudBandHPx;
+  }
+
   function drawScore(view, pal) {
     const p = TUNING.render.hudPlate;
+    const pb = pauseRect();
     drawPlate(p.marginPx, p.yPx, p.wPx, p.hPx, pal);
     drawText(bctx, view.meters + 'M', p.marginPx + p.wPx / 2, p.yPx + 4, pal.text,
       { scale: 2, align: 'center' });
-    const hiX = W - p.marginPx - p.wPx;
+    /* High score sits left of the pause control rather than at the
+       edge, so the corner belongs to the button. */
+    const hiX = pb.x - 2 - p.wPx;
     drawPlate(hiX, p.yPx, p.wPx, p.hPx, pal);
     drawText(bctx, String(view.high), hiX + p.wPx / 2, p.yPx + 4, pal.edgeLine,
       { scale: 2, align: 'center' });
-    /* the three hearts sit between the two plates */
+
+    /* The pause button: two bars on the same capsule as everything
+       else, pressed the same way the menu rows are. */
+    const down = view.pressedMenuId === 'hudPause' ? 1 : 0;
+    drawPlate(pb.x, pb.y + down, pb.w, pb.h, pal, down ? pal.outline : undefined);
+    bctx.fillStyle = pal.text;
+    const barY = pb.y + down + 5;
+    bctx.fillRect(pb.x + 6, barY, 2, 7);
+    bctx.fillRect(pb.x + 10, barY, 2, 7);
+
+    /* the three hearts sit between the score plate and the high plate */
     const heartSpr = getSprite('item_heart');
-    const nitroSpr = getSprite('item_nitro');
     const heartsW = TUNING.lives.max * (heartSpr.width + 2) - 2;
-    let hx = Math.round(W / 2 - heartsW / 2);
+    let hx = Math.round((p.marginPx + p.wPx + hiX) / 2 - heartsW / 2);
     const hy = p.yPx + Math.round(p.hPx / 2 - heartSpr.height / 2);
     /* Sound off is a state the player chose and then forgets, so say
        so for the whole run rather than only on the menu. It sits in
@@ -1455,5 +1488,5 @@ export function createRenderer(canvas) {
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, addPuff, addPickupPop };
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, addPuff, addPickupPop };
 }
