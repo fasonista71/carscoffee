@@ -22,10 +22,33 @@ async function boot(seed) {
   return { ctx, page };
 }
 
-/* The hint sits at logical y 284, in a 180x320 buffer. */
+/*
+  The hint used to sit at a constant logical y and this used to tap it
+  there. It now hangs off the bottom of the board band, which moves
+  with the menu above it, so the tap finds it instead: its first line
+  is the lowest amber text on the screen, below the board's own
+  heading. A number here would only be right until the next layout
+  change, which is exactly the change this is meant to survive.
+*/
 async function tapHint(page) {
   const box = await page.locator('#game').boundingBox();
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + (288 / 320) * box.height);
+  const ly = await page.evaluate(() => {
+    const c = document.getElementById('game');
+    const g = c.getContext('2d');
+    const unit = c.height / 320;
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let lowest = -1;
+    for (let y = c.height - 1; y >= Math.floor(240 * unit); y -= 1) {
+      for (let x = 0; x < c.width; x += 1) {
+        const i = (y * c.width + x) * 4;
+        if (d[i] > 245 && d[i + 1] > 200 && d[i + 1] < 235 && d[i + 2] < 90) { lowest = y; break; }
+      }
+      if (lowest >= 0) break;
+    }
+    return lowest < 0 ? null : lowest / unit;
+  });
+  if (ly === null) return 'no hint on screen';
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + (ly / 320) * box.height);
   await page.waitForTimeout(250);
   return page.evaluate(() => localStorage.getItem('cc.soundtip.v1'));
 }

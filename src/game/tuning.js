@@ -399,6 +399,21 @@ export const TUNING = {
     /* Menu layout: one primary button plus option rows, hit tested in
        logical coordinates. Restart taps are ignored for a beat after
        a menu opens, so a frantic last tap cannot start a new run. */
+    /* The title screen's bottom band. The board used to sit at a
+       constant y whatever the menu above it did, which left a 29px
+       void under Sound on iOS, where there is no Rumble row, and
+       butted the board flush against Rumble's outline on Android. It
+       now hangs off the last row, and is pulled back up when a full
+       board would otherwise run off the bottom of a 320px screen. */
+    boardGapPx: 10,
+    boardBottomMarginPx: 4,
+    /* How long the car you just chose is held up where you can see
+       it. The title screen has no spare room for a permanent preview
+       (the badge takes the top 130px and the menu the next 120), and
+       the live car at playerYPx sits behind the option rows and the
+       board, so about five pixels of it were visible. Cycling the car
+       now puts it on a plate in the board's place for a beat. */
+    carPreviewMs: 1400,
     menu: {
       /* Sized so buttons meet the 44 point minimum touch target on a
          phone at 2x logical scale, plus padded hit testing. */

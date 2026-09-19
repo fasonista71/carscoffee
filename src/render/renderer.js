@@ -1197,6 +1197,20 @@ export function createRenderer(canvas) {
     }
   }
 
+  /*
+    The reward for reaching a tier used to be the least readable thing
+    in the game at the moment it was celebrating: the wash starts at
+    its 0.45 maximum on the first frame and the amber on top of it
+    measured 1.79:1 over road and 1.07:1 over the shoulder, so the
+    words only became legible once the flash, and the moment, had
+    passed.
+
+    Same answer as the coffee lesson: fix the background rather than
+    the foreground. The callout sits on the plate every other piece of
+    type in this game sits on, drawn after the wash, so the amber is
+    against a dark chip from the first frame and the flash washes over
+    the road behind it instead of through it.
+  */
   function drawTierBanner(view, pal) {
     if (view.tierFlashFrames <= 0) return;
     const f = view.tierFlashFrames;
@@ -1204,8 +1218,15 @@ export function createRenderer(canvas) {
     const alpha = Math.min(0.45, (f / 90) * 0.45);
     bctx.fillStyle = 'rgba(255, 255, 255, ' + alpha.toFixed(3) + ')';
     bctx.fillRect(0, 0, W, H);
-    drawText(bctx, 'Tier ' + (view.tier + 1), W / 2, 120, pal.edgeLine, { scale: 2, align: 'center' });
-    drawText(bctx, 'Faster. Denser.', W / 2, 140, pal.text, { scale: 1, align: 'center' });
+    const l1 = 'Tier ' + (view.tier + 1);
+    const l2 = 'Faster. Denser.';
+    const w = Math.max(textWidth(l1, 2), textWidth(l2, 1)) + 12;
+    const h = 28;
+    const x = Math.round((W - w) / 2);
+    const y = 112;
+    drawPlate(x, y, w, h, pal);
+    drawText(bctx, l1, W / 2, y + 4, pal.edgeLine, { scale: 2, align: 'center' });
+    drawText(bctx, l2, W / 2, y + 18, pal.text, { scale: 1, align: 'center' });
   }
 
   /*
@@ -1240,9 +1261,15 @@ export function createRenderer(canvas) {
     }
     /* The phone's own ring switch mutes the game and no browser can
        read it, so this is a hint rather than a readout. It sits last
-       so its padded hit box can never steal a tap from a real row. */
+       so its padded hit box can never steal a tap from a real row, and
+       it hangs off the bottom of the board band rather than sitting at
+       a constant y, which is what used to bury it under the board.
+
+       The hint is only ever shown on an empty board, so the band it
+       hangs off is the empty state's. boardTopY asks for the layout
+       with the hint turned off, so this does not recur. */
     if (mode === 'title' && showSoundTip) {
-      items.push({ id: 'soundtip', x: 8, y: 284, w: W - 16, h: 13 });
+      items.push({ id: 'soundtip', x: 8, y: boardBottomY(mode, 0, hapticsSupported) + 6, w: W - 16, h: 13 });
     }
     return items;
   }
@@ -1323,8 +1350,13 @@ export function createRenderer(canvas) {
           label = 'Sound';
           value = view.soundOn ? 'ON' : 'OFF';
         } else {
+          /* No N/A case: menuLayout leaves the row out entirely where
+             rumble cannot happen, so the only way to read this row is
+             to have it. The fallback that used to live here was
+             unreachable, and would have drawn as "N A" anyway, since
+             the font has no slash. */
           label = 'Rumble';
-          value = view.hapticsSupported ? (view.hapticsOn ? 'ON' : 'OFF') : 'N/A';
+          value = view.hapticsOn ? 'ON' : 'OFF';
         }
         const ty = item.y + down + Math.round(item.h / 2) - 2;
         drawText(bctx, label, item.x + 7, ty, pal.text, { scale: 1, align: 'left' });
@@ -1336,13 +1368,48 @@ export function createRenderer(canvas) {
   /*
     The top five. Rank and initials read left, distance reads right,
     and the row just earned is picked out in the accent so a player
-    can find themselves without counting. Drawing is skipped entirely
-    when the board is empty, which is what keeps it clear of the ring
-    switch hint on a fresh install.
+    can find themselves without counting. An empty board says so
+    rather than drawing nothing, and the ring switch hint hangs off
+    the bottom of whichever of the two is on screen.
   */
+  /*
+    Where the bottom band starts: under the last menu row rather than
+    at a constant y, so the void under Sound on a layout with no
+    Rumble row closes, and pulled back up when a full board would run
+    off the bottom.
+  */
+  function boardTopY(mode, rows, hapticsSupported) {
+    let bottom = 0;
+    for (const item of menuLayout(mode, false, hapticsSupported)) {
+      if (item.id === 'soundtip') continue;
+      bottom = Math.max(bottom, item.y + item.h);
+    }
+    const bandH = 13 + Math.max(1, rows) * 7;
+    const latest = H - TUNING.render.boardBottomMarginPx - bandH + 5;
+    return Math.min(bottom + TUNING.render.boardGapPx, latest);
+  }
+
+  /* The band's last pixel, so anything below it can be hung off it. */
+  function boardBottomY(mode, rows, hapticsSupported) {
+    return boardTopY(mode, rows, hapticsSupported) - 5 + 13 + Math.max(1, rows) * 7;
+  }
+
   function drawBoard(view, pal, topY) {
     const rows = view.board || [];
-    if (rows.length === 0) return;
+    /*
+      The empty state. drawBoard used to return here, leaving the
+      bottom 90 pixels of a fresh install as blank dimmed road with
+      nothing to say a board existed at all, so the first thing the
+      game asks you to compete for was invisible until you had already
+      competed.
+    */
+    if (rows.length === 0) {
+      bctx.fillStyle = pal.hudBand;
+      bctx.fillRect(28, topY - 5, W - 56, 20);
+      drawText(bctx, 'Top five', W / 2, topY, pal.edgeLine, { scale: 1, align: 'center' });
+      drawText(bctx, 'No runs yet', W / 2, topY + 8, pal.text, { scale: 1, align: 'center' });
+      return;
+    }
     /* The world keeps moving behind both screens, so the board gets
        the same shaded band the HUD uses rather than trusting the dim
        layer to keep a cup or a car off the text. */
@@ -1358,14 +1425,48 @@ export function createRenderer(canvas) {
     }
   }
 
+  /*
+    The car you are choosing, held up where you can see it.
+
+    The live car sits at playerYPx, which on this screen is behind the
+    option rows and the board: about five pixels of roof were visible,
+    and the only real feedback for cycling was an eleven character name
+    in a 3x5 font.
+
+    There is no spare room on this screen for a permanent preview. The
+    badge owns the top 130 pixels, the menu the next 120, and the board
+    the rest, and a 46 pixel car does not fit in any gap between them
+    on both layouts. So cycling puts the car on a card for a beat, and
+    the card goes over the badge, which is the one area that is
+    decoration rather than a control: nothing is covered that anybody
+    could be reaching for.
+  */
+  function drawCarPreview(view, pal) {
+    const spr = getSprite(view.playerSpriteKey || 'player_coupe');
+    const name = (view.vehicleName || '').toUpperCase();
+    const h = spr.height + 16;
+    const w = Math.max(spr.width + 20, textWidth(name, 1) + 14);
+    const x = Math.round((W - w) / 2);
+    const y = 44;
+    drawPlate(x, y, w, h, pal, pal.outline);
+    bctx.drawImage(spr, Math.round((W - spr.width) / 2), y + 5);
+    drawText(bctx, name, W / 2, y + h - 9, pal.edgeLine, { scale: 1, align: 'center' });
+  }
+
   function drawTitle(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
     const badge = getSprite('ui_badge');
     bctx.drawImage(badge, Math.round((W - badge.width) / 2), 16);
     drawMenu(view, pal, 'title');
-    drawBoard(view, pal, 275);
-    drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.road, { scale: 1, align: 'right' });
+    const rows = (view.board || []).length;
+    drawBoard(view, pal, boardTopY('title', rows, view.hapticsSupported));
+    if (view.carPreview) drawCarPreview(view, pal);
+    /* The build tag is the only version signal this game has, with no
+       telemetry behind it, and it was drawn at 1.08:1 on the dimmed
+       shoulder: recessive to the point of being unreadable, which is
+       no use to a player being asked which build they are on. */
+    drawText(bctx, BUILD_TAG, W - 3, H - 8, pal.building, { scale: 1, align: 'right' });
   }
 
   /*

@@ -60,7 +60,16 @@ export const GLYPH_W = 3;
 export const GLYPH_H = 5;
 export const GLYPH_ADVANCE = 4;
 
+/*
+  The advance includes a trailing space that the last glyph does not
+  need, hence the -1. An empty string has no glyphs and no trailing
+  space, and used to measure -1 * scale: harmless where it was called,
+  but it right aligned from one pixel past x, and a missing vehicle
+  name is exactly the kind of thing that turns up on the day nobody is
+  looking.
+*/
 export function textWidth(text, scale = 1) {
+  if (!text || text.length === 0) return 0;
   return (text.length * GLYPH_ADVANCE - 1) * scale;
 }
 

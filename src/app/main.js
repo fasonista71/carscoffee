@@ -215,10 +215,16 @@ function resumeRun() {
   audio.startMusic();
 }
 
+/* The title screen has no room for a permanent car preview, so
+   cycling holds the chosen car up in the board's band for a beat.
+   renderer.drawTitle draws it; this is just the clock. */
+let carPreviewUntilMs = 0;
+
 function cycleVehicle() {
   const idx = (UNLOCKED.indexOf(vehicleId) + 1) % UNLOCKED.length;
   vehicleId = UNLOCKED[idx];
   saveSetting('cc.vehicle.v1', vehicleId);
+  carPreviewUntilMs = performance.now() + TUNING.render.carPreviewMs;
 }
 
 /*
@@ -539,6 +545,7 @@ const loop = createLoop({
     view.soundOn = soundOn;
     view.soundTip = soundTipVisible() && mode === 'title';
     view.board = board.entries();
+    view.carPreview = mode === 'title' && performance.now() < carPreviewUntilMs;
     view.newEntryIndex = newEntryIndex;
     view.hapticsOn = hapticsOn;
     view.hapticsSupported = haptics.supported;
