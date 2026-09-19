@@ -53,8 +53,11 @@
     gesture was play and no pause is emitted: alternating thumbs
     routinely put two fingers on the glass at once and must never
     pause the run.
-  - Both pause gestures toggle, so the same swipe or the same two
-    fingers resume.
+  - The two finger gesture toggles, so it also resumes. The swipe does
+    not: dragging a finger off a button you decided against is a
+    downward drag past the threshold, and it must not start the run
+    running again behind the menu you are looking at. Resuming is a
+    tap on Resume, two fingers, or a key.
 
   There is deliberately no gesture for the dev overlay. It used to be
   three fingers, which shipped, and meant a player could open a panel
@@ -123,8 +126,9 @@ export function attachTouch(emit, target) {
              and the Restart button on it, effectively unreachable on
              the primary surface. Up is already the escape move, so
              down is the one direction left and it means the opposite:
-             stop. Both gestures toggle, so the same swipe resumes. */
-          emit({ type: 'pause' });
+             stop. Tagged, because the app must be able to tell a
+             deliberate swipe from the two finger gesture. */
+          emit({ type: 'pause', from: 'swipe' });
         }
       }
     }

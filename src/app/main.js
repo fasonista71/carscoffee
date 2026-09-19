@@ -355,7 +355,14 @@ function onIntent(intent) {
   audio.unlock();
   if (intent.type === 'pause') {
     if (mode === 'playing') pauseRun();
-    else if (mode === 'paused') resumeRun();
+    /* A swipe pauses but never resumes. Pressing a menu button and
+       then dragging away from it, which is how a player cancels a
+       press they thought better of, is a drag past the swipe
+       threshold and usually a downward one. Letting that resume would
+       mean the run restarted behind the menu the player was still
+       reading. Two fingers and the keyboard still toggle both ways,
+       and Resume is right there. */
+    else if (mode === 'paused' && intent.from !== 'swipe') resumeRun();
     return;
   }
   if (intent.type === 'pressEnd') {

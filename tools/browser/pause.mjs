@@ -76,9 +76,18 @@ const menuThere = await page.evaluate(() => {
 });
 log(menuThere > 5000, 'the paused menu is on screen', 'accent pixels=' + menuThere);
 
-/* --- the same swipe resumes --- */
+/*
+  A swipe must NOT resume. Cancelling a menu press by dragging off the
+  button is a downward drag past the same threshold, and resuming
+  there would restart the run behind a menu the player is reading.
+*/
 await swipe(90);
-log(await moving(), 'the same swipe down resumes');
+log(!(await moving()), 'a second swipe down does not resume, it stays paused');
+
+/* Resume is a tap on the button, which is right there. */
+await page.touchscreen.tap(box.x + box.width / 2, box.y + (129 / 320) * box.height);
+await page.waitForTimeout(400);
+log(await moving(), 'tapping Resume resumes');
 
 /* --- up is still boost, not pause --- */
 await swipe(-90);
