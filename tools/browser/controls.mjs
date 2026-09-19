@@ -69,6 +69,51 @@ const at = (box, lx, ly) => ({ x: box.x + (lx / 180) * box.width, y: box.y + (ly
   each gesture, and the pause checks now read the paused screen itself
   rather than inferring it from a stalled picture.
 */
+/* --- the keyboard can work the option rows, not just the button --- */
+{
+  const { ctx, page } = await boot();
+  const before = await page.evaluate(() => ({
+    car: localStorage.getItem('cc.vehicle.v1'), sound: localStorage.getItem('cc.sound.v1')
+  }));
+  /* The first press shows the cursor on the button it was already
+     going to press; the second moves to Car. Right then works the row
+     it is on, the way a tap on it would. */
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(250);
+  const afterCar = await page.evaluate(() => localStorage.getItem('cc.vehicle.v1'));
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  const afterSound = await page.evaluate(() => localStorage.getItem('cc.sound.v1'));
+  log(afterCar !== null && afterCar !== before.car, 'arrow keys reach the car row and change it',
+    JSON.stringify({ before: before.car, after: afterCar }));
+  log(afterSound === '0', 'and reach the sound row and turn it off',
+    JSON.stringify({ before: before.sound, after: afterSound }));
+  /* And the selection is visible, or a keyboard player is guessing
+     which row Enter is about to press. */
+  const ring = await page.evaluate(() => {
+    const c = document.getElementById('game');
+    const g = c.getContext('2d');
+    const unit = c.height / 320;
+    /* A thin strip just outside the Sound row's plate, which is where
+       the cursor's outline is and where none of the row's own amber
+       value text can reach. */
+    const d = g.getImageData(Math.floor(16 * unit), Math.floor(214 * unit), Math.ceil(4 * unit), Math.ceil(28 * unit)).data;
+    let amber = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > 245 && d[i + 1] > 200 && d[i + 1] < 235 && d[i + 2] < 90) amber += 1;
+    }
+    return amber;
+  });
+  log(ring > 10, 'and the row the keyboard is on is visibly marked', 'amber pixels ' + ring);
+  await ctx.close();
+}
+
 /* --- the teaching, which the product did not have at all --- */
 {
   const { ctx, page } = await boot();

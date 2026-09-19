@@ -442,6 +442,10 @@ export const TUNING = {
          between a toggle and an irreversible run ender. */
       destructiveGapPx: 18,
       hitPadPx: 6,
+      /* The minimum a finger should meet, in CSS pixels, which is what
+         44 points means on both platforms. The pad grows to hold this
+         when the integer scale drops the whole interface a step. */
+      minTargetCssPx: 44,
       cooldownMs: 350
     },
     /* Cup shiver rate. Purely visual. */

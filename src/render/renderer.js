@@ -24,12 +24,18 @@ export function createRenderer(canvas) {
   const bctx = buffer.getContext('2d');
   const ctx = canvas.getContext('2d');
 
+  /* CSS pixels per logical pixel, which is what a finger actually
+     meets. Kept from the last resize so the hit padding can be sized
+     against it. */
+  let cssPerLogical = 2;
+
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.parentElement.getBoundingClientRect();
     const fit = Math.min((rect.width * dpr) / W, (rect.height * dpr) / H);
     /* Integer device pixel scale wherever the viewport allows. */
     const scale = Math.max(1, Math.floor(fit));
+    cssPerLogical = scale / dpr;
     canvas.width = W * scale;
     canvas.height = H * scale;
     canvas.style.width = (W * scale) / dpr + 'px';
@@ -1321,13 +1327,32 @@ export function createRenderer(canvas) {
     used to cycle the car every time, and now it lands where the
     finger actually was.
   */
+  /*
+    The pad has to grow when the picture shrinks.
+
+    scale is floored to a whole device pixel, so the whole interface
+    drops a step at once: a 22 logical pixel row is 44 CSS pixels on an
+    iPhone 15 Pro, 33 on an SE 3, and 29 inside a 320x480 itch iframe
+    on a dpr 3 phone. The padded box was a constant 6 logical pixels,
+    so it shrank in step with the thing it was rescuing. It is now
+    sized in CSS pixels: whatever the scale, the box a finger has to
+    hit is at least the 44 point minimum. Rows overlap more at small
+    scales, which is safe, because a tap in an overlap resolves to the
+    nearer row's centre.
+  */
+  function hitPadFor(itemH) {
+    const min = TUNING.render.menu.hitPadPx;
+    const needed = (TUNING.render.menu.minTargetCssPx / cssPerLogical - itemH) / 2;
+    return Math.max(min, Math.ceil(needed));
+  }
+
   function hitTestMenu(mode, lx, ly, showSoundTip, hapticsSupported = true) {
     if (mode !== 'title' && mode !== 'paused' && mode !== 'gameOver' && mode !== 'howto') return null;
     if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
-    const pad = TUNING.render.menu.hitPadPx;
     let bestId = null;
     let bestD = Infinity;
     for (const item of menuLayout(mode, showSoundTip, hapticsSupported)) {
+      const pad = hitPadFor(item.h);
       if (lx < item.x - pad || lx > item.x + item.w + pad) continue;
       if (ly < item.y - pad || ly > item.y + item.h + pad) continue;
       const d = Math.abs(ly - (item.y + item.h / 2));
@@ -1349,6 +1374,16 @@ export function createRenderer(canvas) {
     const pressed = view.pressedMenuId;
     for (const item of menuLayout(mode, view.soundTip, view.hapticsSupported)) {
       const down = item.id === pressed ? 1 : 0;
+      /* Where the keyboard is. Drawn only once the keyboard has been
+         used, so a player on a phone never sees a cursor they did not
+         ask for. */
+      if (item.id === view.selectedMenuId && item.id !== 'soundtip') {
+        bctx.fillStyle = pal.edgeLine;
+        bctx.fillRect(item.x - 3, item.y + down - 3, item.w + 6, 1);
+        bctx.fillRect(item.x - 3, item.y + down + item.h + 2, item.w + 6, 1);
+        bctx.fillRect(item.x - 3, item.y + down - 2, 1, item.h + 4);
+        bctx.fillRect(item.x + item.w + 2, item.y + down - 2, 1, item.h + 4);
+      }
       if (item.id === 'soundtip') {
         drawText(bctx, 'NO SOUND. CHECK THE SIDE SWITCH', W / 2, item.y, pal.edgeLine,
           { scale: 1, align: 'center' });
@@ -1684,5 +1719,14 @@ export function createRenderer(canvas) {
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 
-  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, hitTestHelp, addPuff, addPickupPop };
+  /* The rows a keyboard can move between, in the order they are
+     drawn. The ring switch hint is not one: it is a line of text with
+     a tap target, not a control. */
+  function menuIds(mode, hapticsSupported) {
+    return menuLayout(mode, false, hapticsSupported)
+      .filter((item) => item.id !== 'soundtip')
+      .map((item) => item.id);
+  }
+
+  return { drawFrame, resize, screenToLogicalX, screenToLogical, hitTestMenu, hitTestPause, hitTestHelp, menuIds, addPuff, addPickupPop };
 }

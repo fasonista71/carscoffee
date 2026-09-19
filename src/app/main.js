@@ -316,6 +316,35 @@ function handleMenuPress(clientX, clientY) {
   uiSound('ui_press');
 }
 
+/*
+  Where the keyboard is on a menu. It only becomes visible once the
+  keyboard has actually been used: a player on a phone should never see
+  a cursor they did not ask for, and a player on a keyboard should
+  never have to guess which row Enter is about to press.
+*/
+let selectedMenuId = null;
+
+function menuRowIds() {
+  return renderer.menuIds(mode, haptics.supported);
+}
+
+function moveMenuSelection(dir) {
+  const ids = menuRowIds();
+  if (ids.length === 0) return;
+  const at = ids.indexOf(selectedMenuId);
+  const next = at < 0
+    ? (dir > 0 ? 0 : ids.length - 1)
+    : (at + dir + ids.length) % ids.length;
+  selectedMenuId = ids[next];
+  uiSound('ui_press');
+}
+
+/* Enter on a row, or left and right on one, do what a tap on it does. */
+function activateSelected() {
+  const id = selectedMenuId && menuRowIds().includes(selectedMenuId) ? selectedMenuId : 'primary';
+  runMenuAction(id);
+}
+
 function openHowTo() {
   mode = 'howto';
   menuEnteredAt = performance.now();
@@ -337,6 +366,12 @@ function handleMenuTap(clientX, clientY) {
     dismissSoundTip();
     return;
   }
+  runMenuAction(id);
+}
+
+/* What a row does, whether it was tapped or confirmed from the
+   keyboard. */
+function runMenuAction(id) {
   if (id === 'primary') {
     uiSound('ui_confirm');
     if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
@@ -408,11 +443,25 @@ function onIntent(intent) {
     /* The keyboard's way in. Enter and Space press the primary
        button, R restarts, and both respect the same cooldown that
        stops a frantic last tap launching a run. */
+    if (intent.type === 'menuMove') {
+      if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+      moveMenuSelection(intent.dir);
+      return;
+    }
+    /* Left and right work the row the selection is on, which is how a
+       keyboard changes car or turns the sound off. With nothing
+       selected they mean nothing: this is a menu, not the road. */
+    if (intent.type === 'lane') {
+      if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+      if (selectedMenuId && selectedMenuId !== 'primary') runMenuAction(selectedMenuId);
+      return;
+    }
     if (intent.type === 'confirm' || intent.type === 'restart') {
       if (performance.now() - menuEnteredAt < TUNING.render.menu.cooldownMs) return;
+      if (intent.type === 'restart' && mode !== 'title') { uiSound('ui_confirm'); startRun(); return; }
+      if (selectedMenuId) { activateSelected(); return; }
       uiSound('ui_confirm');
       if (mode === 'howto') { mode = 'title'; menuEnteredAt = performance.now(); }
-      else if (intent.type === 'restart' && mode !== 'title') startRun();
       else if (mode === 'paused') resumeRun();
       else startRun();
       return;
@@ -596,6 +645,8 @@ const loop = createLoop({
     view.hapticsOn = hapticsOn;
     view.hapticsSupported = haptics.supported;
     view.pressedMenuId = pressedMenuId;
+    view.selectedMenuId = selectedMenuId && menuRowIds().includes(selectedMenuId)
+      ? selectedMenuId : null;
     renderer.drawFrame(view);
 
     /* drawFrame sets coffeeTipDrawn. Only time the player could
@@ -655,6 +706,27 @@ const pointer = attachPointer(onIntent);
   focus never yanks the host page around.
 */
 canvas.tabIndex = 0;
+/*
+  A screen reader landing on this used to be told nothing at all: a
+  focus stop with no name, no role and no fallback content. Full parity
+  is not on the table for a canvas arcade game, and pretending
+  otherwise would be worse than saying so, but an element a player can
+  focus should at least say what it is and how it is driven. The role
+  is application because the arrow keys belong to the game rather than
+  to the reader.
+*/
+canvas.setAttribute('role', 'application');
+canvas.setAttribute('aria-label',
+  'Cars and Coffee. A top down driving game played on a canvas. '
+  + 'Tap or use the left and right arrow keys to change lane, '
+  + 'swipe up or press the up arrow to boost, Escape pauses. '
+  + 'The game is drawn rather than described, so a screen reader '
+  + 'cannot read the road.');
+if (!canvas.firstChild) {
+  canvas.appendChild(document.createTextNode(
+    'Cars and Coffee is a drawn driving game. Change lane with the left '
+    + 'and right arrow keys, boost with the up arrow, pause with Escape.'));
+}
 function claimKeyboard() {
   try { canvas.focus({ preventScroll: true }); } catch (e) { canvas.focus(); }
 }

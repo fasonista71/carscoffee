@@ -3,7 +3,8 @@
   repeat is ignored: one press, one intent.
 
   Arrows and WASD steer, up and W and Space boost, Escape and P pause,
-  Enter and Space confirm a menu, R restarts. The scroll keys the game
+  Enter and Space confirm a menu, up and down move between menu rows,
+  left and right work the row they land on, and R restarts. The scroll keys the game
   does not use are swallowed rather than ignored, because an unhandled
   one reaches the embedding page and pulls it out from under the
   player mid run.
@@ -27,14 +28,22 @@ export function attachKeyboard(emit) {
         e.preventDefault();
         emit({ type: 'lane', dir: 1 });
         break;
-      case 'ArrowUp':
-      case 'KeyW':
       case 'Space':
         e.preventDefault();
         /* Boost in play, confirm on a menu. The adapter does not know
            which, so it says both and the app picks. */
         emit({ type: 'boost' });
         emit({ type: 'confirm' });
+        break;
+      /* Up and down are boost in play and a menu selection out of it.
+         A keyboard player could reach Start and Restart but could not
+         change car or turn the sound off, because nothing ever moved
+         between the rows. */
+      case 'ArrowUp':
+      case 'KeyW':
+        e.preventDefault();
+        emit({ type: 'boost' });
+        emit({ type: 'menuMove', dir: -1 });
         break;
       case 'Escape':
       case 'KeyP':
@@ -60,6 +69,9 @@ export function attachKeyboard(emit) {
         break;
       case 'ArrowDown':
       case 'KeyS':
+        e.preventDefault();
+        emit({ type: 'menuMove', dir: 1 });
+        break;
       case 'PageUp':
       case 'PageDown':
       case 'Home':
