@@ -1,5 +1,28 @@
 # Next pass: brief for a Claude Code session
 
+## What is live
+
+| | |
+|---|---|
+| Uploaded to itch | 19 September 2026 |
+| Bundle | `cars-and-coffee-web-M8.zip`, md5 `25a6f6522a85cfcc74470531480addad` |
+| Versioned directory | `v2c27f6f0f1` |
+| Commit | `05ccede` (`878afa5` adds this file and changes nothing in the bundle) |
+
+`bash tools/build-itch.sh` from a clean tree reproduces that directory name
+exactly, which is how you check the repo and the live build still agree.
+
+Note on what this upload does and does not prove. It is the transition off the
+old scheme, where every build shipped at `src-M8/` and `assets/`, so a
+returning browser holding those files gets a page pointing at a directory it
+has never seen and fetches everything fresh. If a browser somehow serves the
+old `index.html` from cache without revalidating, its request for
+`src-M8/app/main.js` now 404s and the boot card offers a retry, which reloads
+the page and resolves it. Both paths are clean. But the mechanism itself, a
+content hash keeping changed and unchanged files apart across an update, is
+only really exercised on the **next** upload. That is what the upgrade test in
+Phase 1 is for.
+
 Everything still open on Cars & Coffee, in the order it should be taken.
 Read this whole file before starting. Read `CLAUDE.md` first if you have not.
 
