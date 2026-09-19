@@ -1,17 +1,16 @@
 /*
-  Oil slick, rubble, and stumble behavior, headless. Traffic spawning
-  is pushed out of reach and tiers pinned (own process, no leakage);
-  rows and hazards are injected by hand where needed.
+  Oil slick, rubble, and stumble behavior, headless. Rows and hazards
+  are injected by hand, and quietStep keeps the generator from adding
+  anything else and holds the tier at zero, per world. That used to be
+  done by writing into the shared TUNING at module scope on the
+  strength of a comment about each file having its own process.
 */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, step, isBoosting, currentSpeedPxPerSec } from '../src/game/world.js';
+import { createWorld, isBoosting, currentSpeedPxPerSec } from '../src/game/world.js';
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
-
-TUNING.obstacles.firstSpawnDistPx = 1e9;
-TUNING.tiers.splice(1);
-TUNING.fuel.passiveDrainPerSec = 0;
+import { quietStep } from './support/ghost.js';
 
 function mkWorld() {
   return createWorld({ seed: 7, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city });
@@ -31,25 +30,25 @@ function mkRow(world, aheadPx, lanes) {
 test('a slick slides the car to its telegraphed lane and locks steering', () => {
   const w = mkWorld();
   w.hazards.push({ type: 'slick', lane: 1, dir: 1, distPx: w.distancePx + 40 });
-  for (let f = 0; f < 25; f += 1) step(w, []);
+  for (let f = 0; f < 25; f += 1) quietStep(w, []);
   assert.ok(w.slideLockFrames > 0, 'slide lock should be active');
   /* steering input during the lock does nothing */
-  for (let f = 0; f < 25; f += 1) step(w, [{ type: 'lane', dir: -1 }]);
+  for (let f = 0; f < 25; f += 1) quietStep(w, [{ type: 'lane', dir: -1 }]);
   assert.equal(w.player.lane, 2, 'forced into the telegraphed lane despite input');
   /* after the lock expires, steering works again */
-  while (w.slideLockFrames > 0) step(w, []);
-  step(w, [{ type: 'lane', dir: -1 }]);
-  for (let f = 0; f < 12; f += 1) step(w, []);
+  while (w.slideLockFrames > 0) quietStep(w, []);
+  quietStep(w, [{ type: 'lane', dir: -1 }]);
+  for (let f = 0; f < 12; f += 1) quietStep(w, []);
   assert.equal(w.player.lane, 1, 'steering restored after the lock');
 });
 
 test('rubble costs fuel, slows the car, ends boost, and is consumed', () => {
   const w = mkWorld();
-  step(w, [{ type: 'boost' }]);
+  quietStep(w, [{ type: 'boost' }]);
   assert.ok(isBoosting(w));
   const boosted = currentSpeedPxPerSec(w);
   w.hazards.push({ type: 'rubble', lane: 1, distPx: w.distancePx + 30 });
-  for (let f = 0; f < 12; f += 1) step(w, []);
+  for (let f = 0; f < 12; f += 1) quietStep(w, []);
   assert.equal(w.hazards.length, 0, 'rubble is consumed on hit');
   assert.ok(!isBoosting(w), 'rubble ends an active boost');
   assert.ok(w.slowFrames > 0, 'speed loss is active');
@@ -60,7 +59,7 @@ test('rubble costs fuel, slows the car, ends boost, and is consumed', () => {
   const hi = TUNING.fuel.max - TUNING.hazards.rubble.fuelCost;
   const lo = hi - TUNING.fuel.boostDrainPerSec * (12 / TUNING.logic.hz);
   assert.ok(w.fuel <= hi && w.fuel >= lo, `fuel ${w.fuel} outside [${lo}, ${hi}]`);
-  while (w.slowFrames > 0) step(w, []);
+  while (w.slowFrames > 0) quietStep(w, []);
   assert.equal(currentSpeedPxPerSec(w), TUNING.speed.basePxPerSec, 'speed recovers');
 });
 
@@ -68,18 +67,18 @@ test('lethal contacts spend hearts with the stumble treatment; the last heart en
   const w = mkWorld();
   assert.equal(w.hearts, TUNING.lives.start);
   w.rows.push(mkRow(w, 40, [false, true, false]));
-  for (let f = 0; f < 20; f += 1) step(w, []);
+  for (let f = 0; f < 20; f += 1) quietStep(w, []);
   assert.equal(w.status, 'running', 'first contact is forgiven');
   assert.equal(w.hearts, TUNING.lives.start - 1, 'one heart spent');
   assert.ok(w.invulnFrames > 0, 'invulnerability granted');
   /* ride out invulnerability, then take the final hit on the last
      heart. Clear the road first: rows must stay ordered by distPx,
      and natural traffic has spawned ahead of the injection point. */
-  while (w.invulnFrames > 0) step(w, []);
+  while (w.invulnFrames > 0) quietStep(w, []);
   w.hearts = 1;
   w.rows.length = 0;
   w.rows.push(mkRow(w, 40, [false, true, false]));
-  for (let f = 0; f < 40 && w.status === 'running'; f += 1) step(w, []);
+  for (let f = 0; f < 40 && w.status === 'running'; f += 1) quietStep(w, []);
   assert.equal(w.status, 'dead');
   assert.equal(w.deathCause, 'crash');
 });
@@ -88,22 +87,22 @@ test('a heart pickup restores a heart, capped at the maximum', () => {
   const w = mkWorld();
   w.hearts = 1;
   w.pickups.push({ kind: 'heart', lane: 1, distPx: w.distancePx + 10, speedPxPerSec: 0 });
-  step(w, []);
+  quietStep(w, []);
   assert.equal(w.pickups.length, 0, 'heart collected');
   assert.equal(w.hearts, 2);
   w.hearts = TUNING.lives.max;
   w.pickups.push({ kind: 'heart', lane: 1, distPx: w.distancePx + 10, speedPxPerSec: 0 });
-  step(w, []);
+  quietStep(w, []);
   assert.equal(w.hearts, TUNING.lives.max, 'capped at max');
 });
 
 test('hazards do nothing during stumble invulnerability', () => {
   const w = mkWorld();
   w.rows.push(mkRow(w, 40, [false, true, false]));
-  for (let f = 0; f < 20; f += 1) step(w, []);
+  for (let f = 0; f < 20; f += 1) quietStep(w, []);
   assert.ok(w.invulnFrames > 0);
   w.hazards.push({ type: 'slick', lane: 1, dir: 1, distPx: w.distancePx + 20 });
-  for (let f = 0; f < 15; f += 1) step(w, []);
+  for (let f = 0; f < 15; f += 1) quietStep(w, []);
   assert.equal(w.slideLockFrames, 0, 'no slide during invulnerability');
   assert.equal(w.player.lane, 1, 'car stays in its lane');
 });

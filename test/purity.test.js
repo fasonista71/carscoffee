@@ -11,7 +11,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const gameDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'game');
+const here = dirname(fileURLToPath(import.meta.url));
+const gameDir = join(here, '..', 'src', 'game');
 
 /*
   The second group is the hole this list had. None of them appear in
@@ -91,5 +92,30 @@ test('the forbidden list actually rejects the things it names', () => {
   for (const line of innocent) {
     const hit = FORBIDDEN.find((pattern) => pattern.test(line));
     assert.ok(!hit, 'false positive ' + hit + ' on: ' + line);
+  }
+});
+
+/*
+  The other shared thing worth guarding, in the other direction. Five
+  test files used to configure themselves by writing into the shared
+  TUNING at module scope: traffic out of reach, the tier list truncated
+  in place, the fuel drain muted. That holds only while the runner
+  gives each file its own process, and the day it does not, the files
+  deciding whether the road is survivable are the ones reshaping what
+  another file measures. They set their conditions per world now, and
+  this keeps it that way.
+*/
+test('no test file reshapes the shared TUNING for everybody else', () => {
+  const files = readdirSync(here).filter((f) => f.endsWith('.test.js'));
+  assert.ok(files.length >= 8, 'expected to find the test files');
+  for (const file of files) {
+    const text = readFileSync(join(here, file), 'utf8');
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const writes = /\bTUNING(\.[A-Za-z0-9_]+)+\s*(=[^=]|\+=|-=)/.test(line)
+        || /\bTUNING(\.[A-Za-z0-9_]+)*\.(splice|push|pop|shift|unshift|sort|reverse|fill)\s*\(/.test(line);
+      assert.ok(!writes, `${file}:${i + 1} writes to the shared TUNING: ${line.trim()}`);
+    }
   }
 });

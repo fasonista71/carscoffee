@@ -15,23 +15,17 @@
   - and it works below the fuel floor, which tuning.js says is the
     entire reason the pickup exists.
 
-  Traffic is pushed out of reach for the duration of this suite and
-  handed back afterwards, rather than mutated into the shared TUNING at
-  module scope.
+  The bench tests run on an empty road, done to their own worlds by
+  quietStep rather than by reshaping the shared TUNING.
 */
 
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, step, isBoosting } from '../src/game/world.js';
+import { createWorld, isBoosting } from '../src/game/world.js';
 import { TUNING, VEHICLES, ENVIRONMENTS } from '../src/game/tuning.js';
-import { useTuning } from './support/tuning.js';
+import { quietStep, ghostStep } from './support/ghost.js';
 
 describe('nitro', () => {
-  useTuning((t) => {
-    t.obstacles.firstSpawnDistPx = 1e9;
-    t.fuel.passiveDrainPerSec = 0;
-  });
-
   const mkWorld = () => createWorld({
     seed: 11, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city
   });
@@ -43,7 +37,7 @@ describe('nitro', () => {
   test('a bottle banks a charge rather than firing one', () => {
     const w = mkWorld();
     dropNitro(w);
-    step(w, []);
+    quietStep(w, []);
     assert.equal(w.pickups.length, 0, 'the bottle should have been collected');
     assert.equal(w.nitroCharges, 1);
     assert.ok(!isBoosting(w), 'picking one up must not accelerate the player');
@@ -54,7 +48,7 @@ describe('nitro', () => {
     const w = mkWorld();
     for (let i = 0; i < TUNING.nitro.maxCharges + 2; i += 1) {
       dropNitro(w);
-      step(w, []);
+      quietStep(w, []);
     }
     assert.equal(w.nitroCharges, TUNING.nitro.maxCharges);
   });
@@ -62,44 +56,56 @@ describe('nitro', () => {
   test('a boost spends a banked charge before it spends coffee', () => {
     const w = mkWorld();
     dropNitro(w);
-    step(w, []);
-    const fuelBefore = w.fuel;
-    step(w, [{ type: 'boost' }]);
+    quietStep(w, []);
+    quietStep(w, [{ type: 'boost' }]);
     assert.ok(isBoosting(w));
     assert.equal(w.nitroCharges, 0, 'the charge should have been spent');
+
+    /*
+      "Burns no coffee" measured against a run that did not boost at
+      all, rather than against a frozen number: the tank still drains
+      the ordinary passive amount while a nitro boost is running, and
+      what has to be zero is the extra.
+    */
+    const control = mkWorld();
+    quietStep(control, []);
+    quietStep(control, []);
     const boostFrames = Math.round((TUNING.boost.durationMs / 1000) * TUNING.logic.hz);
-    for (let i = 0; i < boostFrames; i += 1) step(w, []);
+    for (let i = 0; i < boostFrames; i += 1) {
+      quietStep(w, []);
+      quietStep(control, []);
+    }
     assert.ok(!isBoosting(w), 'a nitro boost lasts a full boost and no longer');
-    assert.equal(w.fuel, fuelBefore, 'a nitro boost burns no coffee');
+    assert.equal(w.fuel, control.fuel, 'a nitro boost burns no coffee of its own');
   });
 
   test('and it fires below the fuel floor, which is the point of it', () => {
     const w = mkWorld();
     dropNitro(w);
-    step(w, []);
+    quietStep(w, []);
     w.fuel = TUNING.boost.minFuel - 1;
-    step(w, [{ type: 'boost' }]);
+    quietStep(w, [{ type: 'boost' }]);
     assert.ok(isBoosting(w), 'a banked nitro must work when coffee cannot pay');
     assert.equal(w.nitroCharges, 0);
 
     /* Same world, same floor, no charge left: now it is refused. */
     const boostFrames = Math.round((TUNING.boost.durationMs / 1000) * TUNING.logic.hz);
-    for (let i = 0; i < boostFrames; i += 1) step(w, []);
+    for (let i = 0; i < boostFrames; i += 1) quietStep(w, []);
     w.fuel = TUNING.boost.minFuel - 1;
-    step(w, [{ type: 'boost' }]);
+    quietStep(w, [{ type: 'boost' }]);
     assert.ok(!isBoosting(w), 'with no charge the floor still holds');
   });
 
   test('a press during a nitro boost neither extends it nor spends another', () => {
     const w = mkWorld();
     dropNitro(w);
-    step(w, []);
+    quietStep(w, []);
     dropNitro(w);
-    step(w, []);
+    quietStep(w, []);
     assert.equal(w.nitroCharges, 2);
-    step(w, [{ type: 'boost' }]);
+    quietStep(w, [{ type: 'boost' }]);
     const left = w.boostFramesLeft;
-    step(w, [{ type: 'boost' }]);
+    quietStep(w, [{ type: 'boost' }]);
     assert.equal(w.nitroCharges, 1, 'the second press must not spend the second charge');
     assert.equal(w.boostFramesLeft, left - 1, 'nor extend the boost already running');
   });
@@ -113,11 +119,6 @@ describe('nitro', () => {
   would look exactly like a mechanic nobody uses.
 */
 describe('nitro on the road', () => {
-  useTuning((t) => {
-    t.fuel.passiveDrainPerSec = 0;
-    t.hazards.rubble.fuelCost = 0;
-  });
-
   /*
     Measured while writing this: seven bottles across ten seeds of 150
     seconds each, so a player meets one about every two and a half
@@ -131,15 +132,7 @@ describe('nitro on the road', () => {
       const w = createWorld({ seed, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city });
       const counted = new Set();
       for (let f = 0; f < 9000; f += 1) {
-        step(w, []);
-        /* A ghost: deaths are reverted so the sampling keeps going,
-           the same trick distribution.test.js uses. */
-        if (w.status !== 'running') {
-          w.status = 'running';
-          w.deathCause = null;
-          w.hearts = TUNING.lives.start;
-          w.fuel = TUNING.fuel.max;
-        }
+        ghostStep(w);
         for (const item of w.pickups) {
           if (item.kind !== 'nitro') continue;
           const key = Math.round(item.distPx) + ':' + item.lane;
