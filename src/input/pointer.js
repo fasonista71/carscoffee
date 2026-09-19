@@ -57,6 +57,7 @@ export function attachPointer(emit) {
       emit({ type: 'pressEnd' });
       if (Math.abs(dx) >= Math.abs(dy)) emit({ type: 'lane', dir: dx > 0 ? 1 : -1 });
       else if (dy < 0) emit({ type: 'boost' });
+      else emit({ type: 'pause' });
     }
   }
 

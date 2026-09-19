@@ -42,16 +42,19 @@
   Gesture rules:
   - Finger travel past swipeThresholdPx classifies the touch as a
     swipe: dominant horizontal axis is a lane change in that direction,
-    dominant vertical axis upward is boost, downward is unmapped.
+    dominant vertical axis upward is boost, downward is pause.
   - A release with no swipe within tapMaxMs is a tap. The adapter does
     not decide what a tap means; it emits the position and the app
     resolves it per TUNING.input.tapMode, since resolution can depend
     on canvas geometry and car position, which input has no business
     knowing.
   - Two fingers down together, with neither of them doing anything
-    else, is a pause. If either finger tapped or swiped, the gesture
-    was play and no pause is emitted: alternating thumbs routinely put
-    two fingers on the glass at once and must never pause the run.
+    else, is also a pause. If either finger tapped or swiped, the
+    gesture was play and no pause is emitted: alternating thumbs
+    routinely put two fingers on the glass at once and must never
+    pause the run.
+  - Both pause gestures toggle, so the same swipe or the same two
+    fingers resume.
 
   There is deliberately no gesture for the dev overlay. It used to be
   three fingers, which shipped, and meant a player could open a panel
@@ -113,6 +116,15 @@ export function attachTouch(emit, target) {
           emit({ type: 'lane', dir: dx > 0 ? 1 : -1 });
         } else if (dy < 0) {
           emit({ type: 'boost' });
+        } else {
+          /* Down is pause. Until now the only ways to pause were a
+             keyboard, which a phone does not have, and two fingers,
+             which nothing tells you about. That left the paused menu,
+             and the Restart button on it, effectively unreachable on
+             the primary surface. Up is already the escape move, so
+             down is the one direction left and it means the opposite:
+             stop. Both gestures toggle, so the same swipe resumes. */
+          emit({ type: 'pause' });
         }
       }
     }
