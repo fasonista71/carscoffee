@@ -1,0 +1,173 @@
+/*
+  What screen am I on, and is the run live.
+
+  Every script here used to answer both by diffing a thin strip of
+  canvas pixels over a few frames and calling any difference "the world
+  is moving". That has two failure modes and the suite had both.
+
+  A strip of plain road can be identical from one frame to the next, so
+  a live run reads as frozen: tier1.mjs and the webkit smoke each lost
+  an assertion in about one run in three that way. And a run that ended
+  while the script was busy elsewhere keeps scrolling behind the game
+  over screen, so a dead run reads as live: that is controls.mjs and its
+  two finger hold, about one run in six.
+
+  So ask the screen what it is rather than whether it changed. The score
+  plate is drawn only while playing or paused, its interior is pal.road,
+  and drawPaused lays the dim over the top of it. One pixel inside that
+  plate separates all three cases outright: road colour is playing, road
+  under the dim is paused, anything else is neither (title, game over,
+  or a boot card still up). The expected colours are read from the
+  bundle's own tuning.js inside the page, so this cannot drift from the
+  palette the renderer actually used.
+
+  The motion probes stay, because "the mode says playing" and "the world
+  is advancing" are different claims and the interesting assertions want
+  both. They now hash the whole canvas rather than one strip, so the
+  score readout alone is enough to register.
+*/
+
+const LOGICAL_W = 180;
+
+/* Sampled inside the score plate: drawPlate(2, 3, 50, 17) fills its
+   interior from y=4, and the distance text starts at y=7, so row 5 is
+   plate and nothing else however many digits are on it. */
+const PROBE_PX = [[6, 5], [20, 5], [45, 5]];
+
+async function readMode(page, probes) {
+  return page.evaluate(async ({ probes }) => {
+    if (!window.__ccProbePal) {
+      const src = document.querySelector('script[type=module]').getAttribute('src');
+      const mod = await import(src.replace(/app\/main\.js$/, 'game/tuning.js'));
+      const pal = mod.TUNING.palette.city;
+      const rgb = (s) => {
+        const m = String(s).match(/^#([0-9a-f]{6})$/i);
+        if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+        const p = String(s).match(/rgba?\(([^)]+)\)/);
+        const n = p[1].split(',').map((v) => parseFloat(v));
+        return [n[0], n[1], n[2], n.length > 3 ? n[3] : 1];
+      };
+      const road = rgb(pal.road);
+      const dim = rgb(pal.dim);
+      const a = dim[3];
+      window.__ccProbePal = {
+        playing: road,
+        paused: road.map((c, i) => Math.round(c * (1 - a) + dim[i] * a))
+      };
+    }
+    const want = window.__ccProbePal;
+    const c = document.getElementById('game');
+    if (!c || !c.width) return 'other';
+    const g = c.getContext('2d');
+    const unit = c.width / 180;
+    const near = (got, exp) => got.every((v, i) => Math.abs(v - exp[i]) <= 2);
+    const read = ([lx, ly]) => {
+      const d = g.getImageData(Math.floor((lx + 0.5) * unit), Math.floor((ly + 0.5) * unit), 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    const px = probes.map(read);
+    if (px.every((p) => near(p, want.playing))) return 'playing';
+    if (px.every((p) => near(p, want.paused))) return 'paused';
+    return 'other';
+  }, { probes });
+}
+
+/* One reading is a single frame, and a tier banner's white wash can
+   land on any single frame, so a mode is only a mode once it has held
+   still for two of them. */
+export async function mode(page) {
+  const first = await readMode(page, PROBE_PX);
+  const second = await readMode(page, PROBE_PX);
+  return first === second ? first : 'other';
+}
+
+export async function waitForMode(page, want, ms = 5000) {
+  const t0 = Date.now();
+  for (;;) {
+    if (await mode(page) === want) return true;
+    if (Date.now() - t0 > ms) return false;
+    await page.waitForTimeout(60);
+  }
+}
+
+/* A strided hash of the entire canvas, sampled every frame. Anything
+   that redraws, including the distance readout, counts. */
+function changedWithin(msArg) {
+  return new Promise((res) => {
+    const c = document.getElementById('game');
+    const g = c.getContext('2d');
+    const hash = () => {
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i += 4 * 31) h = (h * 31 + d[i] * 3 + d[i + 1] * 5 + d[i + 2] * 7) | 0;
+      return h;
+    };
+    const first = hash();
+    const t0 = performance.now();
+    const tick = () => {
+      if (hash() !== first) return res(true);
+      if (performance.now() - t0 > msArg) return res(false);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+export function moving(page, ms = 900) {
+  return page.evaluate(changedWithin, ms);
+}
+
+export async function still(page, ms = 600) {
+  return !(await moving(page, ms));
+}
+
+/* The run is live and advancing, which is what most of these scripts
+   mean when they check that something did not break the game. */
+export async function running(page, ms = 2000) {
+  if (!(await waitForMode(page, 'playing', ms))) return false;
+  return moving(page);
+}
+
+/*
+  Put the page back into a live run whatever it is showing, so a script
+  testing a gesture is not also testing whether the pilot survived long
+  enough to make it. Enter works the primary button in all three menu
+  modes, and a qualifying run parks an initials panel over the canvas
+  first, so that gets skipped out of the way.
+*/
+export async function ensureRunning(page) {
+  for (let i = 0; i < 4; i += 1) {
+    if (await mode(page) === 'playing') return true;
+    /* The panel is built once and hidden, so it is always in the
+       document; only a visible one is in the way. */
+    const skip = page.locator('#initials-entry button', { hasText: 'Skip' }).first();
+    if (await skip.isVisible()) {
+      await skip.click({ timeout: 2000 });
+      await page.waitForTimeout(200);
+    }
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(400);
+  }
+  return await mode(page) === 'playing';
+}
+
+/*
+  A run that has only just started. A gesture check held for most of a
+  second is otherwise also a bet on how long a car nobody is steering
+  lasts, and that bet was losing about one run in three. Escape pauses,
+  R starts a new one, and the paused menu ignores input for a beat after
+  it opens, so the key gets repeated until the mode says it took.
+*/
+export async function freshRun(page) {
+  if (!(await ensureRunning(page))) return false;
+  await page.keyboard.press('Escape');
+  if (!(await waitForMode(page, 'paused', 3000))) return false;
+  for (let i = 0; i < 4; i += 1) {
+    await page.waitForTimeout(400);
+    await page.keyboard.press('KeyR');
+    if (await waitForMode(page, 'playing', 1500)) return true;
+  }
+  return false;
+}
+
+export { LOGICAL_W };

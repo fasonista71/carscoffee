@@ -1,5 +1,6 @@
 import { chromium, webkit } from 'playwright';
 import { chromiumOpts } from './launch.mjs';
+import { running } from './probe.mjs';
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8099';
 const which = process.argv[2] || 'chromium';
@@ -51,7 +52,11 @@ log(/^\.\/v[0-9a-f]{10}\/src\/app\/main\.js$/.test(tag),
   'entry script points at a content versioned directory', tag);
 
 // 3. canvas is actually painted (not a black rectangle)
-const painted = await page.evaluate(() => {
+/* The boot card hides when main.js says the game is ready, which is
+   before the first frame is necessarily on the canvas: sampling once at
+   that moment read a blank buffer in about one webkit run in four. Wait
+   for the paint rather than assume it has happened. */
+const paintCheck = () => page.evaluate(() => {
   const c = document.getElementById('game');
   if (!c || !c.width) return { ok: false, why: 'no canvas' };
   const g = c.getContext('2d');
@@ -60,6 +65,12 @@ const painted = await page.evaluate(() => {
   for (let i = 0; i < d.length; i += 4 * 97) seen.add(d[i] + ',' + d[i+1] + ',' + d[i+2]);
   return { ok: seen.size > 4, colors: seen.size, w: c.width, h: c.height };
 });
+let painted = await paintCheck();
+const paintDeadline = Date.now() + 5000;
+while (!painted.ok && Date.now() < paintDeadline) {
+  await page.waitForTimeout(100);
+  painted = await paintCheck();
+}
 log(painted.ok, 'title screen renders more than one colour', JSON.stringify(painted));
 
 // helpers
@@ -67,24 +78,6 @@ const LOGICAL_W = 180, LOGICAL_H = 320;
 async function logicalToPage(lx, ly) {
   const box = await page.locator('#game').boundingBox();
   return { x: box.x + (lx / LOGICAL_W) * box.width, y: box.y + (ly / LOGICAL_H) * box.height };
-}
-/* Sample the canvas repeatedly; the world is scrolling if any two
-   samples differ. A single before/after pair can straddle a frame
-   that happens to be identical, which made this flaky. */
-async function isMoving(ms = 900) {
-  return page.evaluate((ms) => new Promise((res) => {
-    const c = document.getElementById('game');
-    const g = c.getContext('2d');
-    const snap = () => g.getImageData(0, Math.floor(c.height * 0.4), c.width, 40).data.join(',');
-    const first = snap();
-    const t0 = performance.now();
-    const tick = () => {
-      if (snap() !== first) return res(true);
-      if (performance.now() - t0 > ms) return res(false);
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }), ms);
 }
 
 // 5. a real tap on START starts the run
@@ -94,9 +87,7 @@ const startAt = await logicalToPage(LOGICAL_W / 2, 150 + 13);
    a stray tap during load cannot start a run. Respect it. */
 await page.waitForTimeout(600);
 await page.touchscreen.tap(startAt.x, startAt.y);
-await page.waitForTimeout(700);
-const running = await isMoving();
-log(running, 'a tap on Start begins the run and the world scrolls');
+log(await running(page), 'a tap on Start begins the run and the world scrolls');
 
 // 6. two fingers down together does not kill lane changes (blocker 2)
 //    Drive with a resting second finger and check the car still moves.
@@ -130,7 +121,7 @@ if (laneMoved !== null) log(laneMoved, 'a tap with a second finger resting still
 
 // 7. and that gesture must NOT have paused the run
 await page.waitForTimeout(250);
-log(await isMoving(), 'a resting second finger does not pause the run');
+log(await running(page), 'a resting second finger does not pause the run');
 
 // 8. no uncaught errors anywhere in that session
 log(errors.length === 0, 'no page errors or console errors', errors.slice(0, 4).join(' | '));

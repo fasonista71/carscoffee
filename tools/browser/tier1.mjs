@@ -5,6 +5,7 @@
 */
 import { chromium } from 'playwright';
 import { chromiumOpts } from './launch.mjs';
+import { ensureRunning } from './probe.mjs';
 const BASE = process.env.BASE || 'http://127.0.0.1:8399';
 const out = [];
 const log = (ok, n, x = '') => out.push(`${ok ? 'PASS' : 'FAIL'}  ${n}${x ? '  :: ' + x : ''}`);
@@ -168,12 +169,22 @@ async function tapHint(page) {
   const box = await page.locator('#game').boundingBox();
   const before = await page.evaluate(() => localStorage.getItem('cc.coffeetip.v1'));
   await page.touchscreen.tap(box.x + box.width / 2, box.y + (163 / 320) * box.height);
+  /*
+    Nobody is steering, so the pilot crashes into the first row it cannot
+    dodge, and if that happens before a cup comes into reading distance
+    the flag is never written and this used to fail on the timeout, about
+    one run in eight. The claim is that the tip retires once it has been
+    read, not that an unattended car survives; so when the run ends, start
+    another one and keep waiting.
+  */
   let spent = false;
-  try {
-    await page.waitForFunction(() => localStorage.getItem('cc.coffeetip.v1') === '1',
-      null, { timeout: 30000 });
-    spent = true;
-  } catch (e) { /* never spent */ }
+  const deadline = Date.now() + 45000;
+  while (Date.now() < deadline) {
+    spent = await page.evaluate(() => localStorage.getItem('cc.coffeetip.v1') === '1');
+    if (spent) break;
+    await ensureRunning(page);
+    await page.waitForTimeout(250);
+  }
   log(before === null && spent,
     'the coffee lesson is still retired once it has actually been on screen');
   await ctx.close();
