@@ -20,9 +20,9 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 20 September 2026 from commit `8076395` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-032401/` |
-| Versioned directory | `v93028c8e44` |
+| Built | 20 September 2026 from commit `d98f481` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-041040/` |
+| Versioned directory | `vea1eae2799` |
 
 What sits between the live build and this one:
 
@@ -63,6 +63,9 @@ What sits between the live build and this one:
   road on 8% of frames. `tools/measure-traffic.mjs` prints all of it.
 - The tier callout names the place. FARMLAND, LAVA FIELDS, SNOWLINE, COAST,
   each in its own colour, with the screen wash matching.
+- A pursuit can now end somewhere: the runner stopped in a lane with its
+  hazards on and the police car behind it, lights going. Roughly one every 5km,
+  and only where the geometry allows it. See D7 in `DESIGN-BACKLOG.md`.
 
 So the third thing to check on device is whether the road feels right now:
 that is the change most likely to need a second pass by feel.
