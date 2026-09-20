@@ -20,9 +20,9 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 20 September 2026 from commit `7449c5a` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-003344/` |
-| Versioned directory | `v7d05c0e1e4` |
+| Built | 20 September 2026 from commit `88722d9` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-005300/` |
+| Versioned directory | `v34bb5c268c` |
 
 What sits between the live build and this one:
 
