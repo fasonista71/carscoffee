@@ -57,13 +57,31 @@ function scriptedIntents(frame) {
   return intents;
 }
 
-function drive(pilot, frames) {
+/*
+  The oracle pilot plans survival and knows nothing about coffee, so
+  what it drinks is whatever happens to be in the lane it picked for
+  other reasons. Left to find its own fuel it reaches ten thousand
+  frames on about one seed in three, which made the liveness assertion
+  below a coin flip wearing a gate's clothes: this seed was one of the
+  lucky ones, and the first traffic change that moved the cups around
+  failed the test without changing the fuel economy at all (measured:
+  the change that broke it improved the economy, from 7 seeds in 30
+  surviving to 14).
+
+  So the tank is topped up here, the way the fairness gate tops it up
+  for the same reason, and "still running" now means what it says: the
+  pilot did not crash. Whether the road feeds a driver is a different
+  question with its own test, in economy.test.js, which asks it across
+  thirty seeds rather than one.
+*/
+function drive(pilot, frames, { fuelled = true } = {}) {
   const world = createWorld({ seed: SEED, vehicle: VEHICLES.coupe, environment: ENVIRONMENTS.city });
   const events = {};
   let topTier = 0;
   let diedAt = null;
   for (let f = 0; f < frames; f += 1) {
     step(world, pilot(world, f));
+    if (fuelled) world.fuel = TUNING.fuel.max;
     topTier = Math.max(topTier, world.tier);
     for (const e of world.events) events[e] = (events[e] || 0) + 1;
     if (diedAt === null && world.status !== 'running') diedAt = f;
@@ -106,8 +124,10 @@ describe('determinism', () => {
   });
 
   test('scripted inputs, bursts and all, crash at the same frame every time', () => {
-    const a = drive(scriptedPilot, 1000);
-    const b = drive(scriptedPilot, 1000);
+    /* This one is meant to crash, so it gets no free fuel: the crash
+       is the assertion. */
+    const a = drive(scriptedPilot, 1000, { fuelled: false });
+    const b = drive(scriptedPilot, 1000, { fuelled: false });
     assert.equal(fnv1a(JSON.stringify(a.world)), fnv1a(JSON.stringify(b.world)));
     assert.equal(a.diedAt, b.diedAt);
     assert.ok(a.diedAt !== null,

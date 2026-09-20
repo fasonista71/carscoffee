@@ -111,11 +111,24 @@ export const TUNING = {
        that pair's minimum gap would be violated. Keeps moving rows
        from ever bunching into an unfair wall. */
     clampMarginPx: 12,
-    /* Clusters: rows may pack bumper to bumper when a guaranteed open
-       corridor runs through them (every corridor lane stays open), so
-       traffic reads crowded without ever demanding a lane change
-       there is no room to make. */
-    clusterMaxLen: 7,
+    /*
+      Clusters: rows may pack bumper to bumper when a guaranteed open
+      corridor runs through them (every corridor lane stays open), so
+      traffic reads crowded without ever demanding a lane change
+      there is no room to make.
+
+      The cap counts continuations, so a queue is one leading row plus
+      this many: two gives three cars nose to tail and no more.
+
+      It was seven. Measured over 18km the queue lengths came out
+      1:20% 2:16% 3:11% 4:12% 5:10% 6:7% 7:2% 8:22%, so more than a
+      fifth of all packs ran the full eight rows, and since 92% of
+      rows are a single car and a cluster may never narrow its open
+      lanes, that reads on screen as eight cars in single file in one
+      lane with an empty road either side. Three is a queue. Eight is
+      a car park.
+    */
+    clusterMaxLen: 2,
     /* When continuing a cluster, incompatible lane patterns are
        rerolled up to this many extra times. Keeps clusters long and
        the road crowded. Raised from 2 when the tight rule got
@@ -139,6 +152,23 @@ export const TUNING = {
        like the overtakers), the next full gap single car row stops
        dead with its hazard flashers on. Single car only, never
        inside a pack, so two flashing cars never sit together. */
+    /*
+      Traffic is either crawling or moving with the flow, and share is
+      how much of the moving traffic takes the fast band. The per tier
+      speedFrac range below is now the crawl band alone.
+
+      The two bands have to average out to roughly what the old single
+      range averaged, and this share is what holds that. The fair gap
+      is measured against the player's own speed rather than the
+      closing speed, which is the conservative choice and the right
+      one, because the clamp can slow a row after it has been placed.
+      The price is that faster traffic thins the road: measured over
+      18km, a quarter share costs nothing (43 cars per km against 43,
+      2.02 cars on screen against 2.08, an empty road on 8% of frames
+      against 7%), where a 40% share costs a tenth of them and a
+      single range reaching 0.82 costs a fifth.
+    */
+    flow: { share: 0.25, fracMin: 0.46, fracMax: 0.72 },
     breakdownEveryMeters: 500,
     breakdownJitterFrac: 0.5
   },
@@ -147,8 +177,9 @@ export const TUNING = {
     Difficulty tiers, entered at distance milestones. Each tier sets
     the dials that make the road harder: scroll speed, how loose the
     gaps run, how often rows force a single lane, how much traffic
-    clusters, how mixed the traffic speeds are, and how few rows sit
-    still. Passive fuel drain scales with the tier's speed. Tier
+    clusters, how slowly the crawling traffic crawls, and how few rows
+    sit still. speedFracMin and speedFracMax are the crawl band only;
+    the flow band is shared across tiers and lives in traffic.flow. Passive fuel drain scales with the tier's speed. Tier
     transitions ramp the speed over about two seconds rather than
     stepping it, and announce themselves with a banner and flash.
     All values are GUESSES to be tuned by feel.
@@ -161,20 +192,20 @@ export const TUNING = {
     longer a tier field; it is scheduled by distance in overtakers.
   */
   tiers: [
-    { atMeters: 0,    theme: 'mountain', speed: 1.0,  gapJitterMax: 1.35, doubleRowChance: 0.42, clusterChance: 0.80, stalledChance: 0.30, speedFracMin: 0.12, speedFracMax: 0.62, aggro: 0.22 },
-    { atMeters: 1000, theme: 'farmland', speed: 1.1,  gapJitterMax: 1.32, doubleRowChance: 0.44, clusterChance: 0.82, stalledChance: 0.29, speedFracMin: 0.11, speedFracMax: 0.64, aggro: 0.27 },
-    { atMeters: 2000, theme: 'desert',   speed: 1.2,  gapJitterMax: 1.29, doubleRowChance: 0.46, clusterChance: 0.84, stalledChance: 0.28, speedFracMin: 0.10, speedFracMax: 0.66, aggro: 0.32 },
-    { atMeters: 3000, theme: 'volcanic', speed: 1.31, gapJitterMax: 1.26, doubleRowChance: 0.48, clusterChance: 0.86, stalledChance: 0.27, speedFracMin: 0.09, speedFracMax: 0.68, aggro: 0.37 },
-    { atMeters: 4000, theme: 'snow',     speed: 1.42, gapJitterMax: 1.24, doubleRowChance: 0.50, clusterChance: 0.87, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.70, aggro: 0.42 },
-    { atMeters: 5000, theme: 'forest',   speed: 1.53, gapJitterMax: 1.22, doubleRowChance: 0.52, clusterChance: 0.89, stalledChance: 0.25, speedFracMin: 0.07, speedFracMax: 0.71, aggro: 0.46 },
-    { atMeters: 6000, theme: 'beach',    speed: 1.64, gapJitterMax: 1.20, doubleRowChance: 0.54, clusterChance: 0.90, stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.72, aggro: 0.50 },
+    { atMeters: 0,    theme: 'mountain', speed: 1.0,  gapJitterMax: 1.14, doubleRowChance: 0.42, clusterChance: 0.95, stalledChance: 0.30, speedFracMin: 0.12, speedFracMax: 0.30, aggro: 0.22 },
+    { atMeters: 1000, theme: 'farmland', speed: 1.1,  gapJitterMax: 1.13, doubleRowChance: 0.44, clusterChance: 0.95, stalledChance: 0.29, speedFracMin: 0.11, speedFracMax: 0.30, aggro: 0.27 },
+    { atMeters: 2000, theme: 'desert',   speed: 1.2,  gapJitterMax: 1.12, doubleRowChance: 0.46, clusterChance: 0.96, stalledChance: 0.28, speedFracMin: 0.10, speedFracMax: 0.29, aggro: 0.32 },
+    { atMeters: 3000, theme: 'volcanic', speed: 1.31, gapJitterMax: 1.11, doubleRowChance: 0.48, clusterChance: 0.96, stalledChance: 0.27, speedFracMin: 0.09, speedFracMax: 0.29, aggro: 0.37 },
+    { atMeters: 4000, theme: 'snow',     speed: 1.42, gapJitterMax: 1.10, doubleRowChance: 0.50, clusterChance: 0.96, stalledChance: 0.26, speedFracMin: 0.08, speedFracMax: 0.28, aggro: 0.42 },
+    { atMeters: 5000, theme: 'forest',   speed: 1.53, gapJitterMax: 1.10, doubleRowChance: 0.52, clusterChance: 0.97, stalledChance: 0.25, speedFracMin: 0.07, speedFracMax: 0.28, aggro: 0.46 },
+    { atMeters: 6000, theme: 'beach',    speed: 1.64, gapJitterMax: 1.09, doubleRowChance: 0.54, clusterChance: 0.97, stalledChance: 0.24, speedFracMin: 0.06, speedFracMax: 0.27, aggro: 0.50 },
     /* Speed stops here on purpose. Everything past this point changes
        what the road is made of, not how fast it comes at you: the
        ceiling has to be reachable or the game turns into a reaction
        time test and casual players leave. */
-    { atMeters: 7000, theme: 'cliffs',   speed: 1.75, gapJitterMax: 1.18, doubleRowChance: 0.56, clusterChance: 0.91, stalledChance: 0.23, speedFracMin: 0.05, speedFracMax: 0.73, aggro: 0.54 },
-    { atMeters: 8000, theme: 'city',     speed: 1.75, gapJitterMax: 1.16, doubleRowChance: 0.58, clusterChance: 0.92, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.74, aggro: 0.58 },
-    { atMeters: 9000, theme: 'forest',   speed: 1.75, gapJitterMax: 1.15, doubleRowChance: 0.60, clusterChance: 0.93, stalledChance: 0.21, speedFracMin: 0.04, speedFracMax: 0.75, aggro: 0.62 }
+    { atMeters: 7000, theme: 'cliffs',   speed: 1.75, gapJitterMax: 1.09, doubleRowChance: 0.56, clusterChance: 0.97, stalledChance: 0.23, speedFracMin: 0.05, speedFracMax: 0.27, aggro: 0.54 },
+    { atMeters: 8000, theme: 'city',     speed: 1.75, gapJitterMax: 1.08, doubleRowChance: 0.58, clusterChance: 0.97, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.26, aggro: 0.58 },
+    { atMeters: 9000, theme: 'forest',   speed: 1.75, gapJitterMax: 1.08, doubleRowChance: 0.60, clusterChance: 0.97, stalledChance: 0.21, speedFracMin: 0.04, speedFracMax: 0.26, aggro: 0.62 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -261,7 +292,7 @@ export const TUNING = {
       does not burn the slot: the scheduler keeps retrying once a
       second until one lands, then measures the next gap from there.
     */
-    passEveryMeters: 420,
+    passEveryMeters: 340,
     passJitter: 0.4,
     firstPassAtMeters: 1000,
     /* Pursuits: this share of passes bring the law along. The

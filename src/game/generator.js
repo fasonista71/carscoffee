@@ -193,12 +193,39 @@ export function nextRowSpec(genState, tierCfg) {
     }
   }
 
+  /*
+    Two bands, not one range.
+
+    Traffic used to draw its speed from a single spread that reached
+    two thirds of the player's pace at most, so every car was
+    somewhere between stopped and slow and the road read as a field of
+    obstacles rather than as traffic. It is now either crawling or
+    moving with the flow, drawn from whichever band the first roll
+    picks, and the mean of the two is the mean the single range had.
+    The road holds the same number of cars arriving at the same rate;
+    what changed is that some of them are going somewhere.
+
+    The mean has to hold, and this is why. The fair gap is measured
+    against the player's own speed, not the closing speed, so a row
+    doing four fifths of the player's pace takes far longer to reach
+    than the spacing implies. Raise the average and the same spacing
+    thins the road: measured, lifting the old range's top from 0.62 to
+    0.82 cost a fifth of the cars on screen and tripled the share of
+    frames with an empty road.
+  */
   let speedFrac = 0;
   [roll, s] = nextFloat01(s);
   if (roll >= tierCfg.stalledChance) {
+    const flow = TUNING.traffic.flow;
+    let band;
     let f;
+    [band, s] = nextFloat01(s);
     [f, s] = nextFloat01(s);
-    speedFrac = tierCfg.speedFracMin + f * (tierCfg.speedFracMax - tierCfg.speedFracMin);
+    if (band < flow.share) {
+      speedFrac = flow.fracMin + f * (flow.fracMax - flow.fracMin);
+    } else {
+      speedFrac = tierCfg.speedFracMin + f * (tierCfg.speedFracMax - tierCfg.speedFracMin);
+    }
   }
 
   let gapJitter;

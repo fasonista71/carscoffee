@@ -67,7 +67,8 @@ milestone log and tuning guide.
 - `src/input/` touch (viewport wide listeners, per finger tracking,
   tap resolves to the lane under the finger) and keyboard
 - `test/` determinism (10k frames hash identical), purity guard,
-  fairness oracle, fuel, hazards, taps, distribution
+  fairness oracle, fuel economy across many seeds, fuel, hazards,
+  taps, distribution
 - `_to_delete/` is gitignored trash from remote sessions; ignore it,
   or empty it locally whenever
 
@@ -131,9 +132,19 @@ missing; add the rule; rerun everything.
 
 ## Current feature dials worth knowing
 
-- Tiers every 2000m: speed, density, cluster pressure, aggro share
-  (0.22 to 0.62), and overtaker chance (0 to 0.6) all scale; scenery
-  theme changes per tier (mountain, desert, snow, beach, city).
+- Tiers every 1000m, ten of them: speed, gap jitter, cluster pressure
+  and aggro share (0.22 to 0.62) all scale; the scenery theme changes
+  per tier (mountain, farmland, desert, volcanic, snow, forest, beach,
+  cliffs, city, forest again). Speed stops climbing at the beach on
+  purpose: past there the road changes what it is made of, not how
+  fast it arrives.
+- Traffic is either crawling or moving with the flow, drawn from two
+  bands rather than one range (traffic.flow, and the per tier
+  speedFrac pair is the crawl band alone). A queue is capped at three
+  cars. Both numbers are measured, not guessed: tools/measure-traffic.mjs
+  prints what the road actually holds and tools/measure-fuel.mjs prints
+  whether a driver can stay fuelled on it. Run both before and after
+  anything that changes how rows are laid out.
 - Three hearts; road hearts appear only after two are spent.
 - Boost: 2000ms at 1.65x. The multiplier must stay BELOW the
   slowest overtaker multiplier (1.7) or the pass guard's closing
@@ -141,11 +152,12 @@ missing; add the rule; rerun everything.
   full bursts.
 - Boost prompt: meter pulses and a BOOST! callout flashes while a
   speeder bears down and a boost is banked.
-- Emergency fleet is stand in art: blue truck as SWAT van, red
-  flatbed as fire truck, blue car as police, wig wag lights placed
-  per sprite on the vehicle's own cab or roof (never on the flatbed
-  cargo). Swap EMERGENCY_VARIANT_IDS in world.js when real art
-  arrives.
+- Emergency fleet is real art now: police cruiser, state police,
+  sheriff and a SWAT van chase, and an ambulance or fire truck can run
+  alone on a call. Wig wag lights are drawn per sprite on the
+  vehicle's own cab or roof, never on carried cargo. The recovery
+  truck runs the same wig wag in orange and the taxi blinks its roof
+  sign; both are in TUNING.render.workLights.
 
 ## iOS port phase (when it starts)
 
