@@ -24,45 +24,34 @@ same game, natively, plus the social board and six additions that do
 not touch the road: a callout when you pass a friend's best, a second
 board for the longest clean stretch, a daily goal, cars that have to
 be unlocked, a results card built to be shared, and an App Clip so a
-challenge link plays without installing anything. It is free, carries
-ads, and sells one purchase that removes them.
+challenge link plays without installing anything. It is free to
+download, carries no ads, and sells one unlock at $1.99 to keep
+driving past the fourth scene.
 
 ## What is settled
 
 | | |
 |---|---|
 | Version one | Parity with the browser build, plus Game Center |
-| Sunday Run, shared daily seed | Dropped. Distance boards, no shared road |
 | The browser build | Stays, as the tuning sandbox |
-| Money | Freemium: free with ads, one purchase to remove them |
+| Money | Free to download, one unlock at $1.99 to keep driving. No ads, no subscription |
 | Beyond parity | The rival line, a haptic vocabulary, a daily goal, car unlocks, a results card built to be shared |
 | The third number | Longest clean stretch, on its own board. Anything you touch resets it |
 | Friend challenges | An App Clip and a link. Separate roads, compare scores |
 
-Dropping the Sunday Run is the most consequential of these and it is
-the right call, for a reason stronger than the one first written here.
+There is no shared road anywhere in this plan, and one measured fact
+is the reason. The road reacts to the driver: `applyAggro` in
+`world.js` reflects targeted rows off the lane the player is committed
+to, and the cluster reroll loop in `spawn` then draws a different
+number of random values depending on what that did, so two players on
+one seed desync almost at once. Measured: the same seed driven by a
+cautious pilot and by one that keeps changing lanes produces roads
+that diverge between 75m and 310m in, on every seed tried. A shared
+seed does not give two people the same road, with or without
+deterministic arithmetic.
 
-The original reason was floating point: a shared seed means two phones
-have to agree on the same road frame for frame, which means replacing
-floating point in the simulation with fixed point arithmetic, and
-`ROADMAP.md` calls that the riskiest refactor on the list.
-
-The real blocker is simpler and it is not fixable by arithmetic. The
-road reacts to the driver. `applyAggro` in `world.js` reflects targeted
-rows off the lane the player is committed to, and the cluster reroll
-loop in `spawn` then draws a different number of random values
-depending on what that did, so the two streams desync almost at once.
-Measured: the same seed driven by a cautious pilot and by one that
-keeps changing lanes produces roads that diverge between 75m and 310m
-in, on every seed tried. A shared seed does not give two people the
-same road even with perfect determinism.
-
-That costs nothing today and it closes a door properly rather than
-leaving it ajar. A shared road competition would need either the road
-baked as data, or a mode where the aggro target lane is drawn from the
-seed instead of from the driver, which is one branch of code and a
-slightly different game. Both remain available later. Neither is on
-the critical path now.
+Everything social in this plan is built on comparing numbers, never on
+comparing roads.
 
 ---
 
@@ -137,7 +126,7 @@ Plus what native buys:
 - real audio through AVAudioEngine rather than synthesized Web Audio
 - 120Hz rendering with the simulation still fixed at 60Hz
 - Game Center leaderboards and authentication
-- ads, and a purchase that removes them
+- one unlock, bought once, and no ads anywhere
 
 Plus six additions that earn their place because none of them touches
 the road:
@@ -157,8 +146,8 @@ is scored. They add a second board, a reason to come back, somewhere to
 get to, and something to send a friend. The simulation is untouched.
 
 **Explicitly not in version one:** coffee orders and recipes,
-destination runs, car culture progression, the Sunday Run, near miss
-scoring, achievements, cloud save, iPad layout, any second platform.
+destination runs, car culture progression, near miss scoring,
+achievements, cloud save, iPad layout, any second platform.
 
 ---
 
@@ -192,8 +181,8 @@ history, and state hashes at fixed checkpoints. Swift replays the same
 fixtures and must produce the same hashes. This is the parity gate and
 it either passes or it does not. Note the honest limit: this proves
 the two agree on the machines the fixtures were made and replayed on,
-not that floating point agrees everywhere. Without the Sunday Run that
-is enough.
+not that floating point agrees everywhere. With nothing in the product
+depending on two devices generating the same road, that is enough.
 
 **The oracle, ported faithfully.** `test/fairness.test.js` drives the
 real simulation with a planning pilot across 100 seeds and 30,000
@@ -273,10 +262,11 @@ still playable with both switched off.
 
 See the section below.
 
-### Phase 5: ads and the purchase. GUESS: 1 to 2 weeks
+### Phase 5: the unlock. GUESS: under a week
 
-See the section below. This is the phase most likely to overrun,
-because it is the one with a third party in it.
+One non consumable through StoreKit 2, a restore path, and the card at
+the end of the free road. See the section below. This used to be the
+phase most likely to overrun, when it had an ad SDK in it.
 
 ### Phase 6b: the App Clip and challenge links. GUESS: 1 to 2 weeks
 
@@ -298,8 +288,8 @@ with the rest of GameCore, car unlocks and the results card in phase
 2, the rival line and the daily goal in phase 4, the App Clip and
 challenge links in phase 6b.
 
-**Total GUESS: 10 to 16 weeks of evenings.** Treat that as a shape,
-not a date.
+**Total GUESS: 9 to 15 weeks of evenings.** Treat that as a shape, not
+a date.
 
 ---
 
@@ -337,8 +327,8 @@ driving, it costs a read and a comparison, and it risks nothing.
 **The daily goal.** The same goal for everyone, every day: 2,500m, or
 40 cups, or a 900m clean stretch. Derived from the date so every
 device computes the same one with no server, checked locally, and
-carrying no score. This is what the Sunday Run was for, at roughly one
-percent of the cost, because it needs no shared road at all.
+carrying no score. It gives the game a reason to be opened tomorrow
+without needing two devices to agree on anything.
 
 **No shared seed means no anti cheat problem worth solving.** Distance
 boards on an endless runner get manipulated. Without a shared road
@@ -401,9 +391,10 @@ score, name, and nothing else. No accounts, no storage, no backend.
 **Separate roads, compare scores.** Both players drive their own
 randomly generated road and the higher number wins, which is what
 almost every endless runner does. The alternative, an identical road
-for both, is not available from a shared seed (see the Sunday Run note
-above) and would need a mode where the aggro target lane comes from
-the seed rather than the driver. That remains a later option.
+for both, is not available from a shared seed (see the measurement
+under What is settled) and would need a mode where the aggro target
+lane comes from the seed rather than the driver. That remains a later
+option.
 
 **Scores in a link are forgeable.** Between friends this does not
 matter. It matters a great deal if a challenge result is ever allowed
@@ -418,56 +409,56 @@ not depend on the answer, since the link carries everything.
 
 ---
 
-## Ads, and the purchase that removes them
+## The price, and what you get for it
 
-This is what Jason asked for, so this is what the plan builds. It is
-also the part of the document with the most honest warnings in it.
+**Free to download, one unlock at $1.99, no ads, no subscription.**
 
-**It breaks a rule in the existing brief.** The build brief says the
-project must run with no third party dependencies. An ad network is a
-third party dependency, a large one, with its own update cadence and
-its own privacy surface. That rule needs amending deliberately rather
-than quietly, and the amendment should be narrow: the ad SDK is the
-only third party code in the project, and it lives behind a protocol
-like every other platform service, so it can be removed in an
-afternoon.
+The free road runs to the fourth scene. Past that the run ends on a
+card offering the rest of the game for one payment, once, forever.
 
-**Where ads go in a game with a 90 second loop.** An interstitial
-between runs is the only placement that does not interrupt play. Not
-after every run: after every third or fourth, with a floor of a couple
-of minutes between, or the game becomes unplayable in exactly the
-session where someone is enjoying it enough to retry.
+**Why not ads, recorded so it is not relitigated.** A pixel art
+endless driver from an unknown developer does not make meaningful
+money from ads. The revenue is pennies a day and the price is an ad
+SDK, an App Tracking Transparency prompt, a privacy manifest,
+SKAdNetwork entries, an age rating that accounts for third party ads,
+a review risk, a failure path so a dead ad never blocks a retry, and a
+permanent design constraint on a ninety second loop. It was a bad
+trade on revenue alone.
 
-**The rewarded video question, which is the important one.** The
-obvious lever in this genre is watch an ad to continue after a crash.
-It is also the single thing most likely to damage the game. A
-continued run is not a run, and a continued run on a distance
-leaderboard makes the board meaningless. The recommendation is either
-not to offer it, or to offer it and exclude continued runs from Game
-Center entirely. Either is defensible. Offering it and submitting the
-score is not.
+**What dropping ads gives back.** The ad SDK was the only third party
+code in the project, so the build brief's no dependencies rule stands
+as written and needs no amendment. The rewarded continue question
+disappears, and with it the only mechanism that could have put
+continued runs on a distance board. The phase flagged as most likely
+to overrun mostly evaporates.
 
-**What it costs to have ads at all.** App Tracking Transparency
-prompt and the decline path. A privacy manifest listing what the SDK
-collects. SKAdNetwork identifiers in the plist. Accurate privacy
-nutrition labels. An age rating that accounts for third party ads. A
-test path for the SDK's own failure modes, because an ad that does not
-load must never block a retry.
+**Why free with an unlock rather than a price at the door.** Nobody
+can try a paid app, and this plan's entire distribution story is a
+challenge link that someone taps out of curiosity. A link that opens a
+paywall is a link nobody forwards. Free to download means the App Clip
+and the challenge funnel work without depending on two things this
+document cannot currently confirm: whether an App Clip is permitted
+for a paid app, and whether Apple offers a first class free trial for
+a one time purchase. Both questions go away entirely under this model.
 
-**The purchase.** One non consumable, StoreKit 2, with a restore path
-that works on a new device. Removing ads should also remove the
-interstitial machinery entirely rather than showing a blank, and
-should be checked on launch before the first interstitial can fire.
+**The mechanics.** One non consumable through StoreKit 2, with a
+restore path that works on a new device, checked at launch before the
+free road can end. No consumables, no currency, no timers, nothing
+that expires.
 
-**The honest number.** A pixel art endless driver from an unknown
-developer will not make meaningful money from ads. Ad revenue at this
-scale is measured in pennies a day, and the cost is a third party SDK,
-a privacy surface, a consent prompt, a review risk and a permanent
-design constraint. That is a bad trade on revenue alone. It is a
-reasonable trade if the point is to learn the plumbing, or if the
-remove ads purchase is really a tip jar with a function. Worth Jason
-deciding which of those it is, because it changes how hard the ads
-should push.
+**Where the free road stops is the one real judgement.** Four scenes
+is roughly 4,000m, which is past the point where most first runs end,
+so a new player sees the ladder climb, the scenery change three times
+and the traffic get properly difficult before being asked for
+anything. Cut it shorter and the game feels like a demo. Cut it longer
+and there is nothing left to sell. This number should be revisited
+once there is any data at all.
+
+**One interaction to be deliberate about.** If the free road stops at
+4,000m then a challenge above 4,000m can only be answered by someone
+who has bought the game. That is either the cleanest conversion moment
+in the product or an insulting wall, depending entirely on how the
+card is worded, and it is worth designing rather than discovering.
 
 ---
 
@@ -492,8 +483,12 @@ all of them are more fun to build than a Game Center authentication
 failure path. Version one is parity plus the board. Everything else
 waits for a version two that exists because version one shipped.
 
-**4. The ad SDK.** The only third party in the project, and the phase
-most likely to overrun.
+**4. The free cut is wrong.** Four scenes is a judgement with no data
+behind it. Too short and the game reads as a demo and gets reviewed as
+one. Too long and nobody ever reaches the ask. It is a one line change
+in the build and an expensive one to get wrong at launch, so it wants
+a decision made deliberately rather than inherited from this
+paragraph.
 
 **5. Feel does not survive the port.** The browser build's feel is the
 product, and it is the product because it has been tuned by hand on a
@@ -503,15 +498,16 @@ rendering, input timing and haptics all sit outside the core. This is
 what phase 2's done criterion is for, and it is a judgement call that
 only Jason can make.
 
-**6. Floating point.** Accepted rather than mitigated, because the
-Sunday Run is dropped. If a shared seed ever comes back, this becomes
-risk number one.
+**6. Floating point.** Accepted rather than mitigated, because nothing
+in the product needs two devices to generate the same road. If that
+ever changes, this becomes risk number one.
 
 ---
 
 ## Open questions
 
-1. **Rewarded continue: yes, no, or yes but excluded from the board.**
+1. **Where exactly the free road stops.** Four scenes is this
+   document's guess, not a decision.
 2. **The initials wheel: keep it alongside Game Center, or retire it.**
 3. **Per car leaderboards or one board.**
 4. **Deployment target.** The conservative answer is the current iOS
@@ -520,9 +516,9 @@ risk number one.
    expensive if decided after the shell is built.
 6. **Does the app keep the arcade three letter name for anything, or
    does Game Center's display name take over everywhere.**
-7. **Is the remove ads purchase priced as a tip jar or as a real
-   unlock.** The ads section argues this changes how hard the ads
-   should push, and it is the one money decision still open.
+7. **How the card at the end of the free road is worded**, and what
+   it says when the run being answered is a challenge the player
+   cannot reach without buying.
 8. **What unlocks the second and third car**, distance or lifetime
    cups, and at what number. Nothing in the game counts lifetime cups
    today.
@@ -535,6 +531,8 @@ risk number one.
     the itch build already has in a worse form.
 11. **Two App Clip facts to look up rather than assume:** the current
     size limit, and whether Game Center works inside a clip.
+    (Whether a clip is allowed for a paid app stopped mattering when
+    the app became free.)
 12. **Whether more scenes get authored.** Nine today, so a 20km run
     tours the same nine twice. Each new one costs two verge strips of
     30x544 and a palette row.
