@@ -14,7 +14,7 @@ not be redone when the scenery was replaced; this can be rerun.
     bash tools/trailer/prepare.sh
     (cd tools/trailer/stage && python3 -m http.server 8484) &
     node tools/store/shots.mjs                 # OUT=out by default
-    python3 tools/store/cover.py out out
+    python3 tools/store/cover.py out out       # also flattens the shots to RGB
 
 `shots.mjs` needs `tools/trailer/stage`, the capture copy of the build
 with the read only world hook appended, because it drives the game
@@ -35,7 +35,12 @@ while you are iterating on one.
 | `cover-630x500.png` | itch cover |
 | `banner-960x540.png` | itch page banner |
 
-All 540x960, three device pixels per logical one.
+All 540x960, three device pixels per logical one, and all RGB: they
+come out of a canvas, and chromium writes four channels into a canvas
+png whether or not anything in it is transparent, so `cover.py` drops
+the alpha on its way past. It refuses to flatten anything that turns
+out to be genuinely transparent rather than compositing it onto a
+colour nobody chose.
 
 ## How a shot finds its moment
 

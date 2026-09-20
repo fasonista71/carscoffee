@@ -343,14 +343,18 @@ for (const shot of SHOTS) {
     const best = await page.evaluate(`(() => {
       const step = ${step};
       const score = () => { ${SCORE_PRELUDE} ${shot.score} };
+      /* These come out RGBA whatever the canvas is: chromium writes
+         four channels into a png no matter how the context was made.
+         cover.py flattens them on its way past. */
       const canvas = document.getElementById('game');
+      const grab = () => canvas.toDataURL('image/png');
       let bestScore = -1;
       let bestAt = -1;
       let png = null;
       for (let i = 0; i < ${shot.candidates}; i += 1) {
         step(${shot.every});
         const s = score();
-        if (s > bestScore) { bestScore = s; bestAt = i; png = canvas.toDataURL('image/png'); }
+        if (s > bestScore) { bestScore = s; bestAt = i; png = grab(); }
       }
       return { bestScore, bestAt, png };
     })()`);

@@ -15,8 +15,15 @@ ground shades toward the road, so two verges side by side do not
 join. The banner is cropped from the frame at six times instead, which
 loses ten logical pixels off each verge and has no seam in it at all.
 
+It also flattens every png in the output directory to RGB on its way
+past. The shots come out of a canvas, and chromium writes four
+channels into a canvas png whether or not anything is transparent, so
+every screenshot arrives a third larger than it needs to be carrying
+an alpha channel that is 255 everywhere.
+
   python3 tools/store/cover.py <plates dir> <out dir>
 """
+import os
 import sys
 from PIL import Image
 
@@ -61,6 +68,32 @@ def banner(plate, badge):
     out.alpha_composite(b, ((960 - b.width) // 2, (540 - b.height) // 2))
     return out.convert('RGB')
 
+
+def flatten(d):
+    """Drop the unused alpha channel from everything in a directory.
+    Refuses anything actually transparent rather than quietly
+    compositing it onto a colour nobody chose."""
+    n = 0
+    for name in sorted(os.listdir(d)):
+        if not name.endswith('.png'):
+            continue
+        path = os.path.join(d, name)
+        im = Image.open(path)
+        if im.mode != 'RGBA':
+            continue
+        lo, hi = im.getchannel('A').getextrema()
+        if (lo, hi) != (255, 255):
+            print('left alone, it has real transparency:', name)
+            continue
+        im.convert('RGB').save(path, optimize=True)
+        n += 1
+    if n:
+        print('flattened', n, 'png files to RGB')
+
+
+flatten(PLATES)
+if OUT != PLATES:
+    flatten(OUT)
 
 badge = Image.open('assets/badge.png').convert('RGBA')
 plate = native(PLATES + '/plate-mountain.png')
