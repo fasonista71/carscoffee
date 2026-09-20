@@ -1233,14 +1233,12 @@ export function createRenderer(canvas) {
     const alpha = Math.min(0.45, (f / 90) * 0.45);
     bctx.fillStyle = 'rgba(' + rgbOf(theme.c.banner) + ', ' + alpha.toFixed(3) + ')';
     bctx.fillRect(0, 0, W, H);
-    const l1 = 'Tier ' + (view.tier + 1);
-    /* Speed stops climbing at the beach on purpose, so from there on
-       the old line was announcing something that had not happened.
-       The road still tightens; that is what it says instead. */
-    const tiers = TUNING.tiers;
-    const i = Math.min(view.tier, tiers.length - 1);
-    const faster = i === 0 || tiers[i].speed > tiers[i - 1].speed;
-    const l2 = faster ? 'Faster. Denser.' : 'Denser. Tighter.';
+    /* The place is the headline and the tier number is the footnote.
+       It used to be the other way round with "Faster. Denser." under
+       it, which was a difficulty note where the interesting fact is
+       that the road has gone somewhere. */
+    const l1 = theme.c.label;
+    const l2 = 'Tier ' + (view.tier + 1);
     const w = Math.max(textWidth(l1, 2), textWidth(l2, 1)) + 12;
     const h = 28;
     const x = Math.round((W - w) / 2);

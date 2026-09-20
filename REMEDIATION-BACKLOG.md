@@ -30,7 +30,7 @@ back to this file. Re-read against the code on 19 September:
 | 2.4 title spacing | Done. The board hangs off the last menu row instead of a constant y. |
 | 2.5 the hidden car preview | Done. Cycling a car puts it on a plate, and the chosen car parks on the title screen. |
 | 2.6 the 44pt claim | Done. `hitPadFor` sizes the pad in CSS pixels, so the target holds at any scale. |
-| 2.7 the tier banner's colours | Done. The callout's headline and its screen wash both take the colour of the place being announced, one per theme, so the arrival reads as somewhere new rather than as the same amber every time. The subtitle stopped claiming the road gets faster past the beach, where it does not. |
+| 2.7 the tier banner's colours | Done. The callout's headline and its screen wash both take the colour of the place being announced, one per theme, so the arrival reads as somewhere new rather than as the same amber every time. It names the place too: the headline is Farmland or Lava Fields or Snowline and the tier number is the footnote under it, because the road going somewhere new is the interesting fact and "Faster. Denser." was a difficulty note dressed up as one. |
 | 2.8 the initials modal as a second design system | Done, by D5: the modal is gone, replaced by a wheel drawn in the canvas. |
 | 2.9 invisible to assistive technology | Done as far as it honestly can be. Role, label and fallback text. No attempt at announcing the road, and the label says so. |
 | 2.10 no reduced motion path | **Open, ASK.** The one item here with real accessibility weight. |

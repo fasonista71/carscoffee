@@ -644,6 +644,11 @@ export const TUNING = {
     the drawing styles live in render.
   */
   /*
+    label is what the place is called, which is what the tier callout
+    announces: the road going somewhere new is the interesting fact,
+    and "faster, denser" was a difficulty note dressed up as one. Two
+    tiers share the forest, so two tiers say Forest, which is true.
+
     banner is the tier callout's headline colour, one per place, taken
     from what that place is made of rather than the single amber every
     tier used to announce itself in. It is the one thing on the callout
@@ -652,15 +657,15 @@ export const TUNING = {
     dark plate the callout sits on.
   */
   sceneryThemes: {
-    mountain: { farDensity: 85, nearDensity: 70, farItem: 'peak',     nearItem: 'pine',     offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a', banner: '#b9cdf0' },
-    farmland: { farDensity: 32, nearDensity: 42, farItem: 'barn',     nearItem: 'cow',      offroad: '#8fbf5a', far: '#b4553f', farDark: '#8c3f2e', farAccent: '#f4f4f4', near: '#5aa03f', nearDark: '#2c3a28', trunk: '#8c6a3f', banner: '#e0a83c' },
-    desert:   { farDensity: 55, nearDensity: 58, farItem: 'mesa',     nearItem: 'cactus',   offroad: '#ddba75', far: '#b97e4b', farDark: '#94603a', farAccent: '#d19a63', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#4e9e3f', banner: '#e8a54f' },
-    volcanic: { farDensity: 34, nearDensity: 62, farItem: 'volcano',  nearItem: 'lavarock', offroad: '#4a4046', far: '#5a4a52', farDark: '#3d3239', farAccent: '#ff6b35', near: '#6b5b62', nearDark: '#463b41', trunk: '#ffb937', banner: '#ff6b35' },
-    snow:     { farDensity: 85, nearDensity: 58, farItem: 'snowpeak', nearItem: 'snowfront',     offroad: '#e9edf4', far: '#c7d0dd', farDark: '#a6b1c2', farAccent: '#ffffff', near: '#2f5c4a', nearDark: '#234636', trunk: '#5a4632', banner: '#cfe6ff' },
-    forest:   { farDensity: 80, nearDensity: 88, farItem: 'peak',     nearItem: 'pine',     offroad: '#3f7a3a', far: '#2f5c4a', farDark: '#234636', farAccent: '#4e9e3f', near: '#2f6b2c', nearDark: '#1f4a1e', trunk: '#5a4632', banner: '#7bd06a' },
-    beach:    { farDensity: 100, nearDensity: 54, farItem: 'water',    nearItem: 'beachfront',     offroad: '#ecd493', far: '#3f9edb', farDark: '#2f7fb8', farAccent: '#f4f4f4', near: '#3f8a3a', nearDark: '#2f6b2c', trunk: '#8a6238', banner: '#4fc9e8' },
-    cliffs:   { farDensity: 72, nearDensity: 58, farItem: 'mesa',     nearItem: 'scrub',    offroad: '#b9b0a0', far: '#9a8a78', farDark: '#786a5c', farAccent: '#cdbfa8', near: '#6b8a4f', nearDark: '#4f6b39', trunk: '#8a7a68', banner: '#d8c49a' },
-    city:     { farDensity: 78, nearDensity: 52, farItem: 'building', nearItem: 'treeblob', offroad: '#adadb8', far: '#8f9ab8', farDark: '#717c9c', farAccent: '#f4f4f4', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#7a5a3a', banner: '#a8bde8' }
+    mountain: { farDensity: 85, nearDensity: 70, farItem: 'peak',     nearItem: 'pine',     offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a', banner: '#b9cdf0', label: 'Mountains' },
+    farmland: { farDensity: 32, nearDensity: 42, farItem: 'barn',     nearItem: 'cow',      offroad: '#8fbf5a', far: '#b4553f', farDark: '#8c3f2e', farAccent: '#f4f4f4', near: '#5aa03f', nearDark: '#2c3a28', trunk: '#8c6a3f', banner: '#e0a83c', label: 'Farmland' },
+    desert:   { farDensity: 55, nearDensity: 58, farItem: 'mesa',     nearItem: 'cactus',   offroad: '#ddba75', far: '#b97e4b', farDark: '#94603a', farAccent: '#d19a63', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#4e9e3f', banner: '#e8a54f', label: 'Desert' },
+    volcanic: { farDensity: 34, nearDensity: 62, farItem: 'volcano',  nearItem: 'lavarock', offroad: '#4a4046', far: '#5a4a52', farDark: '#3d3239', farAccent: '#ff6b35', near: '#6b5b62', nearDark: '#463b41', trunk: '#ffb937', banner: '#ff6b35', label: 'Lava Fields' },
+    snow:     { farDensity: 85, nearDensity: 58, farItem: 'snowpeak', nearItem: 'snowfront',     offroad: '#e9edf4', far: '#c7d0dd', farDark: '#a6b1c2', farAccent: '#ffffff', near: '#2f5c4a', nearDark: '#234636', trunk: '#5a4632', banner: '#cfe6ff', label: 'Snowline' },
+    forest:   { farDensity: 80, nearDensity: 88, farItem: 'peak',     nearItem: 'pine',     offroad: '#3f7a3a', far: '#2f5c4a', farDark: '#234636', farAccent: '#4e9e3f', near: '#2f6b2c', nearDark: '#1f4a1e', trunk: '#5a4632', banner: '#7bd06a', label: 'Forest' },
+    beach:    { farDensity: 100, nearDensity: 54, farItem: 'water',    nearItem: 'beachfront',     offroad: '#ecd493', far: '#3f9edb', farDark: '#2f7fb8', farAccent: '#f4f4f4', near: '#3f8a3a', nearDark: '#2f6b2c', trunk: '#8a6238', banner: '#4fc9e8', label: 'Coast' },
+    cliffs:   { farDensity: 72, nearDensity: 58, farItem: 'mesa',     nearItem: 'scrub',    offroad: '#b9b0a0', far: '#9a8a78', farDark: '#786a5c', farAccent: '#cdbfa8', near: '#6b8a4f', nearDark: '#4f6b39', trunk: '#8a7a68', banner: '#d8c49a', label: 'Cliffs' },
+    city:     { farDensity: 78, nearDensity: 52, farItem: 'building', nearItem: 'treeblob', offroad: '#adadb8', far: '#8f9ab8', farDark: '#717c9c', farAccent: '#f4f4f4', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#7a5a3a', banner: '#a8bde8', label: 'City' }
   },
 
   /* City palette, roughly 11 colors. Cheerful, high contrast. */
