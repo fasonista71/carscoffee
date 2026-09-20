@@ -25,15 +25,27 @@ const SCENE_SALT = 0x5ce4e;
   with the scene the player has just spent a kilometre looking at.
 */
 export function sceneOrderForSeed(seed) {
-  const order = TUNING.sceneryCycle.slice();
   let s = seedToState(((seed | 0) ^ SCENE_SALT) >>> 0);
-  for (let i = order.length - 1; i > 0; i -= 1) {
-    let j;
-    [j, s] = nextIntBetween(s, 0, i + 1);
-    const swap = order[i];
-    order[i] = order[j];
-    order[j] = swap;
-  }
+  const shuffle = (list) => {
+    for (let i = list.length - 1; i > 0; i -= 1) {
+      let j;
+      [j, s] = nextIntBetween(s, 0, i + 1);
+      const swap = list[i];
+      list[i] = list[j];
+      list[j] = swap;
+    }
+    return list;
+  };
+  /*
+    Places the ladder never visits come first. A player who clears the
+    ladder has earned somewhere new, and without this the scenes the
+    ladder skipped would be scattered across two laps instead of being
+    the thing on the other side of 10km.
+  */
+  const onLadder = new Set(TUNING.tiers.map((t) => t.theme));
+  const fresh = shuffle(TUNING.sceneryCycle.filter((k) => !onLadder.has(k)));
+  const seen = shuffle(TUNING.sceneryCycle.filter((k) => onLadder.has(k)));
+  const order = fresh.concat(seen);
   const lastAuthored = TUNING.tiers[TUNING.tiers.length - 1].theme;
   if (order.length > 1 && order[0] === lastAuthored) {
     order[0] = order[1];

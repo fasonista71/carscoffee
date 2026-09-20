@@ -1,6 +1,6 @@
 /* Shown small on the title screen so a stale phone cache is visible
    at a glance. Bump when shipping. */
-export const BUILD_TAG = 'M9.1';
+export const BUILD_TAG = 'M9.2';
 
 /*
   Every gameplay number lives here. Nothing elsewhere in the codebase is
@@ -205,7 +205,7 @@ export const TUNING = {
        time test and casual players leave. */
     { atMeters: 7000, theme: 'cliffs',   speed: 1.75, gapJitterMax: 1.09, doubleRowChance: 0.56, clusterChance: 0.97, stalledChance: 0.23, speedFracMin: 0.05, speedFracMax: 0.27, aggro: 0.54 },
     { atMeters: 8000, theme: 'city',     speed: 1.75, gapJitterMax: 1.08, doubleRowChance: 0.58, clusterChance: 0.97, stalledChance: 0.22, speedFracMin: 0.05, speedFracMax: 0.26, aggro: 0.58 },
-    { atMeters: 9000, theme: 'forest',   speed: 1.75, gapJitterMax: 1.08, doubleRowChance: 0.60, clusterChance: 0.97, stalledChance: 0.21, speedFracMin: 0.04, speedFracMax: 0.26, aggro: 0.62 }
+    { atMeters: 9000, theme: 'container',   speed: 1.75, gapJitterMax: 1.08, doubleRowChance: 0.60, clusterChance: 0.97, stalledChance: 0.21, speedFracMin: 0.04, speedFracMax: 0.26, aggro: 0.62 }
   ],
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
@@ -695,7 +695,8 @@ export const TUNING = {
      have an entry in sceneryThemes and a left and right strip in
      SCENERY_STRIPS. */
   sceneryCycle: ['mountain', 'farmland', 'desert', 'volcanic', 'snow',
-    'forest', 'beach', 'cliffs', 'city'],
+    'forest', 'beach', 'cliffs', 'city', 'container', 'canyon', 'orchard',
+    'sunflower', 'roadworks', 'wetland', 'docks'],
 
   sceneryThemes: {
     mountain: { farDensity: 85, nearDensity: 70, farItem: 'peak',     nearItem: 'pine',     offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a', banner: '#b9cdf0', label: 'Mountains' },
@@ -706,6 +707,13 @@ export const TUNING = {
     forest:   { farDensity: 80, nearDensity: 88, farItem: 'peak',     nearItem: 'pine',     offroad: '#3f7a3a', far: '#2f5c4a', farDark: '#234636', farAccent: '#4e9e3f', near: '#2f6b2c', nearDark: '#1f4a1e', trunk: '#5a4632', banner: '#7bd06a', label: 'Forest' },
     beach:    { farDensity: 100, nearDensity: 54, farItem: 'water',    nearItem: 'beachfront',     offroad: '#ecd493', far: '#3f9edb', farDark: '#2f7fb8', farAccent: '#f4f4f4', near: '#3f8a3a', nearDark: '#2f6b2c', trunk: '#8a6238', banner: '#4fc9e8', label: 'Coast' },
     cliffs:   { farDensity: 72, nearDensity: 58, farItem: 'mesa',     nearItem: 'scrub',    offroad: '#b9b0a0', far: '#9a8a78', farDark: '#786a5c', farAccent: '#cdbfa8', near: '#6b8a4f', nearDark: '#4f6b39', trunk: '#8a7a68', banner: '#d8c49a', label: 'Cliffs' },
+    container:{ offroad: '#9ea8a7', banner: '#e0745a', label: 'Container Yard' },
+    canyon:   { offroad: '#d4894f', banner: '#f2743d', label: 'Canyon' },
+    orchard:  { offroad: '#919368', banner: '#9fcc4e', label: 'Orchard' },
+    sunflower:{ offroad: '#8a8a5c', banner: '#ffe23d', label: 'Sunflowers' },
+    roadworks:{ offroad: '#beb9b3', banner: '#ff8a4c', label: 'Roadworks' },
+    wetland:  { offroad: '#536777', banner: '#5fb6d4', label: 'Wetland' },
+    docks:    { offroad: '#c5cfdb', banner: '#4f9fd4', label: 'Industrial Docks' },
     city:     { farDensity: 78, nearDensity: 52, farItem: 'building', nearItem: 'treeblob', offroad: '#adadb8', far: '#8f9ab8', farDark: '#717c9c', farAccent: '#f4f4f4', near: '#4e9e3f', nearDark: '#3c7a31', trunk: '#7a5a3a', banner: '#a8bde8', label: 'City' }
   },
 
@@ -817,7 +825,14 @@ export const SCENERY_STRIPS = [
   'beach_left', 'beach_right',
   'cliffs_left', 'cliffs_right',
   'city_left', 'city_right',
-  'sea'
+  'sea',
+  'container_left', 'container_right',
+  'canyon_left', 'canyon_right',
+  'orchard_left', 'orchard_right',
+  'sunflower_left', 'sunflower_right',
+  'roadworks_left', 'roadworks_right',
+  'wetland_left', 'wetland_right',
+  'docks_left', 'docks_right'
 ];
 
 export const SCENERY_STRIP_H = 544;

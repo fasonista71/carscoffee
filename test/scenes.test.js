@@ -64,6 +64,28 @@ test('the tour never opens with the scene the player is already in', () => {
   }
 });
 
+/*
+  A player who clears the ladder has earned somewhere new. The scenes
+  the ladder never visits are the reward for getting past 10km, so
+  they lead the tour rather than being scattered across two laps.
+*/
+test('past the ladder come the places the ladder never visits, first', () => {
+  const onLadder = new Set(TUNING.tiers.map((t) => t.theme));
+  const fresh = CYCLE.filter((k) => !onLadder.has(k));
+  assert.ok(fresh.length > 0, 'every scene is on the ladder, so this rule does nothing');
+  for (let seed = 1; seed < 300; seed += 1) {
+    const order = sceneOrderForSeed(seed);
+    for (let i = 0; i < fresh.length; i += 1) {
+      const key = sceneKeyForTier(LAST + 1 + i, order);
+      assert.ok(fresh.includes(key),
+        `seed ${seed} sent the player back to ${key} at position ${i + 1} past the ladder`);
+    }
+    const lead = [];
+    for (let i = 0; i < fresh.length; i += 1) lead.push(sceneKeyForTier(LAST + 1 + i, order));
+    assert.equal(new Set(lead).size, fresh.length, `seed ${seed} repeated inside the fresh run`);
+  }
+});
+
 test('the order is the seed, and different seeds tour differently', () => {
   assert.deepEqual(sceneOrderForSeed(4242), sceneOrderForSeed(4242));
   const seen = new Set();

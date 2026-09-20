@@ -65,6 +65,41 @@ Four entries, and a test fails if any of them is missing.
 
 ---
 
+## What actually came back, and what it took
+
+Set 02 arrived as seven columns of complete road, each with a verge
+either side, rather than as sheets of parts. That worked, and the
+notes below are what the next sheet should know.
+
+**The road in the picture is thrown away.** The art drew about 52
+pixels of verge against a 53 pixel road. The game is 30 against 120,
+so the proportions are wrong, but only the verges are used and they
+scale cleanly.
+
+**Only the 40 pixels nearest the road survive.** That crop is not
+arbitrary: 40 by the sheet's 720 tall scales by exactly 0.75 to 30 by
+540, so nothing is distorted. The outer twelve pixels of each verge
+are lost, so anything the artist put at the far edge is cut. Keep the
+interesting things near the road.
+
+**The camera was right on every column**, which is the one thing that
+could not have been repaired here.
+
+**The loop point needed its own fix.** Cross fading the bottom rows
+into the top ghosted wherever a big object sat on the join. The tool
+now rolls each strip until its calmest rows land there first.
+
+**The sheet grew.** Nineteen strips to thirty three, 164KB to 309KB,
+and the whole thing re-quantized to 256 colours to stay a palette PNG.
+
+**Watch the repeat.** A strip loops every 544 world pixels, which is
+68 metres, about two seconds at top speed. The original nine cope
+because they are mostly texture with at most one landmark. A strip
+with a crane, a ship and a shack in it shows all three every two
+seconds. Fewer distinctive objects per strip, not more.
+
+---
+
 ## What to ask an image model for
 
 **Do not ask for the strip.** A 30 pixel wide seamless tiling band is
