@@ -446,10 +446,12 @@ export const TUNING = {
         this screen gives, so covering it makes the control useless
         at the moment it is used.
 
-        A second pass moved the chevrons back in toward the character,
-        to 21, because at 26 they read as two loose arrows floating in
-        the plate rather than as the two buttons belonging to the
-        letter between them. The thumb problem that pushed them out in
+        Later passes moved the chevrons back in toward the character,
+        26 to 21 to 18, because out there they read as two loose arrows
+        floating in the plate rather than as the two buttons belonging
+        to the letter between them. At 18 they sit about six pixels off
+        the glyph, which is as close as they go before the lower one
+        starts touching its descender row. The thumb problem that pushed them out in
         the first place is already solved by the swap: the control the
         hand reaches for most is the lower one, and a hand coming from
         the bottom of the phone never crosses the glyph to get there.
@@ -460,7 +462,7 @@ export const TUNING = {
         top and bottom without reaching the Save button's own padding.
       */
       plateY: 112, plateH: 78, colPitchPx: 46, letterScale: 3,
-      letterCy: 155, chevronDy: 21, hitHPx: 20, hitPadPx: 4
+      letterCy: 155, chevronDy: 18, hitHPx: 20, hitPadPx: 4
     },
     /* The best score is narrower than the distance beside it: five
        digits at double size is 38px, where the distance carries an M

@@ -28,8 +28,9 @@ What sits between the live build and this one:
 
 - The initials wheel's controls swapped, so the lower chevron advances the
   character and a thumb is no longer across what it is changing. The chevrons
-  then came back in toward the letter, and the columns widened to the plate
-  split three ways so the targets grew rather than the gap.
+  then came back in toward the letter, twice, and the columns widened to the
+  plate split three ways so the targets grew rather than the gap. The heading
+  says what to do rather than what the board is.
 - The cars are repainted, the nine traffic bodies in Porsche colours and the
   4x4 in Coniston Green, as a recolour at load rather than new art.
 - The roadside is Jason's art instead of fifteen drawing functions: both
@@ -52,7 +53,7 @@ What sits between the live build and this one:
   after. This is the choppiness, and it was never the frame rate: the render
   costs about a millisecond.
 - The boot card draws itself in the game's own font, with a cone, a drum, a
-  tyre and a barrier coming up the road where the spinner goes.
+  tyre and a barrier taking turns, large and centred, where the spinner goes.
 
 So the first thing to check on device is whether the lower control advancing
 reads right; it is a judgement call and it flips in one line. Second is

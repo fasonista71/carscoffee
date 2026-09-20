@@ -112,7 +112,7 @@
 <body>
   <div id="stage"><canvas id="game"></canvas></div>
   <div id="boot">
-    <canvas id="boot-art" width="180" height="136" aria-hidden="true"></canvas>
+    <canvas id="boot-art" width="180" height="150" aria-hidden="true"></canvas>
     <div class="cup" id="boot-title">CARS &amp; COFFEE</div>
     <div class="msg" id="boot-msg">Loading&hellip;</div>
     <button id="boot-retry" type="button" hidden>
@@ -176,18 +176,26 @@
        '...o.......o...', '...o.......o...', '..ooo.....ooo..']
     ];
 
-    /* One obstacle per beat, and the road under it never stops, so a
-       long load still looks like something is happening between the
-       swaps. */
-    var SWAP_MS = 620;
+    /* One obstacle per beat. They are the whole spinner: there was a
+       stretch of road under them with its centre line running, and it
+       made the card look like a screenshot of the game rather than a
+       thing that is loading. */
+    var SWAP_MS = 520;
+    var OB_SCALE = 4;
+    var OB_CX = 90;
+    var OB_CY = 66;
 
-    function pixels(ctx, rows, x, y) {
+    function pixels(ctx, rows, cx, cy, scale) {
+      var w = rows[0].length * scale;
+      var h = rows.length * scale;
+      var x0 = Math.round(cx - w / 2);
+      var y0 = Math.round(cy - h / 2);
       for (var r = 0; r < rows.length; r += 1) {
         for (var c = 0; c < rows[r].length; c += 1) {
           var key = rows[r].charAt(c);
           if (key === '.') continue;
           ctx.fillStyle = PAL[key];
-          ctx.fillRect(x + c, y + r, 1, 1);
+          ctx.fillRect(x0 + c * scale, y0 + r * scale, scale, scale);
         }
       }
     }
@@ -239,29 +247,13 @@
     function paint(animate) {
       if (!actx) return;
       var t = Date.now() - started;
-      actx.clearRect(0, 0, 180, 136);
+      actx.clearRect(0, 0, 180, 150);
       write(actx, 'Cars & Coffee', 90, 8, 2, '#ffcd75');
 
-      /* A stretch of road with the centre line running down it, the
-         same grey and the same dashes as the game. */
-      actx.fillStyle = '#5a5a6e';
-      actx.fillRect(54, 26, 72, 72);
-      actx.fillStyle = '#ffd93d';
-      actx.fillRect(54, 26, 1, 72);
-      actx.fillRect(125, 26, 1, 72);
-      var scroll = animate ? Math.floor(t / 26) % 16 : 0;
-      for (var d = -16; d < 72; d += 16) {
-        var dy = 26 + d + scroll;
-        var top = Math.max(26, dy);
-        var bot = Math.min(98, dy + 8);
-        if (bot > top) {
-          actx.fillStyle = '#f4f4f4';
-          actx.fillRect(89, top, 2, bot - top);
-        }
-      }
-
+      /* Each one centred on the same point, so the swap reads as one
+         thing changing rather than as four things in four places. */
       var ob = OBSTACLES[animate ? Math.floor(t / SWAP_MS) % OBSTACLES.length : 0];
-      pixels(actx, ob, 90 - Math.floor(ob[0].length / 2), 86 - ob.length);
+      pixels(actx, ob, OB_CX, OB_CY, OB_SCALE);
 
       var lines = wrap(msg.textContent, 40);
       for (var i = 0; i < lines.length; i += 1) {

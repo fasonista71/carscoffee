@@ -1800,7 +1800,7 @@ export function createRenderer(canvas) {
     drawPlate(14, k.plateY, W - 28, k.plateH, pal, pal.outline);
     bctx.fillStyle = pal.road;
     bctx.fillRect(15, k.plateY + 1, W - 30, 1);
-    drawText(bctx, 'Top five. Your initials', W / 2, k.plateY + 6, pal.edgeLine, { scale: 1, align: 'center' });
+    drawText(bctx, 'Enter your initials', W / 2, k.plateY + 6, pal.edgeLine, { scale: 1, align: 'center' });
     const letters = (view.initials && view.initials.letters) || ['A', 'A', 'A'];
     for (let i = 0; i < letters.length; i += 1) {
       const cx = initialsColX(i);
