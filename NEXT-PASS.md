@@ -20,9 +20,9 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 20 September 2026 from commit `88722d9` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-005300/` |
-| Versioned directory | `v34bb5c268c` |
+| Built | 20 September 2026 from commit `2786429` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-020427/` |
+| Versioned directory | `v0abf6c49d6` |
 
 What sits between the live build and this one:
 
@@ -54,6 +54,8 @@ What sits between the live build and this one:
   costs about a millisecond.
 - The boot card draws itself in the game's own font, with a cone, a drum, a
   tyre and a barrier taking turns, large and centred, where the spinner goes.
+- The badge on the title screen is repainted: Grand Prix White, Guards Red and
+  Maritime Blue, so the logo and the traffic share paint codes.
 
 So the first thing to check on device is whether the lower control advancing
 reads right; it is a judgement call and it flips in one line. Second is
