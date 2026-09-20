@@ -319,7 +319,35 @@ export const TUNING = {
        turns "rare on average" into "rare as experienced", which is
        the thing actually being asked for. */
     emergencyMinGapMeters: 1200,
-    chaseGapPx: 90
+    chaseGapPx: 90,
+    /*
+      How a pursuit ends. Rather than the pair simply leaving the top
+      of the screen and never being heard from again, this share of
+      them resolves: the runner is stopped in a lane up the road with
+      the police car behind it, hazards and wig wag going, and the
+      player has to get round the pair.
+
+      pullOverAtPx is where they stop, measured ahead of the player,
+      and it is well past the 250px of road the screen shows on
+      purpose. The player never watches them pull over, they come
+      across it, which is both what happens in life and much easier to
+      make fair: by the time the pair is on screen it has been a
+      static obstacle for a while and every ordinary rule has applied
+      to it.
+
+      The pair becomes two stopped rows, one car each in the same
+      lane, which is a shape the generator could have produced by
+      itself. That is the whole trick: it means the fair gap, the
+      traffic clamp, the corridor rule and the fairness oracle all
+      cover it without knowing it is special. When the geometry does
+      not allow it the pursuit simply leaves, the way a pass that
+      cannot find a clear lane simply does not spawn.
+    */
+    pullOverChance: 0.55,
+    pullOverAtPx: 560,
+    /* How far up the road to look for a gap big enough to stop in
+       before giving up and letting the pursuit leave. */
+    pullOverSearchPx: 900
   },
 
   nitro: {

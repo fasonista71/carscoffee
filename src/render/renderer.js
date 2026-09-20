@@ -595,6 +595,27 @@ export function createRenderer(canvas) {
     from behind, flashing chevrons at the bottom of its lane warn
     which lane is about to be hot.
   */
+  /*
+    Red and blue trading sides on the beat with a strobe pixel
+    stepping between them, on the vehicle's own roof: the per sprite
+    fractions put a truck's lights on its cab and never on carried
+    cargo. Shared, because a police car keeps its lights on after it
+    has stopped, and a stopped one is a row rather than an overtaker.
+  */
+  function drawWigWag(spriteName, x, y, spr, pal) {
+    const phase = Math.floor(worldNow() / TUNING.render.wigWagMs) % 2;
+    const fracs = TUNING.render.wigWagRoofFrac;
+    const roofFrac = fracs[spriteName] !== undefined ? fracs[spriteName] : fracs.default;
+    const barY = y + Math.round(spr.height * roofFrac);
+    const cx = x + Math.round(spr.width / 2);
+    bctx.fillStyle = phase === 0 ? pal.wigWagRed : pal.wigWagRedDim;
+    bctx.fillRect(cx - 5, barY, 4, 2);
+    bctx.fillStyle = phase === 0 ? pal.wigWagBlueDim : pal.wigWagBlue;
+    bctx.fillRect(cx + 1, barY, 4, 2);
+    bctx.fillStyle = '#ffffff';
+    bctx.fillRect(cx - 1, barY + (phase === 0 ? 0 : 1), 2, 1);
+  }
+
   function drawOvertakers(view, pal) {
     const t = worldNow() / 1000;
     for (let i = 0; i < view.overtakers.length; i += 1) {
@@ -613,20 +634,7 @@ export function createRenderer(canvas) {
          sides every beat, with a bright white strobe pixel between.
          The bar sits on the vehicle's own roof: per sprite fractions
          put truck lights on the cab, never on carried cargo. */
-      if (ov.emergency) {
-        const phase = Math.floor(worldNow() / TUNING.render.wigWagMs) % 2;
-        const fracs = TUNING.render.wigWagRoofFrac;
-        const spriteName = TRAFFIC_VARIANTS[ov.variant].sprite;
-        const roofFrac = fracs[spriteName] !== undefined ? fracs[spriteName] : fracs.default;
-        const barY = y + Math.round(spr.height * roofFrac);
-        const cx = x + Math.round(spr.width / 2);
-        bctx.fillStyle = phase === 0 ? pal.wigWagRed : pal.wigWagRedDim;
-        bctx.fillRect(cx - 5, barY, 4, 2);
-        bctx.fillStyle = phase === 0 ? pal.wigWagBlueDim : pal.wigWagBlue;
-        bctx.fillRect(cx + 1, barY, 4, 2);
-        bctx.fillStyle = '#ffffff';
-        bctx.fillRect(cx - 1, barY + (phase === 0 ? 0 : 1), 2, 1);
-      }
+      if (ov.emergency) drawWigWag(TRAFFIC_VARIANTS[ov.variant].sprite, x, y, spr, pal);
     }
   }
 
@@ -732,6 +740,10 @@ export function createRenderer(canvas) {
           bctx.fillRect(x + 1, tailY, 2, 2);
           bctx.fillRect(x + spr.width - 3, tailY, 2, 2);
         }
+        /* A pursuit that ended: the police car keeps its lights on
+           while it is parked. The car it stopped has its hazards on,
+           which is what breakdown already draws. */
+        if (row.wigWag) drawWigWag(spriteName, x, y, spr, pal);
         drawWorkLight(spriteName, x, y, spr, pal, now, row.distPx);
       }
     }

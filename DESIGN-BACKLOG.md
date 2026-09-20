@@ -302,9 +302,39 @@ cluster open set rule, and the guarantee that a spawned obstacle is dodgeable
 from wherever the player is. The oracle will find it if it is wrong, which is
 the point, but budget for the oracle run, not just the feature.
 
-**Undecided.** Whether the runner is on the shoulder (scenery, no collision,
-pure flavour) or in a lane (an obstacle, the interesting version, the one with
-all the geometry work). These are very different sizes of job. **ASK.**
+**Decided and done on 20 September.** Jason picked the lane, which is the
+version with the geometry in it.
+
+It went in as two stopped single car rows in the same lane, the runner with its
+hazards on and the police car behind it with the wig wag still going. That
+shape is one the generator could have produced by itself, which is the whole
+trick: a two car queue is legal, so the fair gap, the traffic clamp, the
+corridor rule and the fairness oracle all cover it without any of them knowing
+it came from an event. No new kind of obstacle was invented.
+
+Three gates, all of which simply cancel the pull over and let the pursuit leave
+the way it always did:
+
+- the pair must stop far enough ahead that the player can still cross out of
+  the lane, measured against the same worst case crossing every gap uses;
+- nothing may already be standing where it wants to stop, and both ends need a
+  fair gap to whatever brackets them;
+- no row between the player and the pair may have a corridor that collapses to
+  the lane about to be closed, because a cluster can pin a player into one lane
+  for its whole length.
+
+They stop where there is room rather than at a fixed mark. A gap big enough for
+a stopped pair with a fair crossing at both ends is about 350px of road at the
+first tier and more later, and the road only offers one that size now and then,
+so a fixed distance found a row in the way on all but one attempt in forty.
+Searching forward from the mark lands 51% of them, which matches the 55% that
+roll for it. Measured over 120km: 45 pursuits, 23 of them ending in a stop, one
+every 5km or so.
+
+The search happens two screens ahead, so the player never watches it happen.
+They come across it, which is both what it looks like in life and much easier
+to keep fair: by the time it is on screen it has been an ordinary obstacle for
+several seconds.
 
 ---
 
@@ -360,14 +390,15 @@ Updated 19 September, after the evening's work.
 | D5 arcade initials | Done. Wheel in the canvas, no text field, closes 1.11 and 2.8. | |
 | D1 two lane tap | Shipped, **not closed**: the fairness oracle still drives one lane moves only, so nothing has actually tested the new one. | an oracle pass |
 | D6 vehicle colours | Done. Nine traffic bodies in Porsche colours, the 4x4 in Coniston Green, by runtime recolour rather than new art. | |
-| D7 pulled over runner | Not started. | shoulder or lane, which is a different size of job either way |
+| D7 pulled over runner | Done, in a lane. Two stopped rows, hazards and wig wag, placed only where the geometry allows and cancelled where it does not. | |
 | D8 part two, the mixer drum | Not started. Needs frames and an atlas contract that understands a sequence. | art |
 | D3 scenery overhaul | Art arrived and is in, then redone as whole looping strips per side rather than tiles. Snow has a chalet. | a landmark for the other places, and for the left hand snow verge |
 | D4 online board | Not started. The seam in `leaderboard.js` is a morning; the product is not. | a product decision, and whether it waits for Game Center |
 
-The honest order from here: the oracle pass on D1, because it is the one thing
-shipped without its gate; then D7 once Jason says shoulder or lane. Everything
-else waits on art or on a decision.
+The honest order from here: the mixer drum, which is the last one that is
+actually a feature, then the oracle pass on D1, which is the one thing shipped
+without its gate. The online board waits for the iOS migration and Game Center
+by Jason's call.
 
 What D6 left behind, for whoever picks the colours up again:
 

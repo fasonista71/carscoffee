@@ -1045,14 +1045,157 @@ const SOLO_CALL_VARIANT_IDS = ['ambulance', 'fire_truck']
   .map((name) => TRAFFIC_VARIANTS.findIndex((v) => v.sprite === name))
   .filter((i) => i >= 0);
 
+/*
+  A pursuit that ends somewhere.
+
+  The pair used to drive off the top of the screen and vanish, which
+  is the one event in the game with no consequence. Some of them now
+  stop up the road instead: the runner in a lane with its hazards on,
+  the police car behind it with the wig wag going, and the player has
+  to get round both.
+
+  The whole design is that this produces a shape the generator could
+  have produced by itself. Two stopped single car rows in the same
+  lane is a two car queue, which is legal, so the fair gap, the
+  traffic clamp, the corridor rule and the fairness oracle all cover
+  it without any of them knowing it came from an event. Nothing here
+  invents a new kind of obstacle.
+
+  When the geometry does not allow it the pursuit just leaves, the
+  same way a pass that cannot find a clear lane simply does not
+  spawn. Refusing is always available and always safe.
+*/
+function pullOverRows(world, runner, chaser, runnerAt) {
+  const laneBit = 1 << runner.lane;
+  const runnerH = TRAFFIC_VARIANTS[runner.variant].hPx;
+  const chaserH = TRAFFIC_VARIANTS[chaser.variant].hPx;
+  const chaserAt = runnerAt - TUNING.overtakers.chaseGapPx;
+
+  /* Far enough ahead that the player can still cross out of the lane
+     after seeing it, measured against the same worst case crossing
+     every gap in the game is measured against. */
+  if (chaserAt - world.distancePx
+      < fairMinGapForPairPx(world, TRAFFIC_MAX_H_PX, chaserH)) return null;
+
+  /* Nothing may already be standing where the pair wants to stop, and
+     both ends need a fair gap to whatever brackets them. */
+  let ahead = null;
+  let behind = null;
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const row = world.rows[i];
+    if (row.distPx > chaserAt && row.distPx < runnerAt) return null;
+    if (row.distPx >= runnerAt) { ahead = row; break; }
+    behind = row;
+  }
+  if (ahead !== null
+      && ahead.distPx - runnerAt < fairMinGapForPairPx(world, runnerH, ahead.maxHPx)) return null;
+  if (behind !== null
+      && chaserAt - behind.distPx < fairMinGapForPairPx(world, behind.maxHPx, chaserH)) return null;
+
+  /*
+    The squeeze. A cluster can pin the player into one lane for its
+    whole length, and closing that lane at the far end of it is a wall
+    with no warning. Every row between the player and the pair has to
+    leave a way through that is not the lane about to be blocked.
+  */
+  const fullMask = (1 << TUNING.road.laneCount) - 1;
+  for (let i = 0; i < world.rows.length; i += 1) {
+    const row = world.rows[i];
+    if (row.distPx < world.distancePx || row.distPx > runnerAt) continue;
+    if ((row.corridorMask & fullMask & ~laneBit) === 0) return null;
+  }
+
+  const makeRow = (at, variant, hPx, breakdown, wigWag) => {
+    const lanes = new Array(TUNING.road.laneCount).fill(false);
+    lanes[runner.lane] = true;
+    const variants = new Array(TUNING.road.laneCount).fill(-1);
+    variants[runner.lane] = variant;
+    return {
+      distPx: at,
+      speedPxPerSec: 0,
+      lanes,
+      variants,
+      offsets: new Array(TUNING.road.laneCount).fill(0),
+      breakdown,
+      tight: false,
+      yield: null,
+      maxHPx: hPx + 2 * TUNING.traffic.staggerMaxPx,
+      /* What the row behind has to stay clear of. The clamp reads
+         this off the row ahead, so both ends need their own. */
+      minGapPrevPx: fairMinGapForPairPx(world, TRAFFIC_MAX_H_PX, hPx),
+      corridorMask: fullMask & ~laneBit,
+      /* Render only: the police car keeps its wig wag while parked,
+         and the car it stopped has its hazards on, which is what
+         breakdown already draws. */
+      pulledOver: true,
+      wigWag
+    };
+  };
+  /* The runner has its hazards on, which is what breakdown draws, and
+     is exactly what a car stopped at the roadside does. */
+  return [makeRow(chaserAt, chaser.variant, chaserH, false, true),
+    makeRow(runnerAt, runner.variant, runnerH, true, false)];
+}
+
 function updateOvertakers(world, dt) {
   const o = TUNING.overtakers;
   for (let i = world.overtakers.length - 1; i >= 0; i -= 1) {
     const ov = world.overtakers[i];
     ov.distPx += ov.speedPxPerSec * dt;
-    if (ov.distPx - world.distancePx > o.despawnAheadPx) {
-      world.overtakers.splice(i, 1);
+  }
+  /* A pursuit flagged to end in a stop runs on past the ordinary
+     despawn so it can park well up the road, out of sight, rather
+     than stopping in the player's face. */
+  const pair = world.overtakers.length === 2
+    && world.overtakers[0].pullOver
+    && !world.overtakers[0].emergency
+    && world.overtakers[1].emergency
+    ? world.overtakers : null;
+  if (pair !== null && pair[0].distPx - world.distancePx >= o.pullOverAtPx) {
+    /*
+      They stop where there is room, not at a fixed mark. A gap big
+      enough to hold a stopped pair with a fair crossing at both ends
+      is 350px of road at the first tier and more later, and the road
+      only offers one that size now and then, so pinning the stop to
+      one distance meant almost every pursuit found a row in the way
+      and left. Searching forward from the mark lands nearly all of
+      them, and since the whole search happens two screens ahead of
+      the player, moving the pair up the road to the next usable gap
+      is invisible and is what pulling over looks like anyway.
+    */
+    let rows = null;
+    for (let at = pair[0].distPx; at <= pair[0].distPx + o.pullOverSearchPx; at += 40) {
+      rows = pullOverRows(world, pair[0], pair[1], at);
+      if (rows !== null) break;
     }
+    if (rows !== null) {
+      let at = world.rows.length;
+      for (let i = 0; i < world.rows.length; i += 1) {
+        if (world.rows[i].distPx > rows[0].distPx) { at = i; break; }
+      }
+      /* The row that ends up ahead of the pair was spaced against a
+         different neighbour, and the clamp reads its gap off it. Keep
+         the larger of the two so the floor can only rise. */
+      if (at < world.rows.length) {
+        world.rows[at].minGapPrevPx = Math.max(world.rows[at].minGapPrevPx,
+          fairMinGapForPairPx(world, rows[1].maxHPx, world.rows[at].maxHPx));
+      }
+      world.rows.splice(at, 0, rows[0], rows[1]);
+      world.overtakers.length = 0;
+      /* Deliberately not in the audio registry. This happens two
+         screens ahead of the player, so a noise at this moment would
+         be a sound with no cause on screen. The event exists for the
+         tests and the measuring tools. */
+      world.events.push('pull_over');
+    } else {
+      pair[0].pullOver = false;
+      pair[1].pullOver = false;
+    }
+  }
+  for (let i = world.overtakers.length - 1; i >= 0; i -= 1) {
+    const ov = world.overtakers[i];
+    const limit = ov.pullOver ? o.pullOverAtPx + o.despawnAheadPx : o.despawnAheadPx;
+    if (ov.distPx - world.distancePx > limit) world.overtakers.splice(i, 1);
   }
 }
 
@@ -1278,9 +1421,16 @@ function maybeSpawnOvertaker(world) {
       if (soloCall) {
         world.events.push('siren');
       } else if (chase) {
+        /* Decided here, once, so both cars agree and the outcome is
+           part of the seed rather than of when the player happens to
+           be looking. The roll is the chase roll read from the far
+           end, which costs no extra draw. */
+        const ends = (1 - chaseRoll) < o.pullOverChance;
+        world.overtakers[world.overtakers.length - 1].pullOver = ends;
         world.overtakers.push({
           lane, distPx: world.distancePx - behindFarPx, speedPxPerSec: vO,
-          variant: pick(EMERGENCY_VARIANT_IDS, chaseRoll), emergency: true
+          variant: pick(EMERGENCY_VARIANT_IDS, chaseRoll), emergency: true,
+          pullOver: ends
         });
         world.events.push('siren');
         world.lastChaseAtPx = world.distancePx;
