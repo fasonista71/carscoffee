@@ -20,9 +20,9 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 20 September 2026 from commit `2786429` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-020427/` |
-| Versioned directory | `v0abf6c49d6` |
+| Built | 20 September 2026 from commit `8076395` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-032401/` |
+| Versioned directory | `v93028c8e44` |
 
 What sits between the live build and this one:
 
@@ -56,6 +56,16 @@ What sits between the live build and this one:
   tyre and a barrier taking turns, large and centred, where the spinner goes.
 - The badge on the title screen is repainted: Grand Prix White, Guards Red and
   Maritime Blue, so the logo and the traffic share paint codes.
+- The traffic is laid out differently. A queue is three cars rather than up to
+  eight, the spacing carries far less jitter, and traffic is either crawling or
+  moving with the flow rather than all somewhere between stopped and slow.
+  Measured to hold the same density: 43 cars per km, 2.0 on screen, an empty
+  road on 8% of frames. `tools/measure-traffic.mjs` prints all of it.
+- The tier callout names the place. FARMLAND, LAVA FIELDS, SNOWLINE, COAST,
+  each in its own colour, with the screen wash matching.
+
+So the third thing to check on device is whether the road feels right now:
+that is the change most likely to need a second pass by feel.
 
 So the first thing to check on device is whether the lower control advancing
 reads right; it is a judgement call and it flips in one line. Second is
