@@ -1,127 +1,316 @@
-# Scenery art: what to ask GPT for, and what comes back
+# Scenery art: the spec for a new place
 
-For D3 in `DESIGN-BACKLOG.md`. This is the brief to hand an image model, plus
-what I do with the files afterwards.
+Rewritten 20 September 2026. The previous version of this file
+described the procedural scenery system, where the roadside was two
+narrow strips of code drawn shapes picked from a table. That system is
+gone. The roadside is painted art now, and almost everything the old
+file said about sizes, angles and objects is wrong. If you have a copy
+of it open, close it.
+
+---
 
 ## The hard limits
 
 These are not style choices, they are the screen.
 
-The game draws to a 180 by 320 pixel picture and blows it up whole. The road
-takes the middle 120 pixels. That leaves 30 pixels of roadside per side, split
-into two strips that scroll at different speeds, which is what makes the
-roadside feel like it has depth:
+The game draws to a 180 by 320 pixel picture and blows the whole thing
+up with smoothing off. The road takes the middle, x 30 to 150. That
+leaves **30 pixels of roadside per side**.
 
-| Strip | Width | Scroll | What it holds |
-|---|---|---|---|
-| Far | 15 px | Slower, 55% of road speed | The horizon: peaks, buildings, barns, the sea |
-| Near | 13 px | Road speed | The verge: trees, cactus, rocks, cattle |
+Each roadside is **one painted strip, 30 pixels wide by 544 tall**.
+Every place needs two of them, a left and a right.
 
-So **no scenery object can be wider than 15 pixels**, and most should be 8 to
-13. Height is free: 16 to 40 pixels is the useful range, taller reads as a
-mountain, shorter as a bush. Objects appear about every 56 pixels of road with
-a random nudge, so they are seen one at a time, never as a crowd.
+- **Left and right are different art.** They are not mirrors of each
+  other. The sea strip is the only thing in the game that is ever
+  mirrored, and that is a deliberate exception.
+- **The strip tiles vertically forever.** It is drawn at y, y+544,
+  y+1088 and so on, so pixel row 543 has to flow into row 0 with no
+  visible seam. Cross fading the top and bottom into each other is how
+  the existing strips do it.
+- **Top down.** The camera looks straight down, the same as it does at
+  the cars. Trees are seen from above, roofs are seen from above,
+  fences are seen from above. Do not draw anything side on.
+- **Flat colour, hard edges.** No gradients, no soft edges, no
+  anti-aliasing, no blur, no drop shadows. Every pixel is one colour
+  from the place's palette.
+- **Small palette.** The whole sheet is 88 colours today across
+  nineteen strips. A new place should add eight to twelve, not sixty.
+- **Shared colours.** The road is `#5a5a6e` and the outline colour
+  used across the whole game is `#262b44`.
+- **The inner edge matters most.** The pixels nearest the road are
+  what the player actually sees while driving, because their eye is on
+  the car. The outer edge is at the screen edge and is half noticed.
 
-If you want richer, wider scenery than that, say so, because it means merging
-the two strips into one 28 pixel band and losing the parallax. My advice is to
-keep the two strips.
+---
 
-## The nine places
+## What a new place costs in code
 
-The run climbs through these in order, one per 1000 metres. Each has its own
-seven colours, and **the art should use these and nothing else**, so the
-roadside stays a set rather than nine unrelated pictures.
+Four entries, and a test fails if any of them is missing.
 
-| Theme | Roadside ground | Far object | Far shadow | Far highlight | Near object | Near shadow | Trunk or detail |
-|---|---|---|---|---|---|---|---|
-| mountain | `#79b364` | `#8a93a6` | `#6e7789` | `#f4f4f4` | `#3f7a3a` | `#2f5c2c` | `#7a5a3a` |
-| farmland | `#8fbf5a` | `#b4553f` | `#8c3f2e` | `#f4f4f4` | `#5aa03f` | `#2c3a28` | `#8c6a3f` |
-| desert | `#ddba75` | `#b97e4b` | `#94603a` | `#d19a63` | `#4e9e3f` | `#3c7a31` | `#4e9e3f` |
-| volcanic | `#4a4046` | `#5a4a52` | `#3d3239` | `#ff6b35` | `#6b5b62` | `#463b41` | `#ffb937` |
-| snow | `#e9edf4` | `#c7d0dd` | `#a6b1c2` | `#ffffff` | `#2f5c4a` | `#234636` | `#5a4632` |
-| forest | `#3f7a3a` | `#2f5c4a` | `#234636` | `#4e9e3f` | `#2f6b2c` | `#1f4a1e` | `#5a4632` |
-| beach | `#ecd493` | `#3f9edb` (sea) | `#2f7fb8` | `#f4f4f4` | `#3f8a3a` | `#2f6b2c` | `#8a6238` |
-| cliffs | `#b9b0a0` | `#9a8a78` | `#786a5c` | `#cdbfa8` | `#6b8a4f` | `#4f6b39` | `#8a7a68` |
-| city | `#adadb8` | `#8f9ab8` | `#717c9c` | `#f4f4f4` | `#4e9e3f` | `#3c7a31` | `#7a5a3a` |
+1. Two columns appended to `assets/scenery.png`. The sheet is 570 by
+   544 today, nineteen columns of 30, in the order `SCENERY_STRIPS`
+   lists them.
+2. One `<name>_left` and one `<name>_right` in `SCENERY_STRIPS`
+   (`src/game/tuning.js`).
+3. One entry in `TUNING.sceneryCycle`, which is the tour the road
+   repeats past the last tier.
+4. One row in `TUNING.sceneryThemes`. **Only three fields are read by
+   anything:** `offroad` (the flat colour painted behind the strip,
+   which shows through any transparency), `banner` (the place name's
+   colour on the tier banner) and `label` (the place name itself). The
+   other ten fields in every existing row are dead leftovers from the
+   procedural era and should be deleted at some point.
 
-The road itself is `#5a5a6e` and the outline colour everywhere is `#262b44`.
+`test/scenes.test.js` checks all four and fails on a half added place.
 
-## What to draw
+---
 
-Fifteen objects. Everything is currently drawn by code, in shapes; these
-replace them.
+## What to ask an image model for
 
-| Object | Strip | Size | Where it appears |
-|---|---|---|---|
-| peak | far | 15 x 22-38 | mountain, forest |
-| barn | far | 15 x 20-26 | farmland |
-| mesa | far | 15 x 18-28 | desert, cliffs |
-| volcano | far | 15 x 24-34 | volcanic |
-| snowpeak | far | 15 x 22-38 | snow |
-| building | far | 15 x 24-40 | city |
-| sea | far | 15 wide, continuous | beach, with drifting foam rather than objects |
-| pine | near | 11 x 18-24 | mountain, forest |
-| cow | near | 11 x 8-10 | farmland |
-| cactus | near | 9 x 14-20 | desert |
-| lavarock | near | 11 x 8-12 | volcanic |
-| snowfront | near | 13 x 10-16 | snow |
-| treeblob | near | 13 x 14-18 | city |
-| scrub | near | 11 x 8-12 | cliffs |
-| beachfront | near | 13 x 10-16 | beach |
-| palm | near | 11 x 18-24 | spare, unused today |
+**Do not ask for the strip.** A 30 pixel wide seamless tiling band is
+1:18 aspect and nothing generative handles it usefully. What comes
+back will be a picture of a road, not a verge strip, and shrinking a
+1024 pixel image to 30 destroys the only thing that makes this art
+work, which is that every pixel was placed on purpose.
 
-## Rules for the artwork
+Ask for the parts instead, one object per image, and they get
+assembled into the strip here.
 
-1. **Side on, not top down.** The cars are seen from above, the roadside is
-   seen from the side. That mix is the convention this kind of game has always
-   used and it is what the current scenery does.
-2. **Flat colour only.** No gradients, no soft edges, no anti-aliasing, no
-   drop shadows. Every pixel is one of the theme's colours.
-3. **Four colours per object at most**, from that theme's row.
-4. **A dark outline** in `#262b44` on the side facing the road, so the object
-   separates from the ground behind it.
-5. **Readable as a silhouette.** At this size the shape is the whole thing: a
-   pine is a triangle, a barn is a box with a roof, a cow is a blob with four
-   legs. Detail inside the shape is wasted.
-6. **Transparent background**, and the object touching the bottom edge of the
-   image, because it stands on the ground.
+**Per place, generate:**
 
-## How to ask for it
+1. **One ground swatch.** A square patch of the verge surface: grass,
+   gravel, sand, water, rock. This becomes the base the band is filled
+   with, so it wants to be flat and even rather than a composition.
+2. **Three to five props.** The characteristic objects of the place.
+   Each one on its own, centred, on a plain background.
+3. **One landmark, optional.** A bigger single object that appears
+   once per 544 pixel loop, on one side only. The snow chalet is the
+   model for this.
 
-Image models do not draw a clean 15 by 30 pixel picture. Ask for it big and
-flat, and I will shrink it and snap the colours to the palette, which is where
-the pixel art actually happens. One object per image.
+**Target sizes**, in final game pixels, so you know what survives:
 
-Prompt to paste, with the bracketed parts filled in:
+| Kind | Width | Height |
+|---|---|---|
+| Small prop (cone, rock, reed clump) | 4 to 10 | 6 to 14 |
+| Medium prop (tree, container, machine) | 10 to 20 | 12 to 28 |
+| Large prop (wall section, tank) | up to 26 | up to 40 |
+| Landmark | up to 26 | up to 60 |
 
-> Pixel art sprite of [a pine tree], side view, for a retro arcade game.
-> Flat colours only, no gradients, no shading, no anti-aliasing, hard edges.
-> Use only these colours: [#3f7a3a for the body, #2f5c2c for the shaded side,
-> #5a4632 for the trunk, #262b44 for the outline]. Dark outline on the left
-> side only. Plain white background, object centred, object touching the
-> bottom edge. Simple bold silhouette readable at thumbnail size. No text, no
-> ground, no sky, no extra objects.
+Nothing can exceed 30 wide, and anything over about 26 touches both
+edges of the strip and stops reading as an object.
 
-Then send me the files. What I need back:
+**Prompt to paste**, with the bracketed parts filled in:
 
-- One PNG per object, any size over about 256 pixels tall.
-- Named for the object: `pine.png`, `barn.png`, `mesa.png`.
-- If an object varies by theme (a pine in snow versus a pine in forest), name
-  it `pine-snow.png`.
+> Pixel art sprite of [a shipping container], **seen from directly
+> above**, for a retro 8 bit arcade game. Flat colours only, no
+> gradients, no shading, no anti-aliasing, no blur, hard pixel edges.
+> Use only these colours: [list the four or five hex values]. A dark
+> outline in #262b44 around the object. Plain magenta #ff00ff
+> background. Object centred, filling most of the frame. Simple bold
+> silhouette that reads at thumbnail size. No text, no watermark, no
+> ground, no sky, no shadow, no other objects.
 
-I shrink each one to its target size, snap every pixel to the theme palette,
-hand check the result at actual size against the road, and pack them into the
-sprite sheet. Anything that does not survive the shrink, I will show you next
-to the current version and we decide.
+Magenta rather than white because white appears inside the snow and
+beach art, and a background colour that is nowhere in the sprite makes
+cutting it out exact rather than a judgement call.
 
-## What this does to the code
+**What to send back:**
 
-The scenery is procedural today: `FAR_ITEMS` and `NEAR_ITEMS` in
-`src/render/renderer.js` are drawing functions, picked per theme by
-`TUNING.sceneryThemes`. Replacing them with sprites means the same registry
-pointing at frames instead of functions, the sheet growing by fifteen or so
-small frames, and `test/atlas.test.js` keeping the contract honest. The theme
-colour table stays exactly as it is, because the ground colour and the strips
-are still drawn as colour.
+- One PNG per object. Any size from about 256 pixels up. Bigger is not
+  better past roughly 512, it just takes longer to shrink.
+- Named `<place>-<object>.png`, for example `canyon-boulder.png`,
+  `docks-container.png`, `docks-crane.png`.
+- The ground swatch named `<place>-ground.png`.
+- The landmark named `<place>-landmark.png`.
 
-Nothing here touches the road, the traffic or the simulation.
+**What happens to them here:** each one is shrunk to its target size,
+every pixel snapped to the place's palette, the band composed from the
+ground swatch with the props placed down it at varying spacing, the
+top and bottom cross faded so the loop is invisible, the landmark
+placed once on one side, and the result appended to the sheet as two
+columns. Then a screenshot at actual size, on the road, at a phone's
+pixel ratio, before anything is committed. Anything that does not
+survive the shrink comes back to you next to the version that does and
+we pick.
+
+---
+
+## The sixteen places
+
+Ten rungs on the tier ladder, one per 1,000m, then the rest appear
+only in the cycle past 10km. That ordering is deliberate: the ladder
+is the first 5.8 minutes and every player sees it, so it holds no
+repeats, and a run that gets past it drives six places it has never
+seen before, out to 16km.
+
+| Rung | Place | Status |
+|---|---|---|
+| 0 | mountain | exists |
+| 1 | farmland | exists |
+| 2 | desert | exists |
+| 3 | volcanic | exists |
+| 4 | snow | exists |
+| 5 | forest | exists |
+| 6 | beach | exists |
+| 7 | cliffs | exists |
+| 8 | city | exists |
+| 9 | **container yard** | NEW, replaces forest's second appearance |
+
+Cycle only, first seen between 11km and 16km:
+
+| Place | Status |
+|---|---|
+| canyon | NEW |
+| orchard | NEW |
+| sunflowers | NEW |
+| roadworks | NEW |
+| wetland | NEW |
+| autumn | NEW, derived from forest, needs no generated art |
+
+Six places need art. Autumn is a palette shift of the two forest
+strips and can be built here without anything being generated, which
+is worth doing first because it is free and it proves the pipeline
+before any art is commissioned.
+
+---
+
+## The seven new places, in detail
+
+Palette values below are GUESSES and should be replaced by colours
+pulled out of the finished art. `banner` is the place name's colour on
+the tier banner and wants to be bright enough to read on a dark box.
+
+### container yard
+
+The port at the end of the city. Stacked steel, painted lines, cranes.
+
+- **Ground:** cracked concrete with faded yellow painted lines.
+- **Props:** a shipping container from above (the strongest motif,
+  repeated in several colours), a stack of two containers, a pallet
+  of drums, a bollard.
+- **Landmark:** a gantry crane leg, or a straddle carrier.
+- **Palette:** concrete greys, rust orange, container red, container
+  blue, container green, faded yellow line.
+- `offroad` `#8e8e96`, `banner` `#ff7a4c`, `label` "Container Yard"
+
+Containers from above are rectangles with ribbed sides, which reads
+perfectly at this size and is the reason this place works.
+
+### canyon
+
+Red rock walls tight to the road. The narrowest the world ever feels.
+
+- **Ground:** red dirt with gravel, only a few pixels wide at the road
+  edge.
+- **Props:** a wall section (this is most of the strip, so generate
+  two or three variants that can be stacked), a fallen boulder, a dead
+  shrub.
+- **Landmark:** an arch or a slot in the wall.
+- **Palette:** rust red, deep shadow red, ochre, pale sandstone,
+  shadow purple, dead brush brown.
+- `offroad` `#c2703f`, `banner` `#f2743d`, `label` "Canyon"
+
+Note for this one: the wall runs the full height rather than sitting
+as objects on ground, so the ground swatch matters less and the wall
+variants matter more.
+
+### orchard
+
+Ordered rows. The only place in the game with strict geometry, which
+is exactly what makes it read as different from farmland and forest.
+
+- **Ground:** mown grass with tractor tracks between rows.
+- **Props:** a fruit tree from above (round, dense, regular), a young
+  tree on a stake, an irrigation pipe run.
+- **Landmark:** a water tank, or a parked tractor.
+- **Palette:** olive green, dark leaf green, grass green, track brown,
+  fruit red, pipe grey.
+- `offroad` `#8fb757`, `banner` `#c6de63`, `label` "Orchard"
+
+The trees should sit on a regular pitch, unlike forest where they are
+scattered. Regularity is the whole point.
+
+### sunflowers
+
+A block of colour. The loudest place in the game and the cheapest to
+read at a glance.
+
+- **Ground:** a narrow strip of grass at the road edge, then field.
+- **Props:** a sunflower head from above, a denser cluster, a field
+  texture of heads at two brightnesses.
+- **Landmark:** none needed. The field is the landmark.
+- **Palette:** petal yellow, deep gold, centre brown, stem green, leaf
+  green, grass verge.
+- `offroad` `#b9bf4a`, `banner` `#ffd93d`, `label` "Sunflowers"
+
+This one is a texture more than a set of objects, so the field patch
+is the important generation.
+
+### roadworks
+
+Cones, barriers and machinery. The most on theme place in the set, and
+the one where the roadside starts to resemble the road.
+
+- **Ground:** churned dirt and gravel, with tyre ruts.
+- **Props:** a traffic cone, a jersey barrier, a stack of pipes, a
+  pile of spoil, a plate of steel.
+- **Landmark:** a digger or a roller.
+- **Palette:** hi-vis orange, barrier white, gravel grey, dirt brown,
+  machine yellow, steel blue grey.
+- `offroad` `#9e968a`, `banner` `#ffc21f`, `label` "Roadworks"
+
+Worth being deliberate: the cones here must not read as the rubble
+hazard on the road itself, or players will try to avoid the verge.
+Keep them clearly outside the edge line and a different orange.
+
+### wetland
+
+Still dark water on both sides. The quietest place in the game, and a
+good one to land right after roadworks in a tour.
+
+- **Ground:** still dark water with a hint of reflection.
+- **Props:** a cypress trunk with its knees, a reed clump, a lily pad
+  patch, a half sunk log.
+- **Landmark:** a shack on stilts, or a short jetty.
+- **Palette:** water green black, water highlight, reed olive, trunk
+  grey brown, moss green, pale reflection.
+- `offroad` `#55705f`, `banner` `#7fd6b2`, `label` "Wetland"
+
+### autumn
+
+Forest, turned. No generation needed: it is the two forest strips with
+the leaf colours shifted to golds, oranges and reds, the trunks warmed
+and the ground turned to leaf litter.
+
+- **Palette:** maple red, gold, burnt orange, brown leaf litter, trunk
+  brown, one green held back so it does not read as a costume.
+- `offroad` `#9c7440`, `banner` `#ff9448`, `label` "Autumn"
+
+The one risk is that it reads as forest with a filter over it. The fix
+is to change the ground as well as the leaves, so the floor is litter
+rather than green, and to hold a little green in the mix rather than
+turning everything.
+
+---
+
+## The code change that goes with these
+
+Six of the seven new places never appear on the ladder, so the shuffle
+that orders the cycle should put places the ladder never used at the
+front of the first lap. Without that, a player reaching 11km gets a
+random pick that is probably somewhere they have already been, and the
+six new places are scattered across two laps instead of being the
+reward for getting past the ladder.
+
+Five lines in `sceneOrderForSeed` in `src/game/scenes.js`, and a test
+that the first six entries past the ladder are all places the ladder
+never used. Both land when the art does.
+
+---
+
+## What this does not touch
+
+Nothing here goes near the road, the traffic, the tuning or the
+simulation. The scenery cannot move a car: `test/scenes.test.js`
+proves it by driving the same seed with two deliberately different
+tours and requiring identical rows.
