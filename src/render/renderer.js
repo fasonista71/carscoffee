@@ -1216,21 +1216,37 @@ export function createRenderer(canvas) {
     against a dark chip from the first frame and the flash washes over
     the road behind it instead of through it.
   */
+  /* '#rrggbb' to 'r, g, b', so a theme colour can be washed at an
+     alpha without a second copy of it in the palette. */
+  function rgbOf(hex) {
+    return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
+  }
+
   function drawTierBanner(view, pal) {
     if (view.tierFlashFrames <= 0) return;
     const f = view.tierFlashFrames;
-    /* strongest at the moment of the change, fading out */
+    const theme = themeFor(view.tier);
+    /* strongest at the moment of the change, fading out. The wash
+       carries the new place's colour rather than plain white, so the
+       screen turns the colour of where you have arrived a beat before
+       the scenery does. */
     const alpha = Math.min(0.45, (f / 90) * 0.45);
-    bctx.fillStyle = 'rgba(255, 255, 255, ' + alpha.toFixed(3) + ')';
+    bctx.fillStyle = 'rgba(' + rgbOf(theme.c.banner) + ', ' + alpha.toFixed(3) + ')';
     bctx.fillRect(0, 0, W, H);
     const l1 = 'Tier ' + (view.tier + 1);
-    const l2 = 'Faster. Denser.';
+    /* Speed stops climbing at the beach on purpose, so from there on
+       the old line was announcing something that had not happened.
+       The road still tightens; that is what it says instead. */
+    const tiers = TUNING.tiers;
+    const i = Math.min(view.tier, tiers.length - 1);
+    const faster = i === 0 || tiers[i].speed > tiers[i - 1].speed;
+    const l2 = faster ? 'Faster. Denser.' : 'Denser. Tighter.';
     const w = Math.max(textWidth(l1, 2), textWidth(l2, 1)) + 12;
     const h = 28;
     const x = Math.round((W - w) / 2);
     const y = 112;
     drawPlate(x, y, w, h, pal);
-    drawText(bctx, l1, W / 2, y + 4, pal.edgeLine, { scale: 2, align: 'center' });
+    drawText(bctx, l1, W / 2, y + 4, theme.c.banner, { scale: 2, align: 'center' });
     drawText(bctx, l2, W / 2, y + 18, pal.text, { scale: 1, align: 'center' });
   }
 

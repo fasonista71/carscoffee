@@ -30,7 +30,7 @@ back to this file. Re-read against the code on 19 September:
 | 2.4 title spacing | Done. The board hangs off the last menu row instead of a constant y. |
 | 2.5 the hidden car preview | Done. Cycling a car puts it on a plate, and the chosen car parks on the title screen. |
 | 2.6 the 44pt claim | Done. `hitPadFor` sizes the pad in CSS pixels, so the target holds at any scale. |
-| 2.7 the tier banner's colours | **Open, ASK.** |
+| 2.7 the tier banner's colours | Done. The callout's headline and its screen wash both take the colour of the place being announced, one per theme, so the arrival reads as somewhere new rather than as the same amber every time. The subtitle stopped claiming the road gets faster past the beach, where it does not. |
 | 2.8 the initials modal as a second design system | Done, by D5: the modal is gone, replaced by a wheel drawn in the canvas. |
 | 2.9 invisible to assistive technology | Done as far as it honestly can be. Role, label and fallback text. No attempt at announcing the road, and the label says so. |
 | 2.10 no reduced motion path | **Open, ASK.** The one item here with real accessibility weight. |
@@ -38,9 +38,12 @@ back to this file. Re-read against the code on 19 September:
 | 2.12 the dead N/A branch | Done. Branch removed. |
 | 2.13 `textWidth('')` | Done. Returns 0. |
 
-So Tier 2 is three items, two of which are Jason's call: a route back to the
-title, the tier banner, and reduced motion. 2.8 closed on 19 September when
-the initials modal was replaced rather than restyled.
+Tier 2 is down to two items and neither is a defect. A route back to the title
+mid run is closed by decision: the pause menu offers Resume and Restart and
+Jason does not want a third way out. Reduced motion is parked for the iOS
+migration, where the platform has its own setting to read. 2.8 closed on 19
+September when the initials modal was replaced rather than restyled, and 2.7
+on 20 September.
 
 **Added on 20 September, from a device session with Jason.** None of these
 were on the list; they came out of playing the build.
