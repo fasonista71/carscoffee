@@ -66,8 +66,12 @@ describe('fairness', () => {
             + `seed ${seed} tier ${world.tier} frame ${f} at ${Math.round(world.distancePx)}px`);
         }
       }
-      assert.equal(topTier, TUNING.tiers.length - 1,
-        `run never reached the top tier: seed ${seed}`);
+      /* At or past the last authored rung. The tier number keeps
+         counting beyond the ladder so the scenery can cycle, so this
+         asks what it always asked (did the run drive the whole
+         ladder) without pinning the number the count stops at. */
+      assert.ok(topTier >= TUNING.tiers.length - 1,
+        `run never reached the top tier: seed ${seed} stopped at ${topTier}`);
     }
   });
 });

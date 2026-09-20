@@ -20,8 +20,12 @@ Cars & Coffee moves to a native iOS app with a pure Swift simulation
 ported from the browser build, a SpriteKit scene inside a SwiftUI
 shell, real haptics, and Game Center leaderboards. The browser build
 stays alive as the place game feel is decided. Version one is the
-same game, natively, plus the social board. It is free, carries ads,
-and sells one purchase that removes them.
+same game, natively, plus the social board and six additions that do
+not touch the road: a callout when you pass a friend's best, a second
+board for the longest clean stretch, a daily goal, cars that have to
+be unlocked, a results card built to be shared, and an App Clip so a
+challenge link plays without installing anything. It is free, carries
+ads, and sells one purchase that removes them.
 
 ## What is settled
 
@@ -31,17 +35,34 @@ and sells one purchase that removes them.
 | Sunday Run, shared daily seed | Dropped. Distance boards, no shared road |
 | The browser build | Stays, as the tuning sandbox |
 | Money | Freemium: free with ads, one purchase to remove them |
+| Beyond parity | The rival line, a haptic vocabulary, a daily goal, car unlocks, a results card built to be shared |
+| The third number | Longest clean stretch, on its own board. Anything you touch resets it |
+| Friend challenges | An App Clip and a link. Separate roads, compare scores |
 
 Dropping the Sunday Run is the most consequential of these and it is
-the right call. A shared seed means two different phones have to agree
-on the same road frame for frame, which means replacing floating point
-in the simulation with fixed point arithmetic. `ROADMAP.md` calls that
-the riskiest refactor on the list and it is. Dropping the feature
-takes it off the critical path entirely.
+the right call, for a reason stronger than the one first written here.
 
-It is deferred rather than free. A shared seed competition can never
-be added later without doing that work, and doing it later means doing
-it to a shipped simulation with scores already on a board.
+The original reason was floating point: a shared seed means two phones
+have to agree on the same road frame for frame, which means replacing
+floating point in the simulation with fixed point arithmetic, and
+`ROADMAP.md` calls that the riskiest refactor on the list.
+
+The real blocker is simpler and it is not fixable by arithmetic. The
+road reacts to the driver. `applyAggro` in `world.js` reflects targeted
+rows off the lane the player is committed to, and the cluster reroll
+loop in `spawn` then draws a different number of random values
+depending on what that did, so the two streams desync almost at once.
+Measured: the same seed driven by a cautious pilot and by one that
+keeps changing lanes produces roads that diverge between 75m and 310m
+in, on every seed tried. A shared seed does not give two people the
+same road even with perfect determinism.
+
+That costs nothing today and it closes a door properly rather than
+leaving it ajar. A shared road competition would need either the road
+baked as data, or a mode where the aggro target lane is drawn from the
+seed instead of from the driver, which is one branch of code and a
+slightly different game. Both remain available later. Neither is on
+the critical path now.
 
 ---
 
@@ -98,13 +119,15 @@ Jason has shipped there before, so the account and the pipeline exist.
 
 ## What version one is
 
-The browser game, natively, and nothing else new:
+The browser game, natively:
 
 - three lanes, three lives, coffee as the only fuel, boost, nitro
 - traffic that crawls or moves with the flow, queues capped at three
 - rubble, oil slicks, breakdowns, speeders, pursuits, the pulled over
   pair
-- ten tiers every 1,000m across nine named places
+- ten tiers every 1,000m across nine named places, then the places
+  cycle in a per run order while every difficulty number stays frozen
+  at the last rung
 - three cars
 - the top five board, now backed by Game Center as well as locally
 
@@ -116,9 +139,26 @@ Plus what native buys:
 - Game Center leaderboards and authentication
 - ads, and a purchase that removes them
 
+Plus six additions that earn their place because none of them touches
+the road:
+
+- **The rival line.** Friends' bests are read at run start and a
+  callout fires the moment you cross one.
+- **The third number.** Longest clean stretch, its own board.
+- **A daily goal.** The same goal for everyone, checked locally.
+- **Car unlocks.** The three cars stop being unlocked from the start.
+- **A results card built to be shared.**
+- **An App Clip, and challenge links.**
+
+This is worth stating plainly, because two other sections of this
+document say the port is not the moment to rebalance and that is still
+true. Not one of the six changes the road, the tuning, or how distance
+is scored. They add a second board, a reason to come back, somewhere to
+get to, and something to send a friend. The simulation is untouched.
+
 **Explicitly not in version one:** coffee orders and recipes,
-destination runs, car culture progression, the Sunday Run, achievements,
-cloud save, iPad layout, any second platform.
+destination runs, car culture progression, the Sunday Run, near miss
+scoring, achievements, cloud save, iPad layout, any second platform.
 
 ---
 
@@ -238,6 +278,14 @@ See the section below.
 See the section below. This is the phase most likely to overrun,
 because it is the one with a third party in it.
 
+### Phase 6b: the App Clip and challenge links. GUESS: 1 to 2 weeks
+
+A second target sharing GameCore and the renderer, a link format, and
+the results card that offers the link. See the challenge section.
+Placed after the store phase deliberately: an App Clip has its own
+review surface and its own way to fail, and none of it is worth
+touching until the app it advertises is approved.
+
 ### Phase 6: store. GUESS: 1 week plus review
 
 Screenshots (the capture tool in `tools/store/` already films the
@@ -245,8 +293,13 @@ browser build and can be pointed at a simulator recording instead),
 description, privacy nutrition labels, age rating, App Store Connect,
 TestFlight, review.
 
-**Total GUESS: 9 to 14 weeks of evenings.** Treat that as a shape, not
-a date.
+Where the six additions land: the clean stretch counter in phase 1
+with the rest of GameCore, car unlocks and the results card in phase
+2, the rival line and the daily goal in phase 4, the App Clip and
+challenge links in phase 6b.
+
+**Total GUESS: 10 to 16 weeks of evenings.** Treat that as a shape,
+not a date.
 
 ---
 
@@ -274,11 +327,94 @@ a replacement for it.
 phone reconnects. This is a small amount of work and its absence is
 very visible.
 
+**The rival line.** The single best use of Game Center in a distance
+game, and the reason to prefer it over a board of Jason's own. Read
+the friends' bests once at run start, hold them in memory, and flash a
+callout the moment the player crosses one: "passed Randy, 3,412m". It
+turns a leaderboard from a list checked once into something felt while
+driving, it costs a read and a comparison, and it risks nothing.
+
+**The daily goal.** The same goal for everyone, every day: 2,500m, or
+40 cups, or a 900m clean stretch. Derived from the date so every
+device computes the same one with no server, checked locally, and
+carrying no score. This is what the Sunday Run was for, at roughly one
+percent of the cost, because it needs no shared road at all.
+
 **No shared seed means no anti cheat problem worth solving.** Distance
 boards on an endless runner get manipulated. Without a shared road
 there is nothing to verify a score against anyway, so the honest
 position is to accept it, and to not build a competitive economy on
 top of a board that cannot be trusted.
+
+---
+
+## The three numbers
+
+Distance alone is one axis, and a leaderboard with one axis is a
+leaderboard people check once. Three numbers, and they have to be in
+real tension or they are the same number in three hats.
+
+**Distance.** How long you lasted. Unchanged, still the headline.
+
+**Coffee cups.** How much you were willing to detour for. The cup is
+often not on the safe line, which is what makes it a choice.
+
+**Longest clean stretch.** How far you went without touching
+anything, in metres, inside a single run. This is the one that is a
+second skill rather than a second view of the first: a 12km run with
+four knocks loses to a flawless 6km. Its own board.
+
+**What breaks a clean stretch.** Anything you touch. The world
+already emits exactly four events for it: `stumble` (hit a car and
+spent a heart), `crash` (hit a car with none left), `rubble_hit`
+(clipped rubble, costs fuel) and `slick_slide` (hit a slick, forced
+slide). All four reset the counter. This is the version that is
+hardest to argue with and easiest to put on a results card.
+
+**The trap this avoids.** The obvious reading, counting obstacles
+avoided, rises with every metre driven, so it would have been distance
+wearing a hat, which is exactly the objection that ruled out goals
+tied to the named places. Any stat that only counts upward while the
+wheels turn is not a second axis.
+
+**Where it lives.** GameCore, alongside distance and cups, which means
+it ports once and the browser build gets it for free. It does not feed
+the score.
+
+---
+
+## Challenging a friend, and the App Clip
+
+The whole payload is 416KB, so the game fits inside an App Clip with
+room to spare. That means a link someone taps plays the real game with
+no install, and offers the full app at the end. For a game nobody has
+heard of, that is the difference between a link being shared and a
+link being ignored.
+
+**The challenge is the reason to send the link.** You finish a run,
+the results card offers a link, your friend taps it, sees "Jason got
+4,210m, beat it", plays, and their end screen hands them a link back.
+
+**It needs no server.** The challenge is carried entirely in the link:
+score, name, and nothing else. No accounts, no storage, no backend.
+
+**Separate roads, compare scores.** Both players drive their own
+randomly generated road and the higher number wins, which is what
+almost every endless runner does. The alternative, an identical road
+for both, is not available from a shared seed (see the Sunday Run note
+above) and would need a mode where the aggro target lane comes from
+the seed rather than the driver. That remains a later option.
+
+**Scores in a link are forgeable.** Between friends this does not
+matter. It matters a great deal if a challenge result is ever allowed
+to touch the real leaderboard, so it must not be.
+
+**Two things to verify rather than assume.** The current App Clip size
+limit (the payload fits under any version of it, but the number should
+be read from Apple's documentation rather than quoted from memory),
+and whether Game Center is usable from inside an App Clip at all. The
+second one is unknown as this is written and the challenge design does
+not depend on the answer, since the link carries everything.
 
 ---
 
@@ -387,6 +523,21 @@ risk number one.
 7. **Is the remove ads purchase priced as a tip jar or as a real
    unlock.** The ads section argues this changes how hard the ads
    should push, and it is the one money decision still open.
+8. **What unlocks the second and third car**, distance or lifetime
+   cups, and at what number. Nothing in the game counts lifetime cups
+   today.
+9. **How the daily goal is chosen.** A rotation of three shapes
+   (distance, cups, clean stretch) seeded off the date is the obvious
+   answer and needs confirming.
+10. **Controller support and iCloud sync of the local best.** Both
+    were raised and neither was decided. Controller support is small.
+    iCloud sync kills the "new phone, lost everything" complaint that
+    the itch build already has in a worse form.
+11. **Two App Clip facts to look up rather than assume:** the current
+    size limit, and whether Game Center works inside a clip.
+12. **Whether more scenes get authored.** Nine today, so a 20km run
+    tours the same nine twice. Each new one costs two verge strips of
+    30x544 and a palette row.
 
 ---
 
