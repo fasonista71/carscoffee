@@ -46,8 +46,31 @@ const LOGICAL_W = 180;
 const PROBE_ROW = 5;
 const PROBE_MIN = 40;
 
+/*
+  Paused no longer draws the run HUD at all, so row 5 cannot answer for
+  it any more: the band it used to read is gone, dim and all. Two more
+  rows answer instead.
+
+  Row 128 is inside the paused menu's Resume button, which is the one
+  plate in the game filled with the edge line amber rather than road
+  grey. Game over's Go again sits in the same place wearing the same
+  amber, so on its own this row means "a menu with its primary button
+  here", which is paused or game over and nothing else: the title's
+  Start is at 150, the legend's Back at 210, and Save on the initials
+  wheel at 202.
+
+  Row 50 separates those two. Game over plates its result block from
+  34 to 106 and the initials wheel plates the same block in the same
+  place, both filled with the outline colour. The paused screen has
+  nothing there but the dimmed world it froze.
+*/
+const MENU_ROW = 128;
+const MENU_MIN = 40;
+const BLOCK_ROW = 50;
+const BLOCK_MIN = 60;
+
 async function readMode(page) {
-  return page.evaluate(async ({ row, min }) => {
+  return page.evaluate(async ({ row, min, menuRow, menuMin, blockRow, blockMin }) => {
     if (!window.__ccProbePal) {
       const src = document.querySelector('script[type=module]').getAttribute('src');
       const mod = await import(src.replace(/app\/main\.js$/, 'game/tuning.js'));
@@ -64,6 +87,8 @@ async function readMode(page) {
       const a = dim[3];
       window.__ccProbePal = {
         playing: road,
+        menu: rgb(pal.edgeLine),
+        block: rgb(pal.outline),
         paused: road.map((c, i) => Math.round(c * (1 - a) + dim[i] * a))
       };
     }
@@ -74,21 +99,26 @@ async function readMode(page) {
     const unit = c.width / 180;
     const near = (got, exp) => Math.abs(got[0] - exp[0]) <= 2
       && Math.abs(got[1] - exp[1]) <= 2 && Math.abs(got[2] - exp[2]) <= 2;
-    const d = g.getImageData(0, Math.floor((row + 0.5) * unit), c.width, 1).data;
-    let playing = 0;
-    let paused = 0;
     /* One sample per logical pixel, not per device pixel, so the
        counts mean the same thing at any integer scale. */
-    for (let lx = 0; lx < 180; lx += 1) {
-      const i = Math.floor((lx + 0.5) * unit) * 4;
-      const px = [d[i], d[i + 1], d[i + 2]];
-      if (near(px, want.playing)) playing += 1;
-      else if (near(px, want.paused)) paused += 1;
-    }
-    if (playing >= min) return 'playing';
-    if (paused >= min) return 'paused';
+    const count = (y, exp) => {
+      const d = g.getImageData(0, Math.floor((y + 0.5) * unit), c.width, 1).data;
+      let n = 0;
+      for (let lx = 0; lx < 180; lx += 1) {
+        const i = Math.floor((lx + 0.5) * unit) * 4;
+        if (near([d[i], d[i + 1], d[i + 2]], exp)) n += 1;
+      }
+      return n;
+    };
+    if (count(row, want.playing) >= min) return 'playing';
+    if (count(menuRow, want.menu) >= menuMin
+      && count(blockRow, want.block) < blockMin) return 'paused';
     return 'other';
-  }, { row: PROBE_ROW, min: PROBE_MIN });
+  }, {
+    row: PROBE_ROW, min: PROBE_MIN,
+    menuRow: MENU_ROW, menuMin: MENU_MIN,
+    blockRow: BLOCK_ROW, blockMin: BLOCK_MIN
+  });
 }
 
 /* One reading is a single frame, and a tier banner's white wash can

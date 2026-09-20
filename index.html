@@ -47,7 +47,17 @@
   /* The boot card. Painted by the browser before a single module has
      been fetched, so a stalled load, a failed atlas, or a module
      graph that never parses shows a message instead of the black
-     rectangle with no explanation that this used to give. */
+     rectangle with no explanation that this used to give.
+
+     It is also the first thing anyone sees, and it used to be system
+     monospace on a flat field: a different game to the one behind
+     it. Everything on it is now drawn in the game's own 3x5 font on
+     its own canvas, with a cone, a drum, a tyre and a barrier coming
+     up the road in turn where the spinner goes. The plain text stays
+     in the markup underneath, off screen but still read aloud, so
+     the card says the same thing to a screen reader as it always
+     did, and so a browser that hands back no 2D context still shows
+     the message rather than nothing. */
   #boot {
     position: fixed;
     inset: 0;
@@ -65,6 +75,12 @@
     z-index: 10;
   }
   #boot[hidden] { display: none; }
+  #boot canvas {
+    display: block;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+  #boot-art { width: 270px; max-width: 100%; height: auto; }
   #boot .cup { font-size: 26px; letter-spacing: 2px; color: #ffcd75; }
   #boot .msg { max-width: 260px; }
   #boot button {
@@ -72,19 +88,37 @@
     color: #262b44;
     background: #ffcd75;
     border: 0;
-    border-radius: 3px;
+    border-radius: 0;
     padding: 9px 20px;
     cursor: pointer;
   }
   #boot button[hidden] { display: none; }
+  #boot-retry-art { width: 80px; height: 14px; }
+  /* Off screen, not display:none: still announced, never drawn. The
+     canvas is decorative once these are reachable. */
+  .offscreen {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
 </style>
 </head>
 <body>
   <div id="stage"><canvas id="game"></canvas></div>
   <div id="boot">
-    <div class="cup">CARS &amp; COFFEE</div>
+    <canvas id="boot-art" width="180" height="136" aria-hidden="true"></canvas>
+    <div class="cup" id="boot-title">CARS &amp; COFFEE</div>
     <div class="msg" id="boot-msg">Loading&hellip;</div>
-    <button id="boot-retry" type="button" hidden>Try again</button>
+    <button id="boot-retry" type="button" hidden>
+      <canvas id="boot-retry-art" width="40" height="7" aria-hidden="true" hidden></canvas>
+      <span id="boot-retry-text">Try again</span>
+    </button>
   </div>
   <!--
     Classic script, not a module, and deliberately before the module
@@ -99,6 +133,162 @@
     var retry = document.getElementById('boot-retry');
     var settled = false;
 
+    /*
+      The game's 3x5 font, copied flat. It cannot be imported: this
+      script is the thing that has to keep working when the module
+      graph does not load, so it cannot depend on a module. Six
+      characters per entry, the character then one octal digit per
+      row, most significant bit on the left, which is exactly how
+      src/render/font.js stores it. test/boot.test.js regenerates
+      this string from that file and fails if the two drift.
+    */
+    var FONT = '075557126227271747371317455711574717674757771222875757975717'
+      + 'A25755B65656C34443D65556E74647F74644G34553H55755I72227J11152K55655'
+      + 'L44447M57755N65555O25552P65644Q25521R65665S34216T72222U55553V55552'
+      + 'W55775X55255Y55222Z71247&25253+02720-00700/11244?61202.00002!22202 00000';
+
+    var GLYPHS = {};
+    for (var gi = 0; gi < FONT.length; gi += 6) {
+      GLYPHS[FONT.charAt(gi)] = FONT.substr(gi + 1, 5);
+    }
+
+    /* Four obstacles off the road, flat versions of them. The real
+       frames live in the atlas, which is the very thing that may not
+       have arrived yet, so the spinner draws its own. */
+    var PAL = {
+      o: '#262b44', a: '#ffb937', w: '#f4f4f4', l: '#b3a58c',
+      t: '#1a1c2c', g: '#8a7a66'
+    };
+    var OBSTACLES = [
+      ['....ooo....', '....oao....', '...ooaoo...', '...oaaao...',
+       '..ooaaaoo..', '..owwwwwo..', '..owwwwwo..', '..oaaaaao..',
+       '.ooaaaaaoo.', '.oaaaaaaao.', '.oaaaaaaao.', 'ooooooooooo',
+       '.ooooooooo.'],
+      ['..ooooooo..', '.olllllllo.', '.oaaaaaaao.', '.oaaaaaaao.',
+       '.owwwwwwwo.', '.owwwwwwwo.', '.oaaaaaaao.', '.oaaaaaaao.',
+       '.owwwwwwwo.', '.owwwwwwwo.', '.oaaaaaaao.', '.oaaaaaaao.',
+       '.ooooooooo.'],
+      ['...ooooo...', '..ottttto..', '.ottttttto.', '.ottgggtto.',
+       'ottg...gtto', 'ottg...gtto', 'ottg...gtto', '.ottgggtto.',
+       '.ottttttto.', '..ottttto..', '...ooooo...'],
+      ['ooooooooooooooo', 'oaaawwwaaawwwao', 'oaawwwaaawwwaao',
+       'oawwwaaawwwaaao', 'ooooooooooooooo', '...o.......o...',
+       '...o.......o...', '...o.......o...', '..ooo.....ooo..']
+    ];
+
+    /* One obstacle per beat, and the road under it never stops, so a
+       long load still looks like something is happening between the
+       swaps. */
+    var SWAP_MS = 620;
+
+    function pixels(ctx, rows, x, y) {
+      for (var r = 0; r < rows.length; r += 1) {
+        for (var c = 0; c < rows[r].length; c += 1) {
+          var key = rows[r].charAt(c);
+          if (key === '.') continue;
+          ctx.fillStyle = PAL[key];
+          ctx.fillRect(x + c, y + r, 1, 1);
+        }
+      }
+    }
+
+    function width(text, scale) { return text.length ? (text.length * 4 - 1) * scale : 0; }
+
+    function write(ctx, text, cx, y, scale, color) {
+      var s = String(text).toUpperCase();
+      var px = Math.round(cx - width(s, scale) / 2);
+      ctx.fillStyle = color;
+      for (var i = 0; i < s.length; i += 1) {
+        var g = GLYPHS[s.charAt(i)];
+        if (g) {
+          for (var row = 0; row < 5; row += 1) {
+            var bits = parseInt(g.charAt(row), 8);
+            for (var col = 0; col < 3; col += 1) {
+              if (bits & (1 << (2 - col))) {
+                ctx.fillRect(px + col * scale, y + row * scale, scale, scale);
+              }
+            }
+          }
+        }
+        px += 4 * scale;
+      }
+    }
+
+    /* The font has no lowercase and no comma, and an error string
+       can be any length, so the message is uppercased by write and
+       wrapped here at the width the card has. */
+    function wrap(text, max) {
+      var words = String(text).replace(/[^A-Za-z0-9 &+\-\/?.!]/g, ' ').split(/\s+/);
+      var lines = [];
+      var line = '';
+      for (var i = 0; i < words.length; i += 1) {
+        if (!words[i]) continue;
+        var next = line ? line + ' ' + words[i] : words[i];
+        if (next.length > max && line) { lines.push(line); line = words[i]; }
+        else line = next;
+      }
+      if (line) lines.push(line);
+      return lines.slice(0, 4);
+    }
+
+    var art = document.getElementById('boot-art');
+    var actx = art && art.getContext ? art.getContext('2d') : null;
+    var raf = 0;
+    var started = Date.now();
+
+    function paint(animate) {
+      if (!actx) return;
+      var t = Date.now() - started;
+      actx.clearRect(0, 0, 180, 136);
+      write(actx, 'Cars & Coffee', 90, 8, 2, '#ffcd75');
+
+      /* A stretch of road with the centre line running down it, the
+         same grey and the same dashes as the game. */
+      actx.fillStyle = '#5a5a6e';
+      actx.fillRect(54, 26, 72, 72);
+      actx.fillStyle = '#ffd93d';
+      actx.fillRect(54, 26, 1, 72);
+      actx.fillRect(125, 26, 1, 72);
+      var scroll = animate ? Math.floor(t / 26) % 16 : 0;
+      for (var d = -16; d < 72; d += 16) {
+        var dy = 26 + d + scroll;
+        var top = Math.max(26, dy);
+        var bot = Math.min(98, dy + 8);
+        if (bot > top) {
+          actx.fillStyle = '#f4f4f4';
+          actx.fillRect(89, top, 2, bot - top);
+        }
+      }
+
+      var ob = OBSTACLES[animate ? Math.floor(t / SWAP_MS) % OBSTACLES.length : 0];
+      pixels(actx, ob, 90 - Math.floor(ob[0].length / 2), 86 - ob.length);
+
+      var lines = wrap(msg.textContent, 40);
+      for (var i = 0; i < lines.length; i += 1) {
+        write(actx, lines[i], 90, 110 + i * 8, 1, '#c0cbdc');
+      }
+    }
+
+    function loop() {
+      paint(true);
+      raf = requestAnimationFrame(loop);
+    }
+
+    if (actx) {
+      /* The plain text is still in the markup and still announced;
+         it just stops being the thing on screen. */
+      document.getElementById('boot-title').className = 'cup offscreen';
+      msg.className = 'msg offscreen';
+      var label = document.getElementById('boot-retry-art');
+      var lctx = label.getContext ? label.getContext('2d') : null;
+      if (lctx) {
+        write(lctx, 'Try again', 20, 1, 1, '#262b44');
+        label.hidden = false;
+        document.getElementById('boot-retry-text').className = 'offscreen';
+      }
+      loop();
+    }
+
     /* Long enough that a slow phone on a bad connection is not told
        it failed while it is still working. The atlas is ~200KB. */
     var STALL_MS = 15000;
@@ -111,6 +301,10 @@
       msg.textContent = text;
       retry.hidden = false;
       card.hidden = false;
+      /* Nothing is loading any more, so nothing should be moving.
+         One static frame, then the animation stops. */
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      paint(false);
     }
 
     function ok() {
@@ -118,6 +312,7 @@
       settled = true;
       clearTimeout(timer);
       card.hidden = true;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
     }
 
     retry.addEventListener('click', function () {

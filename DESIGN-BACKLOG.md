@@ -98,7 +98,7 @@ after at 1x, not zoomed.
 
 ---
 
-## D3 Overhaul of the scenery · ART IN, TILED
+## D3 Overhaul of the scenery · ART IN, STRIPS
 
 > Overhaul of all of the scenery settings, updated graphics from GPT.
 
@@ -118,16 +118,27 @@ sheet, nine places by eight tiles. The verges are tiled with it now, one strip
 per side rather than the old two speed parallax, because tiles are continuous
 ground and two speeds would tear it.
 
+**Then redone as whole strips**, because tiles left seams wherever two of
+them met and clipped whatever crossed a square. Each place now has its own
+left and right verge as one 30 by 544 image, cut so it loops on itself, with
+nothing mirrored. The sea is the one exception, mirrored so a coast can be
+east or west.
+
+**A chalet on 20 September**, in the right hand snow verge, where the snow had
+trees and rocks and no landmark. It is the farmland barn reskinned rather than
+a new drawing, so it is at the same size and the same camera angle as
+everything else. `tools/scenery/chalet.py` is the script and
+`tools/scenery/README.md` explains it.
+
 What is still open here:
 
-- The sheet's tile squares only cover ground props. Anything bigger than a
-  thirty pixel square has to be re-cut from the strip art the way the barn
-  was, and given a tall tile. The silo pair, the windmill and the city shop
-  fronts are the obvious candidates.
-- Only the beach has water. If any other place wants it, add the tile indices
-  to `SCENERY_WATER`.
+- One chalet, on one side. The left hand snow verge would need it mirrored to
+  sit against the screen edge the way the barn does, and these strips do not
+  mirror. A second landmark would have to be cut or drawn.
+- Other places could use a landmark of their own: the silo pair, the windmill
+  and the city shop fronts are the obvious candidates.
 - The old scenery palette in `TUNING.sceneryThemes` is still the fallback
-  colour under the tiles and the source of the ground colour, so it cannot be
+  colour under the strips and the source of the ground colour, so it cannot be
   deleted, but most of its per item fields are now unused.
 
 ---
@@ -327,6 +338,15 @@ the existing timed render effects work.
 **Suggest** taking the procedural half first, since it is nearly free, and
 leaving the mixer until the frames exist.
 
+**Procedural half done.** The taxi's roof sign lights the sign the art already
+paints, and the recovery truck runs the police wig wag in orange: the same two
+lamps trading sides on the same beat with the same strobe pixel between them,
+so a player who has learned to read a police roof reads this one too. Revised
+on 20 September: the taxi was blinking every 560ms, which the eye read as one
+unsteady lamp rather than a light turning on and off, and is now just over a
+second a side. The truck had a beacon of its own in hazard amber, which on a
+yellow truck was one colour.
+
 ---
 
 ## Where these stand
@@ -336,13 +356,13 @@ Updated 19 September, after the evening's work.
 | Item | State | Waiting on |
 |---|---|---|
 | D2 boost tracks | Done. Marks bridge the ground covered, so the line is a line. | |
-| D8 part one, taxi and tow truck lights | Done, on the right parts of the vehicles. | |
+| D8 part one, taxi and tow truck lights | Done. Taxi sign blinks on a readable beat, recovery truck runs the police wig wag in orange. | |
 | D5 arcade initials | Done. Wheel in the canvas, no text field, closes 1.11 and 2.8. | |
 | D1 two lane tap | Shipped, **not closed**: the fairness oracle still drives one lane moves only, so nothing has actually tested the new one. | an oracle pass |
 | D6 vehicle colours | Done. Nine traffic bodies in Porsche colours, the 4x4 in Coniston Green, by runtime recolour rather than new art. | |
 | D7 pulled over runner | Not started. | shoulder or lane, which is a different size of job either way |
 | D8 part two, the mixer drum | Not started. Needs frames and an atlas contract that understands a sequence. | art |
-| D3 scenery overhaul | Art arrived and is in: nine places, eight tiles each, tiled down both verges. Water runs in stretches, the barn is a double height tile. | the tiles the sheet does not cover |
+| D3 scenery overhaul | Art arrived and is in, then redone as whole looping strips per side rather than tiles. Snow has a chalet. | a landmark for the other places, and for the left hand snow verge |
 | D4 online board | Not started. The seam in `leaderboard.js` is a morning; the product is not. | a product decision, and whether it waits for Game Center |
 
 The honest order from here: the oracle pass on D1, because it is the one thing

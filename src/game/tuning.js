@@ -445,9 +445,22 @@ export const TUNING = {
         character it is changing. The character is the only feedback
         this screen gives, so covering it makes the control useless
         at the moment it is used.
+
+        A second pass moved the chevrons back in toward the character,
+        to 21, because at 26 they read as two loose arrows floating in
+        the plate rather than as the two buttons belonging to the
+        letter between them. The thumb problem that pushed them out in
+        the first place is already solved by the swap: the control the
+        hand reaches for most is the lower one, and a hand coming from
+        the bottom of the phone never crosses the glyph to get there.
+
+        The targets grew instead of the gap. Columns are 46 wide rather
+        than 34, which is the whole plate interior split three ways,
+        and hitPadPx lets each one run a few pixels past the plate edge
+        top and bottom without reaching the Save button's own padding.
       */
-      plateY: 112, plateH: 78, colPitchPx: 34, letterScale: 3,
-      letterCy: 155, chevronDy: 26, hitHPx: 20
+      plateY: 112, plateH: 78, colPitchPx: 46, letterScale: 3,
+      letterCy: 155, chevronDy: 21, hitHPx: 20, hitPadPx: 4
     },
     /* The best score is narrower than the distance beside it: five
        digits at double size is 38px, where the distance carries an M
@@ -546,10 +559,20 @@ export const TUNING = {
       the way the wig wags are, as pixels on the sprite rather than as
       new frames in the atlas, so this costs no art and no load time.
       roofFrac is the distance down the sprite to the light, which is
-      the cab on anything with a bed behind it. The taxi sign blinks
-      on and off, the tow truck's beacon sweeps side to side, and both
-      are slow enough at a phone's size to read as a light rather than
-      as a flicker.
+      the cab on anything with a bed behind it.
+
+      The taxi sign blinks on and off. At 560 the two states came and
+      went inside a fifth of a second each and the eye read one
+      unsteady lamp rather than a light turning on and turning off,
+      which is the opposite of what a roof sign is for. Just over a
+      second a side is a blink.
+
+      The recovery truck gets the police wig wag rather than a beacon
+      of its own: same two lamps trading sides on the same beat, same
+      strobe pixel between them, in orange. A tow on the hard shoulder
+      is running the same kind of light in real life, and reusing the
+      pattern means a player who has learned to read the police roof
+      already reads this one.
     */
     workLights: {
       /*
@@ -560,8 +583,8 @@ export const TUNING = {
         of it. The tow truck is 70 tall with its cab roof on rows 25
         to 36, and the beacon sits at the front of it.
       */
-      taxi: { roofFrac: 0.55, kind: 'sign', ms: 560 },
-      tow_truck: { roofFrac: 0.38, kind: 'beacon', ms: 320 }
+      taxi: { roofFrac: 0.55, kind: 'sign', ms: 1100 },
+      tow_truck: { roofFrac: 0.38, kind: 'wigwag', ms: 140 }
     },
     /*
       Where the bodywork ends, as a fraction of the frame, for the
@@ -631,6 +654,11 @@ export const TUNING = {
       wigWagRedDim: '#701414',
       wigWagBlue: '#2a6aff',
       wigWagBlueDim: '#142d70',
+      /* The recovery truck's wig wag. Orange rather than the amber
+         the hazard flashers use, because the truck itself is yellow
+         and amber on yellow is one colour at this size. */
+      wigWagAmber: '#ff7a14',
+      wigWagAmberDim: '#6b2f05',
       rubbleLight: '#b3a58c',
       rubbleMid: '#8a7a66',
       rubbleDark: '#5c5044',

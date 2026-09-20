@@ -21,16 +21,58 @@ export function createRenderer(canvas) {
   const W = TUNING.render.logicalW;
   const H = TUNING.render.logicalH;
 
+  /*
+    Two layers, for one reason: sub pixel scroll.
+
+    The world moves 2.75 logical pixels per step at the first tier, so
+    drawing it on whole logical pixels means it advances 2, 3, 3, 2, 3
+    and the velocity swings by half from one frame to the next. On a
+    phone the buffer is upscaled six times, so those are steps of
+    twelve and eighteen device pixels, and that is the choppiness: not
+    a dropped frame, a wobbling speed. Frame times here are about a
+    millisecond, so there was never anything to make faster.
+
+    So the world draws on the whole pixel it has reached and the blit
+    carries the fraction, rounded to a device pixel. At six times the
+    scroll resolves to a sixth of a logical pixel and the wobble drops
+    to about one device pixel. Nothing is resampled and nothing is
+    blurred: both layers still land on integer device pixels.
+
+    The world layer is one logical row taller than the screen and is
+    drawn one row down, so the row the offset pulls in at the top is
+    already there. Everything the screen holds still, which is the car,
+    the HUD and every menu, is drawn on the second layer at no offset.
+  */
+  const WORLD_OVER = 1;
+
+  /* The world layer is drawn offset, by the overscan row and by screen
+     shake, so every full height fill on it runs past both ends. The
+     canvas clips the surplus; a gap at the top of the screen on the
+     frame a truck is hit does not. */
+  const BLEED = 8;
+
+  const world = document.createElement('canvas');
+  world.width = W;
+  world.height = H + WORLD_OVER * 2;
+  const wctx = world.getContext('2d');
+
   const buffer = document.createElement('canvas');
   buffer.width = W;
   buffer.height = H;
-  const bctx = buffer.getContext('2d');
+  const uctx = buffer.getContext('2d');
   const ctx = canvas.getContext('2d');
+
+  /* Every draw helper writes to bctx, and which layer that is changes
+     twice a frame. */
+  let bctx = wctx;
 
   /* CSS pixels per logical pixel, which is what a finger actually
      meets. Kept from the last resize so the hit padding can be sized
      against it. */
   let cssPerLogical = 2;
+  /* Device pixels per logical pixel, which is how many sub steps the
+     scroll has to play with. */
+  let deviceScale = 2;
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -38,6 +80,7 @@ export function createRenderer(canvas) {
     const fit = Math.min((rect.width * dpr) / W, (rect.height * dpr) / H);
     /* Integer device pixel scale wherever the viewport allows. */
     const scale = Math.max(1, Math.floor(fit));
+    deviceScale = scale;
     cssPerLogical = scale / dpr;
     canvas.width = W * scale;
     canvas.height = H * scale;
@@ -131,14 +174,14 @@ export function createRenderer(canvas) {
     const t = themeFor(tier);
     const w = TUNING.render.scenery.stripWPx;
     bctx.fillStyle = t.c.offroad;
-    bctx.fillRect(0, 0, w, H);
-    bctx.fillRect(W - w, 0, w, H);
+    bctx.fillRect(0, -BLEED, w, H + BLEED * 2);
+    bctx.fillRect(W - w, -BLEED, w, H + BLEED * 2);
     const sh = SCENERY_STRIP_H;
     const offset = Math.floor(distancePx) % sh;
     const base = Math.floor(distancePx / sh);
     for (let k = -1; k <= Math.ceil(H / sh) + 1; k += 1) {
       const y = k * sh + offset;
-      if (y > H || y + sh < 0) continue;
+      if (y > H + BLEED || y + sh < -BLEED) continue;
       const pass = base - k;
       for (let side = 0; side < 2; side += 1) {
         const wet = seaTheme(t.key)
@@ -298,17 +341,17 @@ export function createRenderer(canvas) {
 
   function drawRoad(distancePx, pal, tier) {
     bctx.fillStyle = themeFor(tier).c.offroad;
-    bctx.fillRect(0, 0, W, H);
+    bctx.fillRect(0, -BLEED, W, H + BLEED * 2);
     drawScenery(distancePx, tier);
 
     const roadW = TUNING.road.laneWidthPx * TUNING.road.laneCount;
     const left = TUNING.road.roadLeftPx;
     bctx.fillStyle = pal.road;
-    bctx.fillRect(left, 0, roadW, H);
+    bctx.fillRect(left, -BLEED, roadW, H + BLEED * 2);
 
     bctx.fillStyle = pal.edgeLine;
-    bctx.fillRect(left, 0, TUNING.render.edgeLineWidthPx, H);
-    bctx.fillRect(left + roadW - TUNING.render.edgeLineWidthPx, 0, TUNING.render.edgeLineWidthPx, H);
+    bctx.fillRect(left, -BLEED, TUNING.render.edgeLineWidthPx, H + BLEED * 2);
+    bctx.fillRect(left + roadW - TUNING.render.edgeLineWidthPx, -BLEED, TUNING.render.edgeLineWidthPx, H + BLEED * 2);
 
     /* Dashes scroll toward the bottom of the screen as the car moves
        forward. Offset comes from world distance, so scroll speed and
@@ -632,18 +675,21 @@ export function createRenderer(canvas) {
       return;
     }
     /*
-      A beacon sweeping: one side bright, the other banked, trading
-      every beat, which is the cheapest honest read of a rotating
-      lamp. The truck is yellow, so the lamps get the outline the rest
-      of the game gives its pixels, and that is what makes the dark
-      half of the beat as legible as the lit one.
+      The police wig wag, in orange: two lamps trading sides on the
+      beat with a strobe pixel stepping between them. Same geometry
+      as drawOvertakers uses on an emergency roof, so the two read as
+      the same kind of light. The truck is yellow, so the pair sits
+      on the dark frame the rest of the game gives its pixels, which
+      is what keeps the banked lamp legible against the body.
     */
     bctx.fillStyle = pal.outline;
-    bctx.fillRect(cx - 6, ly - 1, 12, 5);
-    bctx.fillStyle = phase === 0 ? pal.hazardLight : pal.hazardLightDim;
-    bctx.fillRect(cx - 5, ly, 4, 3);
-    bctx.fillStyle = phase === 0 ? pal.hazardLightDim : pal.hazardLight;
-    bctx.fillRect(cx + 1, ly, 4, 3);
+    bctx.fillRect(cx - 6, ly - 1, 12, 4);
+    bctx.fillStyle = phase === 0 ? pal.wigWagAmber : pal.wigWagAmberDim;
+    bctx.fillRect(cx - 5, ly, 4, 2);
+    bctx.fillStyle = phase === 0 ? pal.wigWagAmberDim : pal.wigWagAmber;
+    bctx.fillRect(cx + 1, ly, 4, 2);
+    bctx.fillStyle = '#ffffff';
+    bctx.fillRect(cx - 1, ly + (phase === 0 ? 0 : 1), 2, 1);
   }
 
   function drawTraffic(view) {
@@ -1286,7 +1332,11 @@ export function createRenderer(canvas) {
   function hitTestInitials(lx, ly) {
     if (!Number.isFinite(lx) || !Number.isFinite(ly)) return null;
     const k = TUNING.render.initials;
-    if (ly < k.plateY || ly > k.plateY + k.plateH) return null;
+    /* The targets run a little past the plate at both ends. Above,
+       the result block stops at 106; below, the Save button's own
+       padded box starts at 196. The pad takes the free pixels in
+       between rather than leaving them dead. */
+    if (ly < k.plateY - k.hitPadPx || ly > k.plateY + k.plateH + k.hitPadPx) return null;
     for (let i = 0; i < 3; i += 1) {
       const cx = initialsColX(i);
       if (Math.abs(lx - cx) > k.colPitchPx / 2) continue;
@@ -1805,7 +1855,9 @@ export function createRenderer(canvas) {
   function drawPaused(view, pal) {
     bctx.fillStyle = pal.dim;
     bctx.fillRect(0, 0, W, H);
-    drawText(bctx, 'Paused', W / 2, 88, pal.text, { scale: 2, align: 'center' });
+    drawText(bctx, 'Paused', W / 2, 82, pal.text, { scale: 2, align: 'center' });
+    drawText(bctx, view.meters + ' m   Best ' + view.high, W / 2, 98, pal.edgeLine,
+      { scale: 1, align: 'center' });
     drawMenu(view, pal, 'paused');
   }
 
@@ -1829,28 +1881,64 @@ export function createRenderer(canvas) {
     const pal = TUNING.palette.city;
     const sx = view.shakeX | 0;
     const sy = view.shakeY | 0;
-    bctx.save();
-    bctx.translate(sx, sy);
-    drawRoad(view.distancePx, pal, view.tier);
-    drawSpeedLines(view, pal);
-    drawSkids(view, pal);
-    drawHazards(view);
-    drawPickups(view);
-    drawOvertakers(view, pal);
-    drawTraffic(view);
+
+    /*
+      The world draws on the whole pixel it has reached; the fraction
+      it is past that pixel becomes the blit offset at the bottom of
+      this function. Everything on this layer has to read the same
+      distance or the road and the traffic on it would disagree by a
+      pixel, so the world gets its own view rather than the live one.
+    */
+    /* Position the world in device pixels first and split that, rather
+       than flooring the logical distance and rounding the remainder
+       separately. Done the second way the two disagree on the frame
+       the remainder rounds up to a whole pixel: the offset wraps to
+       zero while the whole pixel has not arrived yet, and the world
+       goes back a pixel and then forward two. Measured as a scroll of
+       7, 11, 15 device pixels where it should have been a flat 11. */
+    const devicePx = Math.round(view.distancePx * deviceScale);
+    const whole = Math.floor(devicePx / deviceScale);
+    const sub = devicePx - whole * deviceScale;
+    const worldView = Object.assign({}, view, { distancePx: whole });
+
+    bctx = wctx;
+    wctx.setTransform(1, 0, 0, 1, 0, 0);
+    wctx.clearRect(0, 0, W, H + WORLD_OVER * 2);
+    wctx.save();
+    wctx.translate(sx, sy + WORLD_OVER);
+    drawRoad(whole, pal, view.tier);
+    drawSpeedLines(worldView, pal);
+    drawSkids(worldView, pal);
+    drawHazards(worldView);
+    drawPickups(worldView);
+    drawOvertakers(worldView, pal);
+    drawTraffic(worldView);
+    /* Reset before the car is drawn, not after it. The reset used to
+       run here in draw order, which was after drawPlayer had set the
+       flag, so the swipe up prompt never once reported itself as
+       shown and never retired. */
+    boostTipDrawn = false;
+    view.coffeeTipDrawn = drawCoffeeTip(worldView, pal);
+    view.steerTipDrawn = drawSteerTip(worldView, pal);
+    wctx.restore();
+
+    /* The car sits at a fixed place on the screen and the HUD never
+       moves at all, so neither belongs on a layer that slides. */
+    bctx = uctx;
+    uctx.setTransform(1, 0, 0, 1, 0, 0);
+    uctx.clearRect(0, 0, W, H);
+    uctx.save();
+    uctx.translate(sx, sy);
     drawOvertakerWarnings(view, pal);
     /* On the title and the legend the car is drawn by those screens,
        on top of their dim layer, so it keeps its colour. */
     if (view.mode !== 'title' && view.mode !== 'howto') drawPlayer(view);
     drawParticles();
-    boostTipDrawn = false;
-    view.coffeeTipDrawn = drawCoffeeTip(view, pal);
-    view.steerTipDrawn = drawSteerTip(view, pal);
-    bctx.restore();
+    uctx.restore();
     /* The game over screen states the distance and the best in full
        size, so the run HUD is redundant there, and dropping it frees
        the top band for the board. */
-    if (view.mode === 'playing' || view.mode === 'paused') {
+    if (view.mode === 'playing') {
       drawHudBand(pal);
       drawFuelBar(view, pal);
       drawScore(view, pal);
@@ -1862,6 +1950,14 @@ export function createRenderer(canvas) {
     if (view.mode === 'howto') drawHowTo(view, pal);
     if (view.mode === 'paused') drawPaused(view, pal);
     if (view.mode === 'gameOver') drawGameOver(pal, view);
+
+    /* The whole point of the two layers. The world goes down by the
+       fraction of a logical pixel it has travelled, rounded to a
+       device pixel, and the overscan row is what covers the gap that
+       opens at the top. */
+    const s = deviceScale;
+    ctx.drawImage(world, 0, 0, W, H + WORLD_OVER * 2,
+      0, sub - WORLD_OVER * s, W * s, (H + WORLD_OVER * 2) * s);
     ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
   }
 

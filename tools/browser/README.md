@@ -28,6 +28,7 @@ node tools/browser/menu.mjs
 node tools/browser/controls.mjs
 node tools/browser/boot.mjs              # starts its own servers on 8110-8114
 node tools/browser/upgrade.mjs           # builds its own fixtures, serves them on 8451
+node tools/browser/perf.mjs              # frame times and scroll steadiness
 SCHEME=legacy node tools/browser/upgrade.mjs   # the control: this one must fail
 ```
 
@@ -54,6 +55,7 @@ originally written and is why it would not run anywhere else.
 | `controls.mjs` | the control scheme against genre convention: the HUD pause button pauses while a tap at the same x on the road still steers, a swipe down is reserved rather than pausing, a swipe up still boosts, a deliberate two finger hold is still the backup, and Enter, Space and R can work the menus. Real touch through CDP |
 | `menu.mjs` | the menu press states and the confirmation sounds: holding a button presses it, the press makes a sound on the way down, dragging off releases it without activating, and a toggle is audible. Watches canvas pixels for the press and the Web Audio graph for the sound, because neither leaves a DOM trace. Five of its eight assertions fail against the build before press states |
 | `upgrade.mjs` | the in place update, which is the only way this game ever ships and the one case every other script here cannot see: build A is served, played, and swapped for build B under the same browser profile. Two cases, one changing only source and one changing only an asset. It asserts the updated page boots, plays, is running the new build's code and holding the new build's art, and that nothing the update changed came out of the browser's cache. `SCHEME=legacy` runs both cases against the pre hash layout, where four of them fail, which is the evidence that the passing run means something |
+| `perf.mjs` | how smooth it is, which is two different questions. Frame gaps and the work done inside each frame answer whether anything is too slow: in a container both are flat, which is the point, because the render costs about a millisecond and never was the problem. The scroll measurement answers the one that matters, by recovering how far the world moves each frame in device pixels. One number, or two a pixel apart, is a steady scroll. Two numbers six apart is the world advancing in whole logical pixels, which at a phone's pixel ratio is the choppiness players report. The build before the sub pixel scroll reads 12 and 18; this one reads 16 and 17 |
 | `tier1.mjs` | the Tier 1 fixes that only exist on the live page: the sound hint's board and mute gating (1.3, 1.12), the initials modal's iOS changes and pre-fill (1.11, 1.13), the menu overlap band resolving to the nearer row (1.7), and the coffee lesson still retiring (1.2). Nine of its thirteen assertions fail against the pre-Tier-1 build, so it is real cover rather than a description |
 
 ## What it cannot cover

@@ -20,22 +20,43 @@ exactly, which is how you check the repo and the live build still agree.
 
 | | |
 |---|---|
-| Built | 19 September 2026 from commit `daa0aa0` |
-| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260919-233139/` |
-| Versioned directory | `ve0d20227ff` |
+| Built | 20 September 2026 from commit `f76c48b` |
+| Bundle | `cars-and-coffee-web-M9.zip` in `_dist/build-M9-20260920-003344/` |
+| Versioned directory | `v7d05c0e1e4` |
 
-Three changes sit between the live build and this one. The initials wheel's
-controls swapped, so the lower chevron advances the character and a thumb is
-no longer across what it is changing. The cars are repainted, the nine traffic
-bodies in Porsche colours and the 4x4 in Coniston Green, as a recolour at load
-rather than new art. And the roadside is Jason's art instead of fifteen
-drawing functions: both verges of each place, scrolling down the way the road
-does, each strip looping on itself so the repeat has no seam and nothing is
-mirrored. The sea is its own strip and the one exception, so a coast can be
-east, west, both, or neither.
+What sits between the live build and this one:
+
+- The initials wheel's controls swapped, so the lower chevron advances the
+  character and a thumb is no longer across what it is changing. The chevrons
+  then came back in toward the letter, and the columns widened to the plate
+  split three ways so the targets grew rather than the gap.
+- The cars are repainted, the nine traffic bodies in Porsche colours and the
+  4x4 in Coniston Green, as a recolour at load rather than new art.
+- The roadside is Jason's art instead of fifteen drawing functions: both
+  verges of each place, scrolling down the way the road does, each strip
+  looping on itself so the repeat has no seam and nothing is mirrored. The sea
+  is its own strip and the one exception, so a coast can be east, west, both,
+  or neither. The right hand snow verge now has a chalet, the barn reskinned,
+  where a fir used to be.
+- Pausing hides the run HUD rather than washing it out. The two corner buttons
+  were visible, half faded and dead, because taps in paused mode go to the
+  menu. The distance and the best moved onto the paused screen at full
+  strength.
+- The taxi's roof sign blinks on a beat you can read rather than flickering,
+  and the recovery truck runs the police wig wag in orange.
+- Sub pixel scroll. The world used to move in whole logical pixels, which at
+  the first tier is 2.75 a step and came out as 8, 12, 12, 8. The world now
+  draws on the whole pixel it has reached and the blit carries the fraction,
+  rounded to a device pixel. Measured at a phone's pixel ratio with
+  `tools/browser/perf.mjs`: 12 and 18 device pixels a frame before, 16 and 17
+  after. This is the choppiness, and it was never the frame rate: the render
+  costs about a millisecond.
+- The boot card draws itself in the game's own font, with a cone, a drum, a
+  tyre and a barrier coming up the road where the spinner goes.
 
 So the first thing to check on device is whether the lower control advancing
-reads right; it is a judgement call and it flips in one line.
+reads right; it is a judgement call and it flips in one line. Second is
+whether the scroll is smooth enough now.
 
 One thing in the live build is not finished and should not be forgotten behind
 a green harness: the fairness oracle does not know about the two lane tap. See
@@ -88,7 +109,7 @@ otherwise be about to do on the initials modal.
 **Commands.**
 
 ```
-node --test test/*.test.js          # 27 tests, all must pass
+node --test test/*.test.js          # 61 tests, all must pass
 bash tools/build-itch.sh            # writes _dist/build-M8-<stamp>/
 ```
 
@@ -105,6 +126,8 @@ BASE=http://127.0.0.1:8399 node tools/browser/tier1.mjs
 BASE=http://127.0.0.1:8399 node tools/browser/menu.mjs
 BASE=http://127.0.0.1:8399 node tools/browser/controls.mjs
 BUNDLE=<same path> node tools/browser/boot.mjs
+BASE=http://127.0.0.1:8399 node tools/browser/embed.mjs
+BASE=http://127.0.0.1:8399 node tools/browser/perf.mjs
 ```
 
 **How to know a fix is real.** Every script in `tools/browser/` was written so

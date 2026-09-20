@@ -68,24 +68,32 @@ const mode = () => frame.evaluate(async () => {
     const road = rgb(pal.road);
     const dim = rgb(pal.dim);
     const a = dim[3];
-    window.__ccPal = { road, paused: road.map((c, i) => Math.round(c * (1 - a) + dim[i] * a)) };
+  window.__ccPal = {
+    road,
+    menu: rgb(pal.edgeLine),
+    block: rgb(pal.outline),
+    paused: road.map((c, i) => Math.round(c * (1 - a) + dim[i] * a))
+  };
   }
   const want = window.__ccPal;
   const c = document.getElementById('game');
   const g = c.getContext('2d');
   const unit = c.width / 180;
-  const d = g.getImageData(0, Math.floor(5.5 * unit), c.width, 1).data;
   const near = (p, q) => Math.abs(p[0] - q[0]) <= 2 && Math.abs(p[1] - q[1]) <= 2 && Math.abs(p[2] - q[2]) <= 2;
-  let playing = 0;
-  let paused = 0;
-  for (let lx = 0; lx < 180; lx += 1) {
-    const i = Math.floor((lx + 0.5) * unit) * 4;
-    const px = [d[i], d[i + 1], d[i + 2]];
-    if (near(px, want.road)) playing += 1;
-    else if (near(px, want.paused)) paused += 1;
-  }
-  if (playing >= 40) return 'playing';
-  if (paused >= 40) return 'paused';
+  /* The same three rows probe.mjs reads, and for the same reason:
+     paused draws no HUD any more, so it is recognised by its own menu
+     plate with nothing plated where a result block would be. */
+  const count = (y, exp) => {
+    const d = g.getImageData(0, Math.floor((y + 0.5) * unit), c.width, 1).data;
+    let n = 0;
+    for (let lx = 0; lx < 180; lx += 1) {
+      const i = Math.floor((lx + 0.5) * unit) * 4;
+      if (near([d[i], d[i + 1], d[i + 2]], exp)) n += 1;
+    }
+    return n;
+  };
+  if (count(5, want.road) >= 40) return 'playing';
+  if (count(128, want.menu) >= 40 && count(50, want.block) < 60) return 'paused';
   return 'other';
 });
 

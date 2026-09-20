@@ -42,6 +42,22 @@ So Tier 2 is three items, two of which are Jason's call: a route back to the
 title, the tier banner, and reduced motion. 2.8 closed on 19 September when
 the initials modal was replaced rather than restyled.
 
+**Added on 20 September, from a device session with Jason.** None of these
+were on the list; they came out of playing the build.
+
+| Item | State |
+|---|---|
+| The paused HUD | Done. The run HUD is no longer drawn while paused. It used to be drawn and then washed by the dim, which made every plate look half faded and left the help and pause buttons looking like buttons and behaving like nothing, because taps in paused mode go to the menu. The distance and the best moved onto the paused screen at full strength. `probe.mjs` and `embed.mjs` had to learn a new signature for paused, since both recognised it by the dimmed HUD band. |
+| The initials chevrons | Done. Back in to 21 from the character, columns widened from 34 to 46, which is the plate interior split three ways, and the targets run four pixels past the plate at both ends. |
+| The taxi and the recovery truck | Done. See D8 in `DESIGN-BACKLOG.md`. |
+| Choppiness | Done, and it was not the frame rate. The world moved in whole logical pixels, 2.75 a step at the first tier, so it advanced 8, 12, 12, 8 device pixels at a scale of four and half that again at a phone's six. The world now draws on the whole pixel it has reached and the blit carries the fraction, rounded to a device pixel. `tools/browser/perf.mjs` measures it: 12 and 18 before, 16 and 17 after. The render itself costs about a millisecond a frame and never was the problem. |
+| The boot card | Done. It drew in system monospace on a flat field, which is a different game to the one behind it. It now draws in the game's own 3x5 font with four obstacles coming up a road where the spinner goes. The font is copied flat into the card, because the card is the thing that has to work when the module graph does not load, and `test/boot.test.js` regenerates the copy from `src/render/font.js` so it cannot drift. |
+| A snow landmark | Done. See D3. |
+
+One bug fell out of the layer split: `boostTipDrawn` was reset after
+`drawPlayer` had set it, so the swipe up prompt never once reported itself as
+shown and never retired. It reports now.
+
 **Tiers 3 and 4 were re-checked item by item on 19 September**, against the
 code as it stands. Six of the ten test items and one of the fifteen drift
 items are closed. The item text below is the original wording and is stale
