@@ -14,6 +14,7 @@ import {
   SCENERY_STRIP_H, SCENERY_SEA_THEMES, SCENERY_SEA_IN
 } from '../game/tuning.js';
 import { laneCenterXPx } from '../game/entities.js';
+import { sceneKeyForTier } from '../game/scenes.js';
 import { getSprite, getTrafficSprite, sceneryStrip } from './sprites.js';
 import { drawText, textWidth } from './font.js';
 
@@ -130,9 +131,14 @@ export function createRenderer(canvas) {
     slower than the road, the near band rides with it. Each tier has
     its own theme: mountain roads, desert, snow, beach, cityscape.
   */
+  /* Which scenes a run cycles through past the last authored tier.
+     Set from the view each frame; null on the title screen, where
+     the tier is zero and the cycle never comes up. */
+  let sceneOrder = null;
+
   function themeFor(tier) {
-    const t = TUNING.tiers[Math.min(tier || 0, TUNING.tiers.length - 1)];
-    return { key: t.theme, c: TUNING.sceneryThemes[t.theme] };
+    const key = sceneKeyForTier(tier || 0, sceneOrder);
+    return { key, c: TUNING.sceneryThemes[key] };
   }
 
   /* Scenery scrolls toward the bottom of the screen exactly like the
@@ -1894,6 +1900,7 @@ export function createRenderer(canvas) {
   let prevMode = null;
 
   function drawFrame(view) {
+    sceneOrder = view.sceneOrder || null;
     tickWorldClock(view.mode);
     if (view.mode !== prevMode) {
       /* Resuming is not starting: the car did not go anywhere. */

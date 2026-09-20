@@ -11,6 +11,7 @@ import { TUNING, TRAFFIC_VARIANTS, PLAYER_SPRITES, OBSTACLE_SPRITES } from './tu
 import { seedToState, nextFloat01 } from './rng.js';
 import { createPlayer, laneCenterXPx, playerLaneFloat } from './entities.js';
 import { createGenState, nextRowSpec, notePlaced } from './generator.js';
+import { sceneOrderForSeed } from './scenes.js';
 
 export function createWorld({ seed, vehicle, environment }) {
   const weights = environment.obstacleWeights;
@@ -24,6 +25,9 @@ export function createWorld({ seed, vehicle, environment }) {
     vehicleId: vehicle.id,
     environmentId: environment.id,
     slickShare,
+    /* Which scenes the road cycles through past the last authored
+       tier. Drawn from a stream of its own so it moves no traffic. */
+    sceneOrder: sceneOrderForSeed(seed),
     status: 'running',
     deathCause: null,
     fuel: TUNING.fuel.max,
@@ -89,8 +93,13 @@ export function isBoosting(world) {
   return world.boostFramesLeft > 0;
 }
 
+/*
+  The difficulty rung for a tier. The tier number keeps counting past
+  the authored ladder so the scenery can keep changing, but the
+  numbers stop at the last rung: nothing past ten gets harder.
+*/
 export function tierConfig(world) {
-  return TUNING.tiers[world.tier];
+  return TUNING.tiers[Math.min(world.tier, TUNING.tiers.length - 1)];
 }
 
 export function currentSpeedPxPerSec(world) {
@@ -121,7 +130,7 @@ function baseSpeedPxPerSec(world) {
   closing gap is the player's call, not an unfair road.
 */
 function plannedSpeedPxPerSec(world) {
-  const target = TUNING.tiers[world.tier].speed;
+  const target = tierConfig(world).speed;
   const mult = Math.max(world.speedTierMult, target);
   return TUNING.speed.basePxPerSec * world.speedMultiplier * mult;
 }
@@ -211,12 +220,22 @@ function updateTier(world) {
   for (let i = 0; i < TUNING.tiers.length; i += 1) {
     if (meters >= TUNING.tiers[i].atMeters) idx = i;
   }
+  /* Past the last authored rung the number carries on at the same
+     cadence, which is what lets the scenery keep cycling and gives a
+     long run a rung to have reached. Difficulty is clamped in
+     tierConfig, so this changes how the road looks, never how it
+     behaves. */
+  const last = TUNING.tiers.length - 1;
+  if (idx === last) {
+    const past = meters - TUNING.tiers[last].atMeters;
+    idx = last + Math.floor(past / TUNING.tierStepMeters);
+  }
   if (idx !== world.tier) {
     world.tier = idx;
     world.tierFlashFrames = 90;
     world.events.push('tier_up');
   }
-  const target = TUNING.tiers[world.tier].speed;
+  const target = tierConfig(world).speed;
   const rate = TUNING.tierRampPerFrame;
   if (world.speedTierMult < target) {
     world.speedTierMult = Math.min(target, world.speedTierMult + rate);

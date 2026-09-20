@@ -137,7 +137,13 @@ missing; add the rule; rerun everything.
   per tier (mountain, farmland, desert, volcanic, snow, forest, beach,
   cliffs, city, forest again). Speed stops climbing at the beach on
   purpose: past there the road changes what it is made of, not how
-  fast it arrives.
+  fast it arrives. Past the tenth tier the NUMBER keeps counting on
+  the same cadence (tuning.tierStepMeters) and the nine scenes repeat
+  in an order shuffled once per run from the run's own seed, while
+  every difficulty number stays frozen at the last rung, which
+  tierConfig clamps. The shuffle draws from a stream of its own
+  (src/game/scenes.js), so a given seed still lays out exactly the
+  road it always did; test/scenes.test.js holds that line.
 - Traffic is either crawling or moving with the flow, drawn from two
   bands rather than one range (traffic.flow, and the per tier
   speedFrac pair is the crawl band alone). A queue is capped at three

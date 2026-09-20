@@ -1,6 +1,6 @@
 /* Shown small on the title screen so a stale phone cache is visible
    at a glance. Bump when shipping. */
-export const BUILD_TAG = 'M9';
+export const BUILD_TAG = 'M9.1';
 
 /*
   Every gameplay number lives here. Nothing elsewhere in the codebase is
@@ -210,6 +210,12 @@ export const TUNING = {
   /* Per frame step toward a new tier's speed multiplier. At 0.003 a
      12 percent tier jump ramps over roughly 40 frames. GUESS. */
   tierRampPerFrame: 0.003,
+
+  /* How far apart the tiers sit past the last authored rung. The
+     ladder above stops at ten; beyond it the tier number keeps
+     counting and the scenery keeps changing on the same cadence,
+     while every difficulty number stays frozen at the last rung. */
+  tierStepMeters: 1000,
 
   hazards: {
     /* Chance a full gap (never a cluster interior) carries a hazard.
@@ -684,6 +690,13 @@ export const TUNING = {
     somewhere new. Every one of them is light enough to hold up on the
     dark plate the callout sits on.
   */
+  /* The scenes the road cycles through past the last authored tier,
+     shuffled per run from the run's own seed. Every key here must
+     have an entry in sceneryThemes and a left and right strip in
+     SCENERY_STRIPS. */
+  sceneryCycle: ['mountain', 'farmland', 'desert', 'volcanic', 'snow',
+    'forest', 'beach', 'cliffs', 'city'],
+
   sceneryThemes: {
     mountain: { farDensity: 85, nearDensity: 70, farItem: 'peak',     nearItem: 'pine',     offroad: '#79b364', far: '#8a93a6', farDark: '#6e7789', farAccent: '#f4f4f4', near: '#3f7a3a', nearDark: '#2f5c2c', trunk: '#7a5a3a', banner: '#b9cdf0', label: 'Mountains' },
     farmland: { farDensity: 32, nearDensity: 42, farItem: 'barn',     nearItem: 'cow',      offroad: '#8fbf5a', far: '#b4553f', farDark: '#8c3f2e', farAccent: '#f4f4f4', near: '#5aa03f', nearDark: '#2c3a28', trunk: '#8c6a3f', banner: '#e0a83c', label: 'Farmland' },

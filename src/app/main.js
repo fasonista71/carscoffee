@@ -717,6 +717,7 @@ const loop = createLoop({
     view.spinFrames = world ? world.spinFrames : 0;
     view.invulnFrames = world ? world.invulnFrames : 0;
     view.tier = world ? world.tier : 0;
+    view.sceneOrder = world ? world.sceneOrder : null;
     view.tierFlashFrames = world ? world.tierFlashFrames : 0;
     view.hearts = world ? world.hearts : TUNING.lives.start;
     const shakeNow = performance.now();
