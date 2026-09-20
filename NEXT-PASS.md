@@ -59,6 +59,36 @@ So the first thing to check on device is whether the lower control advancing
 reads right; it is a judgement call and it flips in one line. Second is
 whether the scroll is smooth enough now.
 
+## The store art
+
+Redone on 20 September against the new scenery, and this time by a tool
+rather than by hand, because the first set could not be remade when the
+roadside changed. `tools/store/README.md` explains it. In short:
+
+- Six screenshots, filmed from the game: title, the barn, the chalet, water
+  both sides, a marked police car behind the speeder it is chasing, and the
+  initials wheel. In `_dist/itch/`.
+- Cover and banner, the badge over a real empty stretch of road rather than
+  over the old procedural verge. In `_dist/itch/` and `_dist/itch-theme/`.
+- The badge's three cars are repainted: Grand Prix White, Guards Red and
+  Maritime Blue, so the logo and the traffic are in the same paint codes.
+  `assets/badge.png` is the title screen badge as well as the store one, so
+  this changes the game too.
+- A 37 second trailer with the theme track under it, and two new beats for
+  the two places nobody reaches in a first sitting: the snow and the coast.
+  In `_dist/trailer/`.
+
+The previous set is parked beside each of those in `superseded-20260919/`
+and `superseded-20260918/` rather than deleted.
+
+The two itch theme tiles are untouched. They are a dark coffee cup pattern
+and a dark road, neither of which carries any scenery, so neither went stale.
+
+One thing to know about writing binary assets from a remote session: the
+first attempt at the chalet wrote a re-encode of the old scenery sheet
+rather than the new one, and it looked like a change because the byte count
+moved. Check the pixels after writing, not the size.
+
 One thing in the live build is not finished and should not be forgotten behind
 a green harness: the fairness oracle does not know about the two lane tap. See
 D1 in `DESIGN-BACKLOG.md`.
